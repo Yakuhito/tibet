@@ -1,0 +1,66 @@
+; the TAIL of a pair's liquidity CAT
+
+; CATs can be created or melted by the pair singleton
+; so this is essentially a TAIL that delegates mint/burn to a singleton
+(mod (
+      ; pair / controller SINGLETON_STRUCT
+      SINGLETON_MOD_HASH
+      LAUNCHER_ID
+      LAUNCHER_PUZZLE_HASH
+      Truths
+      parent_is_cat
+      lineage_proof
+      delta
+      inner_conditions
+      tail_solution ; (singleton_inner_puzzle_hash delta_from_singleton)
+    )
+
+    (include condition_codes.clvm)
+    (include curry-and-treehash.clinc)
+    (include cat_truths.clib)
+
+    ; tail_solution is (singleton_inner_puzzle_hash conditions)
+    (defun-inline singleton_inner_puzzle_hash_from_solution (tail_solution) (f tail_solution))
+    (defun-inline delta_from_singleton_from_solution (tail_solution) (f (r tail_solution)))
+
+    ; https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/did_innerpuz.clvm#L56
+    (defun-inline calculate_full_puzzle_hash (SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH inner_puzzle_hash)
+        (puzzle-hash-of-curried-function SINGLETON_MOD_HASH
+            inner_puzzle_hash
+            (sha256tree (c SINGLETON_MOD_HASH (c LAUNCHER_ID LAUNCHER_PUZZLE_HASH)))
+        )
+    )
+
+    (defun-inline main (
+        my_id
+        singleton_inner_puzzle_hash
+        delta_from_singleton)
+        (if (all 
+                (= 33 (strlen singleton_inner_puzzle_hash))
+                (= delta delta_from_singleton)
+            )
+            (list
+                (list
+                    ASSERT_PUZZLE_ANNOUNCEMENT
+                    (sha256
+                        (calculate_full_puzzle_hash
+                            SINGLETON_MOD_HASH
+                            LAUNCHER_ID LAUNCHER_PUZZLE_HASH
+                            singleton_inner_puzzle_hash
+                        )
+                        delta_from_singleton
+                    )
+                )
+                (list CREATE_COIN_ANNOUNCEMENT 'meow')
+            )
+            (x)
+        )
+    )
+
+    ; main
+    (main
+        (my_id_cat_truth Truths)
+        (singleton_inner_puzzle_hash_from_solution tail_solution)
+        (delta_from_singleton_from_solution tail_solution)
+    )
+)
