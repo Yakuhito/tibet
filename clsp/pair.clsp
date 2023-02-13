@@ -16,24 +16,30 @@
             ; 3 - token to XCH
             ; 4 - merge coins (thank you for your service!)
         params ; params for the called method
+            ; REVIEW REQUIRED
             ; add liquidity: none
             ; remove liquidity: (amount_tokens)
             ; xch to token: (coins)
             ; token to xch: (coins)
+            ; merge coins: (xch coin) - xch != 0 means the coins are XCH, = 0 means they are CATs
     )
     
     (defconstant ACTION_ADD_LIQUIDITY 0)
     (defconstant ACTION_REMOVE_LIQUIDITY 1)
     (defconstant ACTION_XCH_TO_TOKEN 2)
     (defconstant ACTION_TOKEN_TO_XCH 3)
+    (defconstant ACTION_MERGE_COINS 4)
 
+    ; main
     (if (= action ACTION_ADD_LIQUIDITY)
         () ; add liquidity
         (if (= action ACTION_REMOVE_LIQUIDITY)
             () ; remove liquidity
             (if (= action ACTION_XCH_TO_TOKEN)
                 () ; XCH to token
-                () ; token to XCH
+                (if = action ACTION_TOKEN_TO_XCH)
+                    () ; token to XCH
+                    () ; merge coins
             )
         )
     )
