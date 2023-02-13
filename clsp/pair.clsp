@@ -1,0 +1,37 @@
+; the singleton that powers a pair
+
+; modeled after https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy
+
+;; how to 'transfer' assets:
+;; offers! use settlement_payments.clvm and assert amounts for deposited token / xch
+(mod (
+        TAIL_HASH ; identifies the token this pair holds
+        LIQUIDITY ; holds the total number of liquidity tokens in existence
+        action ; action the user wants to take
+            ; 0 - add liquidity
+            ; 1 - remove liquidity
+            ; 2 - XCH to token (sell XCH, buy token)
+            ; 3 - token to XCH
+        params ; params for the called method
+            ; add liquidity: none
+            ; remove liquidity: (amount_tokens)
+            ; xch to token: (coins)
+            ; token to xch: (coins)
+    )
+    
+    (defconstant ACTION_ADD_LIQUIDITY 0)
+    (defconstant ACTION_REMOVE_LIQUIDITY 1)
+    (defconstant ACTION_XCH_TO_TOKEN 2)
+    (defconstant ACTION_TOKEN_TO_XCH 3)
+
+    (if (= action ACTION_ADD_LIQUIDITY)
+        () ; add liquidity
+        (if (= action ACTION_REMOVE_LIQUIDITY)
+            () ; remove liquidity
+            (if (= action ACTION_XCH_TO_TOKEN)
+                () ; XCH to token
+                () ; token to XCH
+            )
+        )
+    )
+)
