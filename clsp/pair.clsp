@@ -7,11 +7,14 @@
 (mod (
         TAIL_HASH ; identifies the token this pair holds
         LIQUIDITY ; holds the total number of liquidity tokens in existence
+        XCH_SUPPLY ; 'contract balance' of XCH
+        TOKEN_SUPPLY ; 'contract balance' of tokens
         action ; action the user wants to take
             ; 0 - add liquidity
             ; 1 - remove liquidity
             ; 2 - XCH to token (sell XCH, buy token)
             ; 3 - token to XCH
+            ; 4 - merge coins (thank you for your service!)
         params ; params for the called method
             ; add liquidity: none
             ; remove liquidity: (amount_tokens)

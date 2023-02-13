@@ -1,0 +1,79 @@
+; a TAIL that delegates the output conditions to a singleton
+
+; used as the TAIL of a pair's liquidity CAT
+
+; q: why use coin announcement instead of puzzle announcement?
+; a: to prevent a vulnerability where an attacker creates another pair contract and redeems liquidity tokens from both contracts
+; this would make an extremely nice CTF challenge!
+(mod (
+      ; pair / controller SINGLETON_STRUCT
+      SINGLETON_MOD_HASH
+      LAUNCHER_ID
+      LAUNCHER_PUZZLE_HASH
+      Truths
+      parent_is_cat
+      lineage_proof
+      delta
+      inner_conditions
+      tail_solution ; (singleton_info delegated_puzzle delegated_solution)
+        ; singleton_info = (parent_id inner_puzzle_hash amount)
+        ; solution to delegated_puzzle is delegated_solution
+        ; no parameters (e.g., Truths, parent_is_cat, etc.) are added to the solution
+    )
+
+    (include condition_codes.clvm)
+    (include curry-and-treehash.clinc)
+    (include cat_truths.clib)
+
+    ; tail_solution is (singleton_inner_puzzle_hash conditions)
+    (defun-inline singleton_info_from_solution (tail_solution) (f tail_solution))
+    (defun-inline delegated_puzzle_from_solution (tail_solution) (f (r tail_solution)))
+    (defun-inline delegated_solution_from_solution (tail_solution) (f (r (r tail_solution))))
+
+    (defun-inline parent_id_from_singleton_info (singleton_info) (f singleton_info))
+    (defun-inline inner_puzzle_hash_from_singleton_info (singleton_info) (f (r ingleton_info)))
+    (defun-inline amount_from_singleton_info (singleton_info) (f (r (r tail_solution))))
+    
+
+    ; https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/did_innerpuz.clvm#L56
+    (defun-inline calculate_full_puzzle_hash (SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH inner_puzzle_hash)
+        (puzzle-hash-of-curried-function SINGLETON_MOD_HASH
+            inner_puzzle_hash
+            (sha256tree (c SINGLETON_MOD_HASH (c LAUNCHER_ID LAUNCHER_PUZZLE_HASH)))
+        )
+    )
+
+    (defun-inline calculate_singleton_coin_id (singleton_info)
+        (calculate_coin_id
+            (parent_id_from_singleton_info singleton_info)
+            (calculate_full_puzzle_hash
+                    SINGLETON_MOD_HASH
+                    LAUNCHER_ID LAUNCHER_PUZZLE_HASH
+                    (inner_puzzle_hash_from_singleton_info singleton_info)
+            )
+            (amount_from_singleton_info singleton_info)
+        )
+    )
+
+    (defun-inline main (
+        singleton_info
+        delegated_puzzle
+        delegated_solution
+    )
+        (c
+            (list
+                ASSERT_COIN_ANNOUNCEMENT
+                (calculate_singleton_coin_id singleton_info)  
+                (sha256tree delegated_tail delegated_solution)
+            )
+            (a delegated_puzzle delegated_solution)
+        )
+    )
+
+    ; main
+    (main
+        (singleton_info_from_solution tail_solution)
+        (delegated_puzzle_from_solution tail_solution)
+        (delegated_solution_from_solution tail_solution)
+    )
+)
