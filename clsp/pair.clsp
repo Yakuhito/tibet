@@ -57,7 +57,7 @@
     )
 
     (defun-inline liquidity_minted_from_token_amount (token_amount)
-        (+ (logior (/ (* token_amount LIQUIDITY) TOKEN_SUPPLY) 1) 1) ; make sure it's even
+        (- (logior (/ (* token_amount LIQUIDITY) TOKEN_SUPPLY) 1) 1) ; make sure it's even
     )
 
     ;; deposit-related
