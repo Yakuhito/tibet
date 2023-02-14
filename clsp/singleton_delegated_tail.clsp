@@ -8,9 +8,8 @@
 ; this would make an extremely nice CTF challenge!
 (mod (
       ; pair / controller SINGLETON_STRUCT
-      SINGLETON_MOD_HASH
-      LAUNCHER_ID
-      LAUNCHER_PUZZLE_HASH
+      SINGLETON_STRUCT  ; to quote did_innerpuz.clvm, 
+            ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
       Truths
       parent_is_cat
       lineage_proof
@@ -34,13 +33,20 @@
     (defun-inline parent_id_from_singleton_info (singleton_info) (f singleton_info))
     (defun-inline inner_puzzle_hash_from_singleton_info (singleton_info) (f (r ingleton_info)))
     (defun-inline amount_from_singleton_info (singleton_info) (f (r (r tail_solution))))
+
+    ; SINGLETON_STRUCT
+    (defun-inline singleton_mod_hash_from_struct (singleton_struct) (f singleton_struct))
+    (defun-inline singleton_launcher_from_struct (singleton_struct) (f (r singleton_struct)))
+    (defun-inline singleton_launcher_puzzle_hash_from_struct (singleton_struct) (f (r (r singleton_struct))))
     
 
     ; https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/did_innerpuz.clvm#L56
-    (defun-inline calculate_full_puzzle_hash (SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH inner_puzzle_hash)
-        (puzzle-hash-of-curried-function SINGLETON_MOD_HASH
+    (defun-inline calculate_full_puzzle_hash (inner_puzzle_hash)
+        (puzzle-hash-of-curried-function (singleton_mod_hash_from_struct SINGLETON_STRUCT)
             inner_puzzle_hash
-            (sha256tree (c SINGLETON_MOD_HASH (c LAUNCHER_ID LAUNCHER_PUZZLE_HASH)))
+            (sha256tree (c (singleton_mod_hash_from_struct SINGLETON_STRUCT)
+                (c (singleton_launcher_from_struct SINGLETON_STRUCT) (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT)))
+            )
         )
     )
 
@@ -48,9 +54,7 @@
         (calculate_coin_id
             (parent_id_from_singleton_info singleton_info)
             (calculate_full_puzzle_hash
-                    SINGLETON_MOD_HASH
-                    LAUNCHER_ID LAUNCHER_PUZZLE_HASH
-                    (inner_puzzle_hash_from_singleton_info singleton_info)
+                (inner_puzzle_hash_from_singleton_info singleton_info)
             )
             (amount_from_singleton_info singleton_info)
         )

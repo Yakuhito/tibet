@@ -4,15 +4,18 @@
 ; modeled after https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy
 
 (mod (
-        SINGLETON_MOD_HASH ; sha256tree hash of the singleton top layer module (uncurried)
-        P2_SINGLETON_MOD_HASH ; sha256 tree hash of the p2_singleton module (uncurried)
         SINGLETON_STRUCT  ; to quote did_innerpuz.clvm, 
             ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
+        P2_SINGLETON_MOD_HASH ; sha256tree of the p2_singleton module (uncurried)
+        CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
+        
         TAIL_HASH ; identifies the token this pair holds
         FEE ; 0.3%
+
         LIQUIDITY ; holds the total number of liquidity tokens in existence
         XCH_RESERVE ; 'contract balance' of XCH
         TOKEN_RESERVE ; 'contract balance' of tokens
+
         action ; action the user wants to take
             ;; 0 - add liquidity (money printer go brr)
             ;; 1 - remove liquidity (sorry to see you go!)
@@ -27,6 +30,9 @@
             ;; merge coins: (xch coins) - xch != 0 means the coins are XCH, = 0 means they are CATs
     )
     
+    ; libs
+    (include curry-and-treehash.clinc)
+
     ; function codes
     (defconstant ACTION_ADD_LIQUIDITY 0)
     (defconstant ACTION_REMOVE_LIQUIDITY 1)
@@ -40,6 +46,11 @@
 
     ; helper functions
 
+    ; SINGLETON_STRUCT
+    (defun-inline singleton_mod_hash_from_struct (singleton_struct) (f singleton_struct))
+    (defun-inline singleton_launcher_from_struct (singleton_struct) (f (r singleton_struct)))
+    (defun-inline singleton_launcher_puzzle_hash_from_struct (singleton_struct) (f (r (r singleton_struct))))
+
     ;; liquidity-related converters
     (defun-inline xch_amount_from_token_amount (token_amount)
         (+ (/ (* token_amount XCH_SUPPLY) TOKEN_SUPPLY) 1)
@@ -50,15 +61,52 @@
     )
 
     ;; deposit-related
-    () ; todo
+    (defun-inline p2_singleton_puzzle_hash (SINGLETON_STRUCT)
+        (puzzle-hash-of-curried-function P2_SINGLETON_MOD_HASH
+            ; parameters are given in reverse order
+            (sha256tree (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT))
+            (sha256tree (singleton_launcher_from_struct SINGLETON_STRUCT))
+            (sha256tree (singleton_mod_hash_from_struct SINGLETON_STRUCT))
+        )
+    )
+
+    (defun-inline create_coins_condition (amount)
+        (list
+            CREATE_COIN
+            (p2_singleton_puzzle_hash SINGLETON_STRUCT)
+            amount    
+        )
+    )
+
+    (defun-inline cat_puzzle_hash (tail_hash inner_puzzle_hash)
+        (puzzle-hash-of-curried-function CAT_MOD_HASH
+            ; parameters are given in reverse order
+            inner_puzzle_hash
+            (sha256tree tail_hash) ; hash of TAIL_PROGRAM_HASH
+            (sha256tree CAT_MOD_HASH) ; another hash of hash
+        )
+    )
+
+    (defun-inline create_token_condition (amount)
+        (list
+            CREATE_COIN
+            (cat_puzzle_hash TAIL_HASH (p2_singleton_puzzle_hash SINGLETON_STRUCT))
+            amount    
+        )
+    )
 
     ; begin main methods
 
     (defun-inline add_liquidity (token_amount) 
         (if (> liquidity 0)
-            (x)
-            ;;; assert deposit XCH
-            ;;; assert deposit tokens
+            (list
+                ; ensure deposit - XCH
+                (create_coins_condition (xch_amount_from_token_amount token_amount))
+
+                ; ensure deposit - tokens
+                (create_token_condition token_amount)
+            )
+            
             ;;; mint liquidity tokens
             ;;; update total liquidity
             ;;; update xch reserve
