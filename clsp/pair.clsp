@@ -4,11 +4,13 @@
 ; modeled after https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy
 
 (mod (
+        PAIR_MOD_HASH ; sha256 of this module / puzzle (uncurried)
         SINGLETON_STRUCT  ; to quote did_innerpuz.clvm, 
             ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
         P2_SINGLETON_MOD_HASH ; sha256tree of the p2_singleton module (uncurried)
         CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
-        
+        LIQUIDITY_TAIL_MOD_HASH ; sha256 tree of the singleton delegated tail module (uncurried)
+
         TAIL_HASH ; identifies the token this pair holds
         FEE ; 0.3%
 
@@ -23,7 +25,7 @@
             ;; 3 - token to XCH (buy XCH, sell token)
             ;; 4 - merge coins (thank you for your service!)
         params ; params for the called method
-            ;; add liquidity: (token_amount)
+            ;; add liquidity: (token_amount to_puzzle_hash)
             ;; remove liquidity: (liquidity_tokens_amount)
             ;; xch to token: (xch_amount)
             ;; token to xch: (token_amount)
@@ -43,6 +45,7 @@
     ; params
     ;; 0 - add liquidity
     (defun-inline add_liquidity_token_amount_from_params (params) (f params))
+    (defun-inline add_liquidity_to_puzzle_hash_from_params (params) (f (r params)))
 
     ; helper functions
 
@@ -70,7 +73,7 @@
         )
     )
 
-    (defun-inline create_coins_condition (amount)
+    (defun-inline deposit_coins_condition (amount)
         (list
             CREATE_COIN
             (p2_singleton_puzzle_hash SINGLETON_STRUCT)
@@ -87,31 +90,81 @@
         )
     )
 
-    (defun-inline create_token_condition (amount)
+    (defun-inline create_token_condition (tail_hash inner_puzzle_hash amount)
         (list
             CREATE_COIN
-            (cat_puzzle_hash TAIL_HASH (p2_singleton_puzzle_hash SINGLETON_STRUCT))
+            (cat_puzzle_hash tail_hash inner_puzzle_hash)
             amount    
+        )
+    )
+
+    (defun-inline deposit_tokens_condition (amount)
+        (create_token_condition TAIL_HASH (p2_singleton_puzzle_hash SINGLETON_STRUCT) amount)
+    )
+
+    (defun-inline mint_liquidity_condition (amount to_puzzle_hash)
+        (create_token_condition
+            ; todo: might have to invert SINGLETON_STRUCT
+            ; ----------------------------------------------------------------------------------------------------
+            (puzzle-hash-of-curried-function LIQUIDITY_TAIL_MOD_HASH SINGLETON_STRUCT)
+            to_puzzle_hash
+            amount
+        )
+    )
+
+    (defun-inline create_liquidity_creation_condition (amount to_puzzle_hash)
+        (list
+            CREATE_COIN_ANNOUNCEMENT
+            ; program in this case: (list CREATE_COIN to_puzzle_hash amount)
+            ; no solution needed: ()
+            (sha256tree (list CREATE_COIN to_puzzle_hash amount) ())
+        )
+    )
+
+    ;; self-propagation
+
+    (defun-inline recreate_self_condition (new_liquidity new_xch_reserve new_token_reserve)
+        (list
+            CREATE_COIN
+            (puzzle-hash-of-curried-function PAIR_MOD_HASH
+                ; TODO: review these parameters and their order
+                new_token_reserve
+                new_xch_reserve
+                new_liquidity
+                FEE
+                TAIL_HASH
+                LIQUIDITY_TAIL_MOD_HASH
+                CAT_MOD_HASH
+                P2_SINGLETON_MOD_HASH
+                SINGLETON_STRUCT
+                PAIR_MOD_HASH
+            )
+            1
         )
     )
 
     ; begin main methods
 
-    (defun-inline add_liquidity (token_amount) 
+    (defun-inline add_liquidity (token_amount to_puzzle_hash) 
         (if (> liquidity 0)
             (list
                 ; ensure deposit - XCH
-                (create_coins_condition (xch_amount_from_token_amount token_amount))
+                (deposit_coins_condition (xch_amount_from_token_amount token_amount)) ; TODO: MIGHT BE ODD
 
                 ; ensure deposit - tokens
-                (create_token_condition token_amount)
+                (deposit_tokens_condition token_amount) ; TODO: MIGHT BE ODD
+
+                ; mint liquidity tokens
+                (mint_liquidity_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash) ; TODO: MIGHT BE ODD
+                (create_liquidity_creation_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
+
+                ; recreate
+                (recreate_self_condition
+                    (+ LIQUIDITY (liquidity_minted_from_token_amount token_amount))
+                    (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
+                    (+ TOKEN_RESERVE token_amount)
+                )
             )
-            
-            ;;; mint liquidity tokens
-            ;;; update total liquidity
-            ;;; update xch reserve
-            ;;; update token reserve
-            ;;; recreate
             ; else liquidity <= 0
             (x)
         )
@@ -121,7 +174,9 @@
     (if (= action ACTION_ADD_LIQUIDITY)
         (add_liquidity
             (add_liquidity_token_amount_from_params params)
+            (add_liquidity_to_puzzle_hash_from_params params)
         )
+        ;; FUTURE SELF: what happens when minted liquidity / coin amounts are odd? please watch out.
         ; else
         (if (= action ACTION_REMOVE_LIQUIDITY)
             () ; remove liquidity
