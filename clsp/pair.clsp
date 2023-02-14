@@ -176,7 +176,6 @@
             (add_liquidity_token_amount_from_params params)
             (add_liquidity_to_puzzle_hash_from_params params)
         )
-        ;; FUTURE SELF: what happens when minted liquidity / coin amounts are odd? please watch out.
         ; else
         (if (= action ACTION_REMOVE_LIQUIDITY)
             () ; remove liquidity
@@ -192,3 +191,8 @@
         )
     )
 )
+
+; NOTES FOR FUTURE SELF
+; what happens when minted liquidity / coin amounts are odd? please watch out
+; puzzle-hash-of-curried-function is deprecated according to currey-and-treehash.clinc? ask on Keybase
+; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
