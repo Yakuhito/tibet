@@ -1,44 +1,89 @@
 ; the singleton that powers a pair
+; author: yakuhito
 
 ; modeled after https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy
 
-;; how to 'transfer' assets:
-;; offers! use settlement_payments.clvm and assert amounts for deposited token / xch
 (mod (
+        SINGLETON_MOD_HASH ; sha256tree hash of the singleton top layer module (uncurried)
+        P2_SINGLETON_MOD_HASH ; sha256 tree hash of the p2_singleton module (uncurried)
+        SINGLETON_STRUCT  ; to quote did_innerpuz.clvm, 
+            ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
         TAIL_HASH ; identifies the token this pair holds
+        FEE ; 0.3%
         LIQUIDITY ; holds the total number of liquidity tokens in existence
-        XCH_SUPPLY ; 'contract balance' of XCH
-        TOKEN_SUPPLY ; 'contract balance' of tokens
+        XCH_RESERVE ; 'contract balance' of XCH
+        TOKEN_RESERVE ; 'contract balance' of tokens
         action ; action the user wants to take
-            ; 0 - add liquidity
-            ; 1 - remove liquidity
-            ; 2 - XCH to token (sell XCH, buy token)
-            ; 3 - token to XCH
-            ; 4 - merge coins (thank you for your service!)
+            ;; 0 - add liquidity (money printer go brr)
+            ;; 1 - remove liquidity (sorry to see you go!)
+            ;; 2 - XCH to token (sell XCH, buy token)
+            ;; 3 - token to XCH (buy XCH, sell token)
+            ;; 4 - merge coins (thank you for your service!)
         params ; params for the called method
-            ; REVIEW REQUIRED
-            ; add liquidity: none
-            ; remove liquidity: (amount_tokens)
-            ; xch to token: (coins)
-            ; token to xch: (coins)
-            ; merge coins: (xch coin) - xch != 0 means the coins are XCH, = 0 means they are CATs
+            ;; add liquidity: (token_amount)
+            ;; remove liquidity: (liquidity_tokens_amount)
+            ;; xch to token: (xch_amount)
+            ;; token to xch: (token_amount)
+            ;; merge coins: (xch coins) - xch != 0 means the coins are XCH, = 0 means they are CATs
     )
     
+    ; function codes
     (defconstant ACTION_ADD_LIQUIDITY 0)
     (defconstant ACTION_REMOVE_LIQUIDITY 1)
     (defconstant ACTION_XCH_TO_TOKEN 2)
     (defconstant ACTION_TOKEN_TO_XCH 3)
     (defconstant ACTION_MERGE_COINS 4)
 
+    ; params
+    ;; 0 - add liquidity
+    (defun-inline add_liquidity_token_amount_from_params (params) (f params))
+
+    ; helper functions
+
+    ;; liquidity-related converters
+    (defun-inline xch_amount_from_token_amount (token_amount)
+        (+ (/ (* token_amount XCH_SUPPLY) TOKEN_SUPPLY) 1)
+    )
+
+    (defun-inline liquidity_minted_from_token_amount (token_amount)
+        (/ (* token_amount LIQUIDITY) TOKEN_SUPPLY)
+    )
+
+    ;; deposit-related
+    () ; todo
+
+    ; begin main methods
+
+    (defun-inline add_liquidity (token_amount) 
+        (if (> liquidity 0)
+            (x)
+            ;;; assert deposit XCH
+            ;;; assert deposit tokens
+            ;;; mint liquidity tokens
+            ;;; update total liquidity
+            ;;; update xch reserve
+            ;;; update token reserve
+            ;;; recreate
+            ; else liquidity <= 0
+            (x)
+        )
+    )
+
     ; main
     (if (= action ACTION_ADD_LIQUIDITY)
-        () ; add liquidity
+        (add_liquidity
+            (add_liquidity_token_amount_from_params params)
+        )
+        ; else
         (if (= action ACTION_REMOVE_LIQUIDITY)
             () ; remove liquidity
+            ; else
             (if (= action ACTION_XCH_TO_TOKEN)
                 () ; XCH to token
+                ; else
                 (if = action ACTION_TOKEN_TO_XCH)
                     () ; token to XCH
+                    ; else
                     () ; merge coins
             )
         )

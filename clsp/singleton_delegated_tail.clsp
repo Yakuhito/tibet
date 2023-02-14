@@ -1,4 +1,5 @@
 ; a TAIL that delegates the output conditions to a singleton
+; author: yakuhito
 
 ; used as the TAIL of a pair's liquidity CAT
 
