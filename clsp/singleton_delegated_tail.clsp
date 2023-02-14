@@ -22,7 +22,7 @@
     )
 
     (include condition_codes.clvm)
-    (include curry-and-treehash.clinc)
+    (include curry.clinc)
     (include cat_truths.clib)
 
     ; tail_solution is (singleton_inner_puzzle_hash conditions)
@@ -42,12 +42,9 @@
 
     ; https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/did_innerpuz.clvm#L56
     (defun-inline calculate_full_puzzle_hash (inner_puzzle_hash)
-        (puzzle-hash-of-curried-function (singleton_mod_hash_from_struct SINGLETON_STRUCT)
+        (curry_hashes_inline (singleton_mod_hash_from_struct SINGLETON_STRUCT)
+            SINGLETON_STRUCT
             inner_puzzle_hash
-            ; todo: might have to de-invert SINGLETON_STRUCT
-            (sha256tree (c (singleton_mod_hash_from_struct SINGLETON_STRUCT)
-                (c (singleton_launcher_from_struct SINGLETON_STRUCT) (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT)))
-            )
         )
     )
 

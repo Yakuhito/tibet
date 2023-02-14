@@ -23,13 +23,11 @@
             ;; 1 - remove liquidity (sorry to see you go!)
             ;; 2 - XCH to token (sell XCH, buy token)
             ;; 3 - token to XCH (buy XCH, sell token)
-            ;; 4 - merge coins (thank you for your service!)
         params ; params for the called method
             ;; add liquidity: (token_amount to_puzzle_hash)
             ;; remove liquidity: (liquidity_tokens_amount)
-            ;; xch to token: (xch_amount)
-            ;; token to xch: (token_amount)
-            ;; merge coins: (xch coins) - xch != 0 means the coins are XCH, = 0 means they are CATs
+            ;; xch to token: (xch_amount to_address)
+            ;; token to xch: (token_amount to_address)
     )
     
     ; libs
@@ -40,7 +38,6 @@
     (defconstant ACTION_REMOVE_LIQUIDITY 1)
     (defconstant ACTION_XCH_TO_TOKEN 2)
     (defconstant ACTION_TOKEN_TO_XCH 3)
-    (defconstant ACTION_MERGE_COINS 4)
 
     ; params
     ;; 0 - add liquidity
@@ -56,20 +53,19 @@
 
     ;; liquidity-related converters
     (defun-inline xch_amount_from_token_amount (token_amount)
-        (+ (/ (* token_amount XCH_SUPPLY) TOKEN_SUPPLY) 1)
+        (+ (logior (/ (* token_amount XCH_SUPPLY) TOKEN_SUPPLY) 1) 1); make sure it's even
     )
 
     (defun-inline liquidity_minted_from_token_amount (token_amount)
-        (/ (* token_amount LIQUIDITY) TOKEN_SUPPLY)
+        (+ (logior (/ (* token_amount LIQUIDITY) TOKEN_SUPPLY) 1) 1) ; make sure it's even
     )
 
     ;; deposit-related
     (defun-inline p2_singleton_puzzle_hash (SINGLETON_STRUCT)
-        (puzzle-hash-of-curried-function P2_SINGLETON_MOD_HASH
-            ; parameters are given in reverse order
-            (sha256tree (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT))
-            (sha256tree (singleton_launcher_from_struct SINGLETON_STRUCT))
-            (sha256tree (singleton_mod_hash_from_struct SINGLETON_STRUCT))
+        (curry_hashes_inline P2_SINGLETON_MOD_HASH
+            (singleton_mod_hash_from_struct SINGLETON_STRUCT)
+            (singleton_launcher_from_struct SINGLETON_STRUCT)
+            (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT)
         )
     )
 
@@ -193,6 +189,7 @@
 )
 
 ; NOTES FOR FUTURE SELF
+; reserves should only have 1 coin each
 ; what happens when minted liquidity / coin amounts are odd? please watch out
 ; puzzle-hash-of-curried-function is deprecated according to currey-and-treehash.clinc? ask on Keybase
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
