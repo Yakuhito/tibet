@@ -191,5 +191,4 @@
 ; NOTES FOR FUTURE SELF
 ; reserves should only have 1 coin each
 ; what happens when minted liquidity / coin amounts are odd? please watch out
-; puzzle-hash-of-curried-function is deprecated according to currey-and-treehash.clinc? ask on Keybase
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
