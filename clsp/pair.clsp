@@ -78,11 +78,10 @@
     )
 
     (defun-inline cat_puzzle_hash (tail_hash inner_puzzle_hash)
-        (puzzle-hash-of-curried-function CAT_MOD_HASH
-            ; parameters are given in reverse order
+        (curry_hashes_inline CAT_MOD_HASH
+            (sha256tree CAT_MOD_HASH)
+            (sha256tree tail_hash)
             inner_puzzle_hash
-            (sha256tree tail_hash) ; hash of TAIL_PROGRAM_HASH
-            (sha256tree CAT_MOD_HASH) ; another hash of hash
         )
     )
 
