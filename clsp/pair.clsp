@@ -409,7 +409,18 @@
 )
 
 ; NOTES FOR FUTURE SELF
-;; since liuidity tail is similar to p2_singleton, can't we get away with
+
+;; since liquidity tail is similar to p2_singleton, can't we get away with
 ;; one coin announcement and one puzzle announcement instead of two coin announcements?
 ;; would be more cost-effective
+
+;; also, major restructure is possible:
+;; in the main func, assert coin id and spend reserves + recreate token and assert new reserve creation
+;; each function returns new reserves, liquidity + additional conditions (e.g., burn / mint iquidity tokens)
+;; this would make the code a lot nicer, but it's best to first finish implementing all functions before doing this
+;; since unexpected things could be required and I don't want to re-write it two times
+
+;; speaking of which, this file already has over 400 lines and it's growinf
+;; after tests, let's split it so it's nicer, both for us and reviewers
+
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
