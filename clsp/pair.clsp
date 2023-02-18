@@ -20,7 +20,8 @@
         TOKEN_RESERVE ; 'contract balance' of tokens
 
         coin_ids ; needed for every spend - this coin & reserves they are (re)created in tandem
-            ;; format: (my_coin_id xch_reserve_coin_id token_reserve_coin_id)
+            ;; format: (my_coin_id xch_reserve_coin_id token_reserve_coin_id [liquidity_parent_id])
+            ;; liquidity_parent_id - only required when calling 'remove liquidity'
         action ; action the user wants to take
             ;; 0 - add liquidity (money printer go brr)
             ;; 1 - remove liquidity (sorry to see you go!)
@@ -55,6 +56,7 @@
     (defun-inline my_coin_id_from_coin_ids (coin_ids) (f coin_ids))
     (defun-inline xch_reserve_coin_id_from_coin_ids (coin_ids) (f (r coin_ids)))
     (defun-inline token_reserve_coin_id_from_coin_ids (coin_ids) (f (r (r coin_ids))))
+    (defun-inline liquidity_parent_id_from_coin_ids (coin_ids) (f (r (r (r coin_ids)))))
 
     ;; 0 - add liquidity
     (defun-inline add_liquidity_token_amount_from_params (params) (f params))
@@ -163,32 +165,23 @@
         )
     )
 
-    (defun-inline burn_liquidity_delegated_puzzle (liquidity_token_amount)
-        (list 
-            (list ASSERT_MY_AMOUNT liquidity_token_amount)
-            (list CREATE_COIN () -113)
-        )
-    )
-
     (defun-inline burn_liquidity_condition (liquidity_token_amount)
         (list
             CREATE_COIN_ANNOUNCEMENT
             ; program with no solution needed
-            (sha256
-                (burn_liquidity_delegated_puzzle liquidity_token_amount)
-                ()
-            )
+            (sha256 liquidity_token_amount)
         )
     )
 
-    (defun-inline assert_liquidity_burn_condition (liquidity_token_amount liquidity_inner_puzzle_hash)
+    (defun-inline assert_liquidity_burn_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash)
         (list
-            ASSERT_PUZZLE_ANNOUNCEMENT
-            (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH SINGLETON_STRUCT) liquidity_inner_puzzle_hash)
-            (sha256
-                (burn_liquidity_delegated_puzzle liquidity_token_amount)
-                ()
+            ASSERT_COIN_ANNOUNCEMENT
+            (calculate_coin_id
+                liquidity_parent_id
+                (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH SINGLETON_STRUCT) liquidity_inner_puzzle_hash)
+                liquidity_token_amount
             )
+            'Y'
         )
     )
 
@@ -219,7 +212,14 @@
 
     ; begin main methods
 
-    (defun-inline add_liquidity (my_coin_id xch_reserve_coin_id token_reserve_coin_id token_amount to_puzzle_hash params)
+    (defun-inline add_liquidity (
+        my_coin_id
+        xch_reserve_coin_id
+        token_reserve_coin_id
+        token_amount
+        to_puzzle_hash
+        params
+        )
         ; step 1: check user-supplied param(s) is/are ok
         (if (all
                 (> token_amount 0)
@@ -240,7 +240,7 @@
                     ; create new XCH reserve
                     (assert_xch_reserve_condition
                         my_coin_id
-                        (+ XCH_RESERVE (xch_amount_from_token_amount token_amount)
+                        (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
                     )
 
                     ; spend token reserve
@@ -306,19 +306,30 @@
         )
     )
 
-    (defun-inline remove_liqiudity (xch_reserve_coin_id token_reserve_coin_id liquidity_tokens_amount liquidity_inner_puzzle_hash)
+    (defun-inline remove_liqiudity (
+        my_coin_id
+        xch_reserve_coin_id
+        token_reserve_coin_id
+        liquidity_parent_id
+        liquidity_tokens_amount
+        liquidity_inner_puzzle_hash
+        )
         (if (all
                 (> LIQUIDITY 0)
                 (> LIQUIDITY liquidity_tokens_amount)
                 (= (* 2 (/ liquidity_tokens_amount 2)) liquidity_tokens_amount) ; is even
             )
             (list
+                ; assert my id
+                (list ASSERT_MY_ID my_coin_id)
+
                 ; spend XCH reserve
                 (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
                 (list ASSERT_COIN_ANNOUNCEMENT xch_reserve_coin_id '$')
 
                 ; create new XCH reserve
-                (create_xch_reserve_condition
+                (assert_xch_reserve_condition
+                    my_coin_id
                     (- XCH_RESERVE (xch_amount_from_liquidity_amount liquidity_tokens_amount))
                 )
 
@@ -327,14 +338,17 @@
                 (list ASSERT_COIN_ANNOUNCEMENT token_reserve_coin_id '$')
 
                 ; create new token reserve
-                (create_token_reserve_condition
+                )
+                (assert_token_reserve_condition
+                    my_coin_id
                     (- TOKEN_RESERVE (token_amount_from_liquidity_amount liquidity_tokens_amount))
                 )
 
+                ; TODO: link with coin id
                 ; burn liquidity tokens
                 (burn_liquidity_condition liquidity_tokens_amount)
                 ; assert liquidity tokens were burned
-                (assert_liquidity_burn_condition liquidity_tokens_amount liquidity_inner_puzzle_hash)
+                (assert_liquidity_burn_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
 
                 ; recreate self
                 (recreate_self_condition
@@ -361,8 +375,10 @@
         ; else
         (if (= action ACTION_REMOVE_LIQUIDITY)
             (remove_liqiudity
-                (xch_reserve_coin_id_from_coin_ids reserve_coin_ids)
-                (token_reserve_coin_id_from_coin_ids reserve_coin_ids)
+                (my_coin_id_from_coin_ids coin_ids)
+                (xch_reserve_coin_id_from_coin_ids coin_ids)
+                (token_reserve_coin_id_from_coin_ids coin_ids)
+                (liquidity_parent_id_from_coin_ids coin_ids)
                 (remove_liquidity_liquidity_tokens_amount_from_params params)
                 (remove_liqiudity_liquidity_inner_puzzle_hash_from_params params)
             )
@@ -380,10 +396,4 @@
 )
 
 ; NOTES FOR FUTURE SELF
-; deposit tokens - harder than initially imagined; how can we be sure that resulting TAILs are valid?
-; use offers! for tokens, create one & assert the announcements (if it comes from a settlement_puzzle that's the inner puzzle of a cat, it's valid)
-; for XCH, do the same
-; this way, we transform 2 'deposits' into simple unlocks & asserts
-; also, please update/review the the liquidity TAIL
-; ALSO THIS ALLOWS FOR F*KING FLASH LOANS
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even

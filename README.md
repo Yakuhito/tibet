@@ -27,12 +27,15 @@ This is Chia, so you can chaing actions together. For example, you can have a tr
 
 ## Offers
 
-The pair code leverages offers code to verify deposits. Tehnically speaking, the code works with offers, and offers can be generated to simulate trades. However, it's important to note that the offer changes each time a trade is executed on a pair (but hey, when you sign it, at least you know there's no slippage - if the price changes, the transaction will become invalid forever).
+The pair code leverages offers code (`settlement_payments.clvm`) to verify deposits (re-create reserves). Tehnically speaking, the code works with offers, and offers can be generated to simulate trades. However, it's important to note that the offer changes each time a trade is executed on a pair (but hey, when you sign it, at least you know there's no slippage - if the price changes, the transaction will become invalid forever).
 
 ## Orders on Pairs
 
-Unlike Uniswap, the router does not allow users to make trades on pairs. Since we're using the coin set model, there's significant cost to using an additional coin for every trade (think of scalability: the router coin would be spent for every trade ever). As such, only the pair singleton is modified when a trade happens. 
+Unlike Uniswap, the router does not allow users to make trades on pairs. Since we're using the coin set model, there's significant cost to using an additional coin for every trade (think of scalability: the router coin would be spent for every trade ever). As such, only the pair singleton is modified when a trade happens. This means that trades for different pairs are executed in parallel, without influencing one another (yay!). 
 
 ## High Fees
 
-'But uniswap has a fee of 0.3% and that goes to liquidity providers' Yes, but this is not Uniswap. The ecosystem is small and devs need to be paid. 0.3% is a lot when your daily volume is over $900 million; 50% is very little when daily volume is $10. Yes, fees should be reduced in the future. Until then, thank you for (forcefully) contributing to the development of the next version, and for supporting ecosystem developers.
+'But uniswap has a fee of 0.3% and that goes to liquidity providers' Yes, but this is not Uniswap. The ecosystem is small and good incentives need to be put in place. 0.3% is a lot when your daily volume is over $900 million; 50% is very little when daily volume is $10. Yes, fees should be reduced in the future. Until then, thank you for (forcefully) contributing to the development of the Chia ecosystem.
+
+## Flash Loans
+Each transaction, token and XCH reserves are burned (destroyed, spent) and then new reserve coins are asserted (via  the settlement payments - just like in offers!). Since everything happens at the same time during a block, you can do whatever you want with all the pair's reserves as long as you 'leave the right amount' at the end of the tx. This is, in my opinion, the equivalent of a traditional flash loan.
