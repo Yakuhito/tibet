@@ -61,6 +61,16 @@
         )
     )
     ; end curry-and-treehash.clinc
+    ; shamelessly stolen from cat_v2.clvm
+
+    ; take two lists and merge them into one
+    (defun merge_list (list_a list_b)
+      (if list_a
+        (c (f list_a) (merge_list (r list_a) list_b))
+        list_b
+      )
+    )
+    ; end of stolen code from cat_v2.clvm
 
     ; function codes
     (defconstant ACTION_ADD_LIQUIDITY 0)
@@ -89,6 +99,12 @@
 
     ;; 3 - token to xch
     (defun-inline token_to_xch_token_amount_from_params (params) (f params))
+
+    ;; function output
+    (defun-inline new_liquidity_from_function_output (output) (f output))
+    (defun-inline new_xch_reserve_amount_from_function_output (output) (f (r output)))
+    (defun-inline new_token_reserve_amount_from_function_output (output) (f (r (r output))))
+    (defun-inline extra_conditions_from_function_output (output) (f (r (r (r output)))))
 
     ; helper functions
 
@@ -347,9 +363,6 @@
     )
 
     (defun-inline remove_liqiudity (
-        my_coin_id
-        xch_reserve_coin_id
-        token_reserve_coin_id
         liquidity_parent_id
         liquidity_tokens_amount
         liquidity_inner_puzzle_hash
@@ -360,40 +373,17 @@
                 (= (* 2 (/ liquidity_tokens_amount 2)) liquidity_tokens_amount) ; is even
             )
             (list
-                ; assert my id
-                (list ASSERT_MY_COIN_ID my_coin_id)
-
-                ; spend XCH reserve
-                (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
-                (list ASSERT_COIN_ANNOUNCEMENT xch_reserve_coin_id '$')
-
-                ; create new XCH reserve
-                (assert_xch_reserve_condition
-                    my_coin_id
-                    (- XCH_RESERVE (xch_amount_from_liquidity_amount liquidity_tokens_amount))
-                )
-
-                ; spend token reserve
-                (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
-                (list ASSERT_COIN_ANNOUNCEMENT token_reserve_coin_id '$')
-
-                ; create new token reserve
-                (assert_token_reserve_condition
-                    my_coin_id
-                    (- TOKEN_RESERVE (token_amount_from_liquidity_amount liquidity_tokens_amount))
-                )
-
-                ; TODO: link with coin id
+                LIQUIDITY
+                (- XCH_RESERVE (xch_amount_from_liquidity_amount liquidity_tokens_amount))
+                (- TOKEN_RESERVE (token_amount_from_liquidity_amount liquidity_tokens_amount))
+                (list
+                    ; todo: ------------------------------------------------------
+                    ; TODO: link with coin id
                 ; burn liquidity tokens
                 (burn_liquidity_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
                 ; assert liquidity tokens were burned
                 (assert_liquidity_burn_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
 
-                ; recreate self
-                (recreate_self_condition
-                    (- LIQUIDITY liquidity_tokens_amount)
-                    (- XCH_RESERVE (xch_amount_from_liquidity_amount liquidity_tokens_amount))
-                    (- TOKEN_RESERVE (token_amount_from_liquidity_amount liquidity_tokens_amount))
                 )
             )
             ; else - hax attempt
@@ -402,61 +392,51 @@
     )
 
     (defun-inline xch_to_token (
-        my_coin_id
-        xch_reserve_coin_id
-        token_reserve_coin_id
         xch_amount
         )
         (if (all
-                (> liquidity 0)
+                (> LIQUIDITY 0)
                 (> xch_amount 0)
             )
+            ; (new_liquidity new_xch_reserve_amount new_token_reserve_amount extra_conditions)
             (list
-                ; assert my id
-                (list ASSERT_MY_COIN_ID my_coin_id)
-                
-                ; spend XCH reserve
-                (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
-                (list ASSERT_COIN_ANNOUNCEMENT xch_reserve_coin_id '$')
-
-                ; create new XCH reserve
-                (assert_xch_reserve_condition
-                    my_coin_id
-                    (+ XCH_RESERVE xch_amount)
-                )
-
-                ; spend token reserve
-                (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
-                (list ASSERT_COIN_ANNOUNCEMENT token_reserve_coin_id '$')
-
-                ; create new token reserve
-                (assert_token_reserve_condition
-                    my_coin_id
-                    (- TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
-                )
-
-                ; recreate self
-                (recreate_self_condition
-                    LIQUIDITY
-                    (+ XCH_RESERVE xch_amount)
-                    (- TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
-                )
+                LIQUIDITY
+                (+ XCH_RESERVE xch_amount)
+                (- TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
+                ()
             )
             ; else prevent hax
             (x)
         )
     )
 
-    (defun-inline token_to_xch (
-        my_coin_id
-        xch_reserve_coin_id
-        token_reserve_coin_id
-        token_amount
-        )
+    (defun-inline token_to_xch (token_amount)
         (if (all
-                (> liquidity 0)
+                (> LIQUIDITY 0)
                 (> token_amount 0)
             )
+            ; (new_liquidity new_xch_reserve_amount new_token_reserve_amount extra_conditions)
+            (list
+                LIQUIDITY
+                (- XCH_RESERVE xch_amount (get_input_price token_amount TOKEN_RESERVE XCH_RESERVE))
+                (+ TOKEN_RESERVE token_amount)
+                ()
+            )
+            ; else prevent hax
+            (x)
+        )
+    )
+
+    ;; function_output = (new_liquidity new_xch_reserve_amount new_token_reserve_amount extra_conditions)
+    ;; todo: how do I get function_output to not re-run do_action every time it's acessed
+    ;; todo: reviewoor pls help
+    (defun create_output_conditions (
+            my_coin_id
+            xch_reserve_coin_id
+            token_reserve_coin_id
+            function_output
+        )
+        (merge_list
             (list
                 ; assert my id
                 (list ASSERT_MY_COIN_ID my_coin_id)
@@ -468,7 +448,7 @@
                 ; create new XCH reserve
                 (assert_xch_reserve_condition
                     my_coin_id
-                    (- XCH_RESERVE xch_amount (get_input_price token_amount TOKEN_RESERVE XCH_RESERVE))
+                    (new_xch_reserve_amount_from_function_output function_output)
                 )
 
                 ; spend token reserve
@@ -478,75 +458,65 @@
                 ; create new token reserve
                 (assert_token_reserve_condition
                     my_coin_id
-                    (+ TOKEN_RESERVE token_amount)
+                    (new_token_reserve_amount_from_function_output function_output)
                 )
 
                 ; recreate self
                 (recreate_self_condition
-                    LIQUIDITY
-                    (- XCH_RESERVE xch_amount (get_input_price token_amount TOKEN_RESERVE XCH_RESERVE))
-                    (+ TOKEN_RESERVE token_amount)
+                    (new_liquidity_from_function_output function_output)
+                    (new_xch_reserve_amount_from_function_output function_output)
+                    (new_token_reserve_amount_from_function_output function_output)
                 )
             )
-            ; else prevent hax
-            (x)
+            (extra_conditions_from_function_output function_output)
+        )
+    )
+
+    (defun-inline do_action ()
+        (if (= action ACTION_ADD_LIQUIDITY)
+            (add_liquidity
+                (add_liquidity_token_amount_from_params params)
+                (add_liquidity_to_puzzle_hash_from_params params)
+            )
+            ; else
+            (if (= action ACTION_REMOVE_LIQUIDITY)
+                (remove_liqiudity
+                    (liquidity_parent_id_from_coin_ids coin_ids)
+                    (remove_liquidity_liquidity_tokens_amount_from_params params)
+                    (remove_liqiudity_liquidity_inner_puzzle_hash_from_params params)
+                )
+                ; else
+                (if (= action ACTION_XCH_TO_TOKEN)
+                    (xch_to_token
+                        (xch_to_token_xch_amount_from_params params)
+                    )
+                    ; else
+                    (if = action ACTION_TOKEN_TO_XCH)
+                        (token_to_xch
+                            (token_to_xch_token_amount_from_params params)
+                        )
+                        ; else
+                        (x) ; unknown operation; just fail
+                )
+            )
         )
     )
 
     ; main
-    (if (= action ACTION_ADD_LIQUIDITY)
-        (add_liquidity
-            (my_coin_id_from_coin_ids coin_ids)
-            (xch_reserve_coin_id_from_coin_ids coin_ids)
-            (token_reserve_coin_id_from_coin_ids coin_ids)
-            (add_liquidity_token_amount_from_params params)
-            (add_liquidity_to_puzzle_hash_from_params params)
-        )
-        ; else
-        (if (= action ACTION_REMOVE_LIQUIDITY)
-            (remove_liqiudity
-                (my_coin_id_from_coin_ids coin_ids)
-                (xch_reserve_coin_id_from_coin_ids coin_ids)
-                (token_reserve_coin_id_from_coin_ids coin_ids)
-                (liquidity_parent_id_from_coin_ids coin_ids)
-                (remove_liquidity_liquidity_tokens_amount_from_params params)
-                (remove_liqiudity_liquidity_inner_puzzle_hash_from_params params)
-            )
-            ; else
-            (if (= action ACTION_XCH_TO_TOKEN)
-                (xch_to_token
-                    (my_coin_id_from_coin_ids coin_ids)
-                    (xch_reserve_coin_id_from_coin_ids coin_ids)
-                    (token_reserve_coin_id_from_coin_ids coin_ids)
-                    (xch_to_token_xch_amount_from_params params)
-                )
-                ; else
-                (if = action ACTION_TOKEN_TO_XCH)
-                    (token_to_xch
-                        (my_coin_id_from_coin_ids coin_ids)
-                        (xch_reserve_coin_id_from_coin_ids coin_ids)
-                        (token_reserve_coin_id_from_coin_ids coin_ids)
-                        (token_to_xch_token_amount_from_params params)
-                    )
-                    ; else
-                    (x) ; unknown operation; just fail
-            )
-        )
+    (create_output_conditions
+        (my_coin_id_from_coin_ids coin_ids)
+        (xch_reserve_coin_id_from_coin_ids coin_ids)
+        (token_reserve_coin_id_from_coin_ids coin_ids)
+        (do_action)
     )
 )
 
 ; NOTES FOR FUTURE SELF
 
-;; side-note: in a plane, no internet so no access to the cdv repo or karlkim's profile
-;; so I'll do the restructure now and just hope for the best
-
-;; also, major restructure is possible:
-;; in the main func, assert coin id and spend reserves + recreate token and assert new reserve creation
-;; each function returns new reserves, liquidity + additional conditions (e.g., burn / mint iquidity tokens)
-;; this would make the code a lot nicer, but it's best to first finish implementing all functions before doing this
-;; since unexpected things could be required and I don't want to re-write it two times
-
-;; speaking of which, this file already has over 400 lines and it's growinf
+;; this file already has over 500 lines and it's growing
 ;; after tests, let's split it so it's nicer, both for us and reviewers
 
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
+
+;; function return format:
+;; (new_liquidity new_xch_reserve_amount new_token_reserve_amount extra_conditions)
