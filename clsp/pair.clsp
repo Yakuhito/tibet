@@ -18,13 +18,16 @@
         XCH_RESERVE ; 'contract balance' of XCH
         TOKEN_RESERVE ; 'contract balance' of tokens
 
+        reserve_coin_ids ; needed for every spend - they are (re)created in tandem
+            ;; format: (xch_reserve_coin_id token_reserve_coin_id)
         action ; action the user wants to take
             ;; 0 - add liquidity (money printer go brr)
             ;; 1 - remove liquidity (sorry to see you go!)
             ;; 2 - XCH to token (sell XCH, buy token)
             ;; 3 - token to XCH (buy XCH, sell token)
         params ; params for the called method
-            ;; add liquidity: (token_amount to_puzzle_hash)
+            ;; add liquidity: (token_amount to_puzzle_hash [xch_amount])
+            ;;;      [xch_amount] - optional; ONLY taken into account IF there is no liquidity (this is the initial deposit)
             ;; remove liquidity: (liquidity_tokens_amount)
             ;; xch to token: (xch_amount to_address)
             ;; token to xch: (token_amount to_address)
@@ -40,9 +43,14 @@
     (defconstant ACTION_TOKEN_TO_XCH 3)
 
     ; params
+    ;; -1 - coin ids
+    (defun-inline xch_reserve_coin_id (coin_ids) (f coin_ids))
+    (defun-inline token_reserve_coin_id (coin_ids) (f (r coin_ids)))
+
     ;; 0 - add liquidity
     (defun-inline add_liquidity_token_amount_from_params (params) (f params))
     (defun-inline add_liquidity_to_puzzle_hash_from_params (params) (f (r params)))
+    (defun-inline add_liquidity_xch_amount_from_params (params) (f (r params)))
 
     ; helper functions
 
@@ -105,12 +113,31 @@
         )
     )
 
-    (defun-inline create_liquidity_creation_condition (amount to_puzzle_hash)
+    (defun-inline create_liquidity_delegated_puzzle (amount to_puzzle_hash)
+        (list 
+            (list CREATE_COIN to_puzzle_hash amount)
+        )
+    )
+
+    (defun-inline create_liquidity_condition (amount to_puzzle_hash)
         (list
             CREATE_COIN_ANNOUNCEMENT
-            ; program in this case: (list CREATE_COIN to_puzzle_hash amount)
-            ; no solution needed: ()
-            (sha256tree (list CREATE_COIN to_puzzle_hash amount) ())
+            ; program with no solution needed
+            (sha256
+                (create_liquidity_delegated_puzzle amount to_puzzle_hash)
+                ()
+            )
+        )
+    )
+
+    (defun-inline assert_liquidity_creation_condition (amount to_puzzle_hash)
+        (list
+            ASSERT_PUZZLE_ANNOUNCEMENT
+            (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH SINGLETON_STRUCT) to_puzzle_hash)
+            (sha256
+                (create_liquidity_delegated_puzzle amount to_puzzle_hash)
+                ()
+            )
         )
     )
 
@@ -140,44 +167,98 @@
 
     ; begin main methods
 
-    (defun-inline add_liquidity (token_amount to_puzzle_hash) 
-        (if (> liquidity 0)
-            (list
-                ; spend XCH reserve
+    (defun-inline add_liquidity (xch_reserve_id token_reserve_id token_amount to_puzzle_hash params) ; last two params are coin ids
+        ; step 1: check user-supplied param(s) is/are ok
+        (if (all
+                > token_amount 0)
+                (= (* 2 (/ token_amount 2)) token_amount) ; is even
+                (> (xch_amount_from_token_amount token_amount) 0)
+                (> (liquidity_minted_from_token_amount token_amount) 0)
+                (= (strlen to_puzzle_hash) 32)
+            )
+            (if (> liquidity 0)
+                (list
+                    ; spend XCH reserve
+                    (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_id)
+                    (list ASSERT_COIN_ANNOUNCEMENT xch_reserve_id '$')
 
-                ; from p2_singleton.clsp
-                ; (list ASSERT_PUZZLE_ANNOUNCEMENT (sha256 (calculate_full_puzzle_hash SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH singleton_inner_puzzle_hash) my_id))
-                ; (list CREATE_COIN_ANNOUNCEMENT '$')
+                    ; create new XCH reserve
+                    (create_xch_reserve_condition
+                        (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
+                    )
 
-                ; create new XCH reserve
-                (create_xch_reserve_condition (xch_amount_from_token_amount token_amount))
+                    ; spend token reserve
+                    (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_id)
+                    (list ASSERT_COIN_ANNOUNCEMENT token_reserve_id '$')
 
-                ; spend token reserve
+                    ; create new token reserve
+                    (create_token_reserve_condition
+                        (+ TOKEN_RESERVE token_amount)
+                    )
 
-                ; create new token reserve
-                (create_token_reserve_condition token_amount)
+                    ; mint liquidity tokens
+                    (mint_liquidity_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
+                    (create_liquidity_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
+                    ; assert liquidity tokens were minted (if not in this tx, they will be stuck forever)
+                    (assert_liquidity_creation_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
 
-                ; mint liquidity tokens
-                (mint_liquidity_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
-                (create_liquidity_creation_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
+                    ; recreate self
+                    (recreate_self_condition
+                        (+ LIQUIDITY (liquidity_minted_from_token_amount token_amount))
+                        (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
+                        (+ TOKEN_RESERVE token_amount)
+                    )
+                )
+                ; else liquidity <= 0
+                (if (all
+                        (= liquidity 0)
+                        (=
+                            (* 2 (/ (add_liquidity_xch_amount_from_params params) 2))
+                            (add_liquidity_xch_amount_from_params params)
+                        ) ; is even
+                    )
+                    (list
+                        ; create new XCH reserve
+                        (create_xch_reserve_condition
+                            (add_liquidity_xch_amount_from_params params)
+                        )
 
-                ; recreate self
-                (recreate_self_condition
-                    (+ LIQUIDITY (liquidity_minted_from_token_amount token_amount))
-                    (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
-                    (+ TOKEN_RESERVE token_amount)
+                        ; create new token reserve
+                        (create_token_reserve_condition
+                            token_amount
+                        )
+
+                        ; mint liquidity tokens
+                        (mint_liquidity_condition (add_liquidity_xch_amount_from_params params) to_puzzle_hash)
+                        (create_liquidity_creation_condition (add_liquidity_xch_amount_from_params params) to_puzzle_hash)
+                        ; assert liquidity tokens were minted (if not in this tx, they will be stuck forever)
+                        (assert_liquidity_creation_condition (add_liquidity_xch_amount_from_params params) to_puzzle_hash)
+
+
+                        ; recreate self
+                        (recreate_self_condition
+                            (add_liquidity_xch_amount_from_params params)
+                            (add_liquidity_xch_amount_from_params params)
+                            token_amount
+                        )
+                    )
+                    ; else liquidity < 0 or hax - wtf???
+                    (x)
                 )
             )
-            ; else liquidity <= 0
-            (x)
+            ; else
+            (x) ; prevent hax - say no to hacks
         )
     )
 
     ; main
     (if (= action ACTION_ADD_LIQUIDITY)
         (add_liquidity
+            (xch_reserve_coin_id reserve_coin_ids)
+            (token_reserve_coin_id reserve_coin_ids)
             (add_liquidity_token_amount_from_params params)
             (add_liquidity_to_puzzle_hash_from_params params)
+            params
         )
         ; else
         (if (= action ACTION_REMOVE_LIQUIDITY)

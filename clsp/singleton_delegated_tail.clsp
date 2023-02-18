@@ -64,12 +64,15 @@
         delegated_solution
     )
         (c
-            (list
-                ASSERT_COIN_ANNOUNCEMENT
-                (calculate_singleton_coin_id singleton_info)  
-                (sha256tree delegated_tail delegated_solution)
+            (list CREATE_PUZZLE_ANNOUNCEMENT (sha256 delegated_puzzle delegated_solution))
+            (c
+                (list
+                    ASSERT_COIN_ANNOUNCEMENT
+                    (calculate_singleton_coin_id singleton_info)  
+                    (sha256 delegated_puzzle delegated_solution)
+                )
+                (a delegated_puzzle delegated_solution)
             )
-            (a delegated_puzzle delegated_solution)
         )
     )
 
