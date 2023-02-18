@@ -412,7 +412,7 @@
                 ; create new XCH reserve
                 (assert_xch_reserve_condition
                     my_coin_id
-                    (- XCH_RESERVE xch_amount)
+                    (+ XCH_RESERVE xch_amount)
                 )
 
                 ; spend token reserve
@@ -422,14 +422,60 @@
                 ; create new token reserve
                 (assert_token_reserve_condition
                     my_coin_id
-                    (+ TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
+                    (- TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
                 )
 
                 ; recreate self
                 (recreate_self_condition
                     LIQUIDITY
-                    (- XCH_RESERVE xch_amount)
-                    (+ TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
+                    (+ XCH_RESERVE xch_amount)
+                    (- TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
+                )
+            )
+            ; else prevent hax
+            (x)
+        )
+    )
+
+    (defun-inline token_to_xch (
+        my_coin_id
+        xch_reserve_coin_id
+        token_reserve_coin_id
+        token_amount
+        )
+        (if (all
+                (> liquidity 0)
+                (> token_amount 0)
+            )
+            (list
+                ; assert my id
+                (list ASSERT_MY_COIN_ID my_coin_id)
+                
+                ; spend XCH reserve
+                (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
+                (list ASSERT_COIN_ANNOUNCEMENT xch_reserve_coin_id '$')
+
+                ; create new XCH reserve
+                (assert_xch_reserve_condition
+                    my_coin_id
+                    (- XCH_RESERVE xch_amount (get_input_price token_amount TOKEN_RESERVE XCH_RESERVE))
+                )
+
+                ; spend token reserve
+                (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
+                (list ASSERT_COIN_ANNOUNCEMENT token_reserve_coin_id '$')
+
+                ; create new token reserve
+                (assert_token_reserve_condition
+                    my_coin_id
+                    (+ TOKEN_RESERVE token_amount)
+                )
+
+                ; recreate self
+                (recreate_self_condition
+                    LIQUIDITY
+                    (- XCH_RESERVE xch_amount (get_input_price token_amount TOKEN_RESERVE XCH_RESERVE))
+                    (+ TOKEN_RESERVE token_amount)
                 )
             )
             ; else prevent hax
@@ -466,9 +512,14 @@
                 )
                 ; else
                 (if = action ACTION_TOKEN_TO_XCH)
-                    (x) ; token to XCH
+                    (token_to_xch
+                        (my_coin_id_from_coin_ids coin_ids)
+                        (xch_reserve_coin_id_from_coin_ids coin_ids)
+                        (token_reserve_coin_id_from_coin_ids coin_ids)
+                        (token_to_xch_token_amount_from_params params)
+                    )
                     ; else
-                    (x) ; merge coins
+                    (x) ; unknown operation; just fail
             )
         )
     )
