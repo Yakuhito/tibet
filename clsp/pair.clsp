@@ -35,6 +35,7 @@
     
     ; libs
     (include curry.clinc)
+    (include condition_codes.clvm)
 
     ; from curry-and-treehash.clinc (which can't be included in the same file as curry.clinc *-*)
     (defun sha256tree (TREE)
@@ -71,19 +72,19 @@
 
     ;; liquidity-related converters
     (defun-inline xch_amount_from_token_amount (token_amount)
-        (+ (logior (/ (* token_amount XCH_SUPPLY) TOKEN_SUPPLY) 1) 1); make sure it's even
+        (+ (logior (/ (* token_amount XCH_RESERVE) TOKEN_RESERVE) 1) 1); make sure it's even
     )
 
     (defun-inline xch_amount_from_liquidity_amount (liquidity_amount)
-        (- (logior (/ (* liquidity_amount XCH_SUPPLY) LIQUIDITY) 1) 1); make sure it's even
+        (- (logior (/ (* liquidity_amount XCH_RESERVE) LIQUIDITY) 1) 1); make sure it's even
     )
 
     (defun-inline token_amount_from_liquidity_amount (liquidity_amount)
-        (- (logior (/ (* liquidity_amount TOKEN_SUPPLY) LIQUIDITY) 1) 1); make sure it's even
+        (- (logior (/ (* liquidity_amount TOKEN_RESERVE) LIQUIDITY) 1) 1); make sure it's even
     )
 
     (defun-inline liquidity_minted_from_token_amount (token_amount)
-        (- (logior (/ (* token_amount LIQUIDITY) TOKEN_SUPPLY) 1) 1) ; make sure it's even
+        (- (logior (/ (* token_amount LIQUIDITY) TOKEN_RESERVE) 1) 1) ; make sure it's even
     )
 
     ;; deposit-related
@@ -372,4 +373,8 @@
 
 ; NOTES FOR FUTURE SELF
 ; deposit tokens - harder than initially imagined; how can we be sure that resulting TAILs are valid?
+; use offers! for tokens, create one & assert the announcements (if it comes from a settlement_puzzle that's the inner puzzle of a cat, it's valid)
+; for XCH, do the same
+; this way, we transform 2 'deposits' into simple unlocks & asserts
+; also, please update/review the the liquidity TAIL
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
