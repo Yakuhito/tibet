@@ -170,7 +170,7 @@
     (defun-inline add_liquidity (xch_reserve_id token_reserve_id token_amount to_puzzle_hash params) ; last two params are coin ids
         ; step 1: check user-supplied param(s) is/are ok
         (if (all
-                > token_amount 0)
+                (> token_amount 0)
                 (= (* 2 (/ token_amount 2)) token_amount) ; is even
                 (> (xch_amount_from_token_amount token_amount) 0)
                 (> (liquidity_minted_from_token_amount token_amount) 0)
@@ -262,15 +262,15 @@
         )
         ; else
         (if (= action ACTION_REMOVE_LIQUIDITY)
-            () ; remove liquidity
+            (x) ; remove liquidity
             ; else
             (if (= action ACTION_XCH_TO_TOKEN)
-                () ; XCH to token
+                (x) ; XCH to token
                 ; else
                 (if = action ACTION_TOKEN_TO_XCH)
-                    () ; token to XCH
+                    (x) ; token to XCH
                     ; else
-                    () ; merge coins
+                    (x) ; merge coins
             )
         )
     )
