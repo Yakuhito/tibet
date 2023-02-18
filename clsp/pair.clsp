@@ -409,4 +409,7 @@
 )
 
 ; NOTES FOR FUTURE SELF
+;; since liuidity tail is similar to p2_singleton, can't we get away with
+;; one coin announcement and one puzzle announcement instead of two coin announcements?
+;; would be more cost-effective
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
