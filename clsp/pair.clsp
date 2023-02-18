@@ -13,7 +13,7 @@
         SETTLEMENT_PAYMENTS_MOD_HASH ; sha256 tree of settlement_payments.clvm (not that it has any curried arguments, but still)
 
         TAIL_HASH ; identifies the token this pair holds
-        FEE ; 0.3%
+        FEE ; 7 for 0.7% (will get divided by a thousand)
 
         LIQUIDITY ; holds the total number of liquidity tokens in existence
         XCH_RESERVE ; 'contract balance' of XCH
@@ -80,6 +80,12 @@
     ;; 1 - remove liquidity
     (defun-inline remove_liquidity_liquidity_tokens_amount_from_params (params) (f params))
     (defun-inline remove_liqiudity_liquidity_inner_puzzle_hash_from_params (params) (f (r params)))
+
+    ;; 2 - xch to token
+    (defun-inline xch_to_token_xch_amount_from_params (params) (f params))
+
+    ;; 3 - token to xch
+    (defun-inline token_to_xch_token_amount_from_params (params) (f params))
 
     ; helper functions
 
@@ -199,6 +205,18 @@
         )
     )
 
+    ;; exchange-related
+
+    ; https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy#L106
+    (defun-inline get_input_price (input_amount input_reserve output_reserve)
+        (/
+            ; numerator
+            (* output_reserve (* input_amount (- 1000 FEE)))
+            ; denominator
+            (+ (* input_reserve 1000) (* input_amount (- 1000 FEE)))
+        )
+    )
+
     ;; self-propagation
 
     (defun-inline recreate_self_condition (new_liquidity new_xch_reserve new_token_reserve)
@@ -232,20 +250,18 @@
         token_reserve_coin_id
         token_amount
         to_puzzle_hash
-        params
         )
         ; step 1: check user-supplied param(s) is/are ok
         (if (all
                 (> token_amount 0)
-                (= (* 2 (/ token_amount 2)) token_amount) ; is even
                 (> (xch_amount_from_token_amount token_amount) 0)
                 (> (liquidity_minted_from_token_amount token_amount) 0)
-                (= (strlen to_puzzle_hash) 32)
+                (= (strlen to_puzzle_hash) 32) ;; todo: is this necessarry ?
             )
             (if (> liquidity 0)
                 (list
                     ; assert my id
-                    (list ASSERT_MY_ID my_coin_id)
+                    (list ASSERT_MY_COIN_ID my_coin_id)
 
                     ; spend XCH reserve
                     (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
@@ -287,7 +303,7 @@
                     )
                     (list
                         ; assert my id
-                        (list ASSERT_MY_ID my_coin_id)
+                        (list ASSERT_MY_COIN_ID my_coin_id)
 
                         ; create new XCH reserve
                         (assert_xch_reserve_condition
@@ -335,7 +351,7 @@
             )
             (list
                 ; assert my id
-                (list ASSERT_MY_ID my_coin_id)
+                (list ASSERT_MY_COIN_ID my_coin_id)
 
                 ; spend XCH reserve
                 (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
@@ -375,6 +391,52 @@
         )
     )
 
+    (defun-inline xch_to_token (
+        my_coin_id
+        xch_reserve_coin_id
+        token_reserve_coin_id
+        xch_amount
+        )
+        (if (all
+                (> liquidity 0)
+                (> xch_amount 0)
+            )
+            (list
+                ; assert my id
+                (list ASSERT_MY_COIN_ID my_coin_id)
+                
+                ; spend XCH reserve
+                (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
+                (list ASSERT_COIN_ANNOUNCEMENT xch_reserve_coin_id '$')
+
+                ; create new XCH reserve
+                (assert_xch_reserve_condition
+                    my_coin_id
+                    (- XCH_RESERVE xch_amount)
+                )
+
+                ; spend token reserve
+                (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
+                (list ASSERT_COIN_ANNOUNCEMENT token_reserve_coin_id '$')
+
+                ; create new token reserve
+                (assert_token_reserve_condition
+                    my_coin_id
+                    (+ TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
+                )
+
+                ; recreate self
+                (recreate_self_condition
+                    LIQUIDITY
+                    (- XCH_RESERVE xch_amount)
+                    (+ TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
+                )
+            )
+            ; else prevent hax
+            (x)
+        )
+    )
+
     ; main
     (if (= action ACTION_ADD_LIQUIDITY)
         (add_liquidity
@@ -383,7 +445,6 @@
             (token_reserve_coin_id_from_coin_ids coin_ids)
             (add_liquidity_token_amount_from_params params)
             (add_liquidity_to_puzzle_hash_from_params params)
-            params
         )
         ; else
         (if (= action ACTION_REMOVE_LIQUIDITY)
@@ -397,7 +458,12 @@
             )
             ; else
             (if (= action ACTION_XCH_TO_TOKEN)
-                (x) ; XCH to token
+                (xch_to_token
+                    (my_coin_id_from_coin_ids coin_ids)
+                    (xch_reserve_coin_id_from_coin_ids coin_ids)
+                    (token_reserve_coin_id_from_coin_ids coin_ids)
+                    (xch_to_token_xch_amount_from_params params)
+                )
                 ; else
                 (if = action ACTION_TOKEN_TO_XCH)
                     (x) ; token to XCH
@@ -413,6 +479,8 @@
 ;; since liquidity tail is similar to p2_singleton, can't we get away with
 ;; one coin announcement and one puzzle announcement instead of two coin announcements?
 ;; would be more cost-effective
+
+;; instead of FEE, can we have 1000 - FEE? yes, but I need to find a suggestive name for it.
 
 ;; also, major restructure is possible:
 ;; in the main func, assert coin id and spend reserves + recreate token and assert new reserve creation
