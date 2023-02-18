@@ -12,17 +12,19 @@
       lineage_proof
       delta
       inner_conditions
-      tail_solution ; (singleton_info [my_amount])
-        ;; singleton_info = (parent_id inner_puzzle_hash amount)
-        ;; [my_amount] = number; only required if burning (delta is negative)
+      tail_solution 
+        ; IF MINT:
+            ;; (singleton_parent_id singleton_inner_puzzle_hash )
+        ; IF BURN:
+            ;; (singleton_inner_puzzle_hash my_id)
     )
 
     (include condition_codes.clvm)
     (include curry.clinc)
     (include cat_truths.clib)
 
-    ; curry-and-treehash.clinc
-    ;; which can't be included in the same file as curry.clinc
+    ; import part of curry-and-treehash.clinc
+    ;; the lib can't be imported in the same file as curry.clinc
     (defconstant b32 32)
 
     (defun-inline size_b32 (var)
@@ -35,73 +37,95 @@
             (x)
         )
     )
-    ; end curry-and-treehash.clinc
 
-    ; tail_solution is (singleton_inner_puzzle_hash conditions)
-    (defun-inline singleton_info_from_solution (tail_solution) (f tail_solution))
-    (defun-inline my_amount_from_solution (tail_solution) (f (r tail_solution)))
+    ; takes a lisp tree and returns the hash of it
+    (defun sha256tree (TREE)
+        (if (l TREE)
+            (sha256 2 (sha256tree (f TREE)) (sha256tree (r TREE)))
+            (sha256 1 TREE)))
+    ; end import of curry-and-treehash.clinc
 
-    (defun-inline parent_id_from_singleton_info (singleton_info) (f singleton_info))
-    (defun-inline inner_puzzle_hash_from_singleton_info (singleton_info) (f (r singleton_info)))
-    (defun-inline amount_from_singleton_info (singleton_info) (f (r (r tail_solution))))
+    ; tail solution to function args
+    (defun-inline mint_singleton_parent_id_from_solution (tail_solution) (f tail_solution))
+    (defun-inline mint_singleton_inner_puzzle_hash_from_solution (tail_solution) (f (r tail_solution)))
+    (defun-inline mint_singleton_amount_from_solution (tail_solution) (f (r (r tail_solution))))
+
+    (defun-inline burn_singleton_inner_puzzle_hash_from_solution (tail_solution) (f tail_solution))
+    (defun-inline burn_my_id_from_solution (tail_solution) (f tail_solution))
 
     ; SINGLETON_STRUCT
     (defun-inline singleton_mod_hash_from_struct (singleton_struct) (f singleton_struct))
-    (defun-inline singleton_launcher_from_struct (singleton_struct) (f (r singleton_struct)))
-    (defun-inline singleton_launcher_puzzle_hash_from_struct (singleton_struct) (f (r (r singleton_struct))))
     
-
     ; https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/did_innerpuz.clvm#L56
     (defun-inline calculate_full_puzzle_hash (inner_puzzle_hash)
         (curry_hashes_inline (singleton_mod_hash_from_struct SINGLETON_STRUCT)
-            SINGLETON_STRUCT
             inner_puzzle_hash
+            (sha256tree SINGLETON_STRUCT)
         )
     )
 
-    (defun-inline calculate_singleton_coin_id (singleton_info)
+    (defun-inline calculate_singleton_coin_id (singleton_parent_id singleton_inner_puzzle_hash singleton_amount)
         (calculate_coin_id
-            (parent_id_from_singleton_info singleton_info)
-            (calculate_full_puzzle_hash
-                (inner_puzzle_hash_from_singleton_info singleton_info)
-            )
-            (amount_from_singleton_info singleton_info)
+            singleton_parent_id
+            (calculate_full_puzzle_hash singleton_inner_puzzle_hash)
+            singleton_amount
         )
     )
 
-    (defun-inline main (
-        singleton_info
-        tail_solution
+    (defun-inline mint (
+        singleton_parent_id
+        singleton_inner_puzzle_hash
+        singleton_amount
     )
-        (if (not parent_is_cat)
-            ; verify parent
-            (if (= delta 0)
+        (if (= delta 0)
+            (list
                 (list
-                    (list ASSERT_MY_PARENT_ID (calculate_singleton_coin_id singleton_info))
+                    ASSERT_MY_PARENT_ID
+                    (calculate_singleton_coin_id singleton_parent_id singleton_inner_puzzle_hash singleton_amount)
                 )
-                ; else
-                (x)
             )
-            ; else - burn
-            (if (= delta (- 0 (amount_from_singleton_info tail_solution)))
+            ; else
+            (x)
+        )
+    )
+
+    (defun-inline burn (
+            singleton_inner_puzzle_hash
+            my_id
+            my_amount
+        )
+        (if (> delta 0)
+            (x)
+            ; else delta <= 0
+            (if (= delta 0)
+                (x)
+                ; else delta < 0
                 (list
-                    (list ASSERT_MY_AMOUNT (amount_from_singleton_info tail_solution))
+                    (list ASSERT_MY_AMOUNT my_amount)
+                    (list ASSERT_MY_COIN_ID my_id)
                     (list
-                        ASSERT_COIN_ANNOUNCEMENT
-                        (calculate_singleton_coin_id singleton_info)
-                        (sha256 (amount_from_singleton_info tail_solution))
+                        ASSERT_PUZZLE_ANNOUNCEMENT
+                        (calculate_full_puzzle_hash singleton_inner_puzzle_hash)
+                        (sha256 my_id my_amount)
                     )
                     (list CREATE_COIN_ANNOUNCEMENT 'Y')
                 )
-                ; else
-                (x)
             )
         )
     )
 
     ; main
-    (main
-        (singleton_info_from_solution tail_solution)
-        tail_solution
+    (if (not parent_is_cat)
+        (mint
+            (mint_singleton_parent_id_from_solution tail_solution)
+            (mint_singleton_inner_puzzle_hash_from_solution tail_solution)
+            (mint_singleton_amount_from_solution tail_solution)
+        )
+    ; else
+        (burn
+            (burn_singleton_inner_puzzle_hash_from_solution tail_solution)
+            (burn_my_id_from_solution tail_solution)
+            (- 0 delta)
+        )
     )
 )
