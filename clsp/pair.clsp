@@ -377,4 +377,5 @@
 ; for XCH, do the same
 ; this way, we transform 2 'deposits' into simple unlocks & asserts
 ; also, please update/review the the liquidity TAIL
+; ALSO THIS ALLOWS FOR F*KING FLASH LOANS
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
