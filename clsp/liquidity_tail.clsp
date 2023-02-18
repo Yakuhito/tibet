@@ -12,19 +12,37 @@
       lineage_proof
       delta
       inner_conditions
-      tail_solution ; (singleton_info_or_my_amount)
-        ; singleton_info = (parent_id inner_puzzle_hash amount)
+      tail_solution ; (singleton_info [my_amount])
+        ;; singleton_info = (parent_id inner_puzzle_hash amount)
+        ;; [my_amount] = number; only required if burning (delta is negative)
     )
 
     (include condition_codes.clvm)
     (include curry.clinc)
     (include cat_truths.clib)
 
+    ; curry-and-treehash.clinc
+    ;; which can't be included in the same file as curry.clinc
+    (defconstant b32 32)
+
+    (defun-inline size_b32 (var)
+        (= (strlen var) b32)
+    )
+
+    (defun calculate_coin_id (parent puzzlehash amount)
+        (if (all (size_b32 parent) (size_b32 puzzlehash) (> amount -1))
+            (sha256 parent puzzlehash amount)
+            (x)
+        )
+    )
+    ; end curry-and-treehash.clinc
+
     ; tail_solution is (singleton_inner_puzzle_hash conditions)
-    (defun-inline singleton_info_or_my_amount_from_solution (tail_solution) (f tail_solution))
+    (defun-inline singleton_info_from_solution (tail_solution) (f tail_solution))
+    (defun-inline my_amount_from_solution (tail_solution) (f (r tail_solution)))
 
     (defun-inline parent_id_from_singleton_info (singleton_info) (f singleton_info))
-    (defun-inline inner_puzzle_hash_from_singleton_info (singleton_info) (f (r ingleton_info)))
+    (defun-inline inner_puzzle_hash_from_singleton_info (singleton_info) (f (r singleton_info)))
     (defun-inline amount_from_singleton_info (singleton_info) (f (r (r tail_solution))))
 
     ; SINGLETON_STRUCT
@@ -52,22 +70,30 @@
     )
 
     (defun-inline main (
-        singleton_info_or_my_amount
+        singleton_info
+        tail_solution
     )
         (if (not parent_is_cat)
             ; verify parent
             (if (= delta 0)
                 (list
-                    (ASSERT_MY_PARENT_ID (calculate_singleton_coin_id singleton_info_or_my_amount))
+                    (list ASSERT_MY_PARENT_ID (calculate_singleton_coin_id singleton_info))
                 )
                 ; else
                 (x)
             )
             ; else - burn
-            (if (= delta (- 0 singleton_info_or_my_amount))
+            (if (= delta (- 0 (amount_from_singleton_info tail_solution)))
                 (list
-                    (list ASSERT_MY_AMOUNT singleton_info_or_my_amount)
-                    (CREATE_PUZZLE_ANNOUNCEMENT singleton_info_or_my_amount)
+                    (list ASSERT_MY_AMOUNT (amount_from_singleton_info tail_solution))
+                    (list
+                        ASSERT_PUZZLE_ANNOUNCEMENT
+                        (calculate_full_puzzle_hash
+                            (inner_puzzle_hash_from_singleton_info singleton_info)
+                        )
+                        (sha256 (amount_from_singleton_info tail_solution))
+                    )
+                    (list CREATE_PUZZLE_ANNOUNCEMENT (amount_from_singleton_info tail_solution))
                 )
                 ; else
                 (x)
@@ -77,6 +103,7 @@
 
     ; main
     (main
-        (singleton_info_or_my_amount_from_solution tail_solution)
+        (singleton_info_from_solution tail_solution)
+        tail_solution
     )
 )
