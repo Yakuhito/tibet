@@ -13,7 +13,10 @@
         SETTLEMENT_PAYMENTS_MOD_HASH ; sha256 tree of settlement_payments.clvm (not that it has any curried arguments, but still)
 
         TAIL_HASH ; identifies the token this pair holds
-        FEE ; 7 for 0.7% (will get divided by a thousand)
+        INVERSE_FEE ; this cleverly-named variable is calculated as 1000 - FEE
+            ;; FEE is, for example, 7 for 0.7% (will get divided by a thousand)
+            ;; meaning INVERSE_FEE is 993 (user swaps 99.3% of their input assets to output - tokens or XCH)
+            ;; 0.7% is kept as lp fee
 
         LIQUIDITY ; holds the total number of liquidity tokens in existence
         XCH_RESERVE ; 'contract balance' of XCH
@@ -218,9 +221,9 @@
     (defun-inline get_input_price (input_amount input_reserve output_reserve)
         (/
             ; numerator
-            (* output_reserve (* input_amount (- 1000 FEE)))
+            (* output_reserve (* input_amount INVERSE_FEE))
             ; denominator
-            (+ (* input_reserve 1000) (* input_amount (- 1000 FEE)))
+            (+ (* input_reserve 1000) (* input_amount INVERSE_FEE))
         )
     )
 
@@ -239,7 +242,7 @@
                 SETTLEMENT_PAYMENTS_MOD_HASH
 
                 TAIL_HASH
-                FEE
+                INVERSE_FEE
 
                 new_liquidity
                 new_xch_reserve
@@ -534,7 +537,8 @@
 
 ; NOTES FOR FUTURE SELF
 
-;; instead of FEE, can we have 1000 - FEE? yes, but I need to find a suggestive name for it.
+;; side-note: in a plane, no internet so no access to the cdv repo or karlkim's profile
+;; so I'll do the restructure now and just hope for the best
 
 ;; also, major restructure is possible:
 ;; in the main func, assert coin id and spend reserves + recreate token and assert new reserve creation
