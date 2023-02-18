@@ -185,11 +185,18 @@
         )
     )
 
-    (defun-inline burn_liquidity_condition (liquidity_token_amount)
+    (defun-inline burn_liquidity_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash)
         (list
-            CREATE_COIN_ANNOUNCEMENT
+            CREATE_PUZZLE_ANNOUNCEMENT
             ; program with no solution needed
-            (sha256 liquidity_token_amount)
+            (sha256 
+                (calculate_coin_id
+                    liquidity_parent_id
+                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH SINGLETON_STRUCT) liquidity_inner_puzzle_hash)
+                    liquidity_token_amount
+                )
+                liquidity_token_amount
+            )
         )
     )
 
@@ -375,7 +382,7 @@
 
                 ; TODO: link with coin id
                 ; burn liquidity tokens
-                (burn_liquidity_condition liquidity_tokens_amount)
+                (burn_liquidity_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
                 ; assert liquidity tokens were burned
                 (assert_liquidity_burn_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
 
@@ -526,10 +533,6 @@
 )
 
 ; NOTES FOR FUTURE SELF
-
-;; since liquidity tail is similar to p2_singleton, can't we get away with
-;; one coin announcement and one puzzle announcement instead of two coin announcements?
-;; would be more cost-effective
 
 ;; instead of FEE, can we have 1000 - FEE? yes, but I need to find a suggestive name for it.
 
