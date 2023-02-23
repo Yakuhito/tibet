@@ -270,14 +270,14 @@
 
     ; begin main methods
 
-    (defun-inline add_liquidity (
+    (defun-inline add_liqiudity (
         my_coin_id
         xch_reserve_coin_id
         token_reserve_coin_id
         token_amount
         to_puzzle_hash
         )
-        ; step 1: check user-supplied param(s) is/are ok
+        ; step 1: check user-supplied params are ok
         (if (all
                 (> token_amount 0)
                 (> (xch_amount_from_token_amount token_amount) 0)
@@ -286,37 +286,11 @@
             )
             (if (> liquidity 0)
                 (list
-                    ; assert my id
-                    (list ASSERT_MY_COIN_ID my_coin_id)
-
-                    ; spend XCH reserve
-                    (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
-                    (list ASSERT_COIN_ANNOUNCEMENT xch_reserve_coin_id '$')
-
-                    ; create new XCH reserve
-                    (assert_xch_reserve_condition
-                        my_coin_id
-                        (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
-                    )
-
-                    ; spend token reserve
-                    (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
-                    (list ASSERT_COIN_ANNOUNCEMENT token_reserve_coin_id '$')
-
-                    ; create new token reserve
-                    (assert_token_reserve_condition
-                        my_coin_id
-                        (+ TOKEN_RESERVE token_amount)
-                    )
-
-                    ; mint liquidity tokens
-                    (create_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
-                    
-                    ; recreate self
-                    (recreate_self_condition
-                        (+ LIQUIDITY (liquidity_minted_from_token_amount token_amount))
-                        (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
-                        (+ TOKEN_RESERVE token_amount)
+                    (+ LIQUIDITY (liquidity_minted_from_token_amount token_amount))
+                    (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
+                    (+ TOKEN_RESERVE token_amount)
+                    (list
+                        (create_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
                     )
                 )
                 ; else liquidity <= 0
@@ -328,37 +302,19 @@
                         ) ; is even
                     )
                     (list
-                        ; assert my id
-                        (list ASSERT_MY_COIN_ID my_coin_id)
-
-                        ; create new XCH reserve
-                        (assert_xch_reserve_condition
-                            my_coin_id
-                            (add_liquidity_xch_amount_from_params params)
-                        )
-
-                        ; create new token reserve
-                        (assert_token_reserve_condition
-                            my_coin_id
-                            token_amount
-                        )
-
-                        ; mint liquidity tokens
-                        (create_liquidity_tokens_condition (add_liquidity_xch_amount_from_params params) to_puzzle_hash)
-
-                        ; recreate self
-                        (recreate_self_condition
-                            (add_liquidity_xch_amount_from_params params)
-                            (add_liquidity_xch_amount_from_params params)
-                            token_amount
+                        (add_liquidity_xch_amount_from_params params)
+                        (add_liquidity_xch_amount_from_params params)
+                        token_amount
+                        (list
+                            (create_liquidity_tokens_condition (add_liquidity_xch_amount_from_params params) to_puzzle_hash)
                         )
                     )
                     ; else liquidity < 0 or hax - wtf???
                     (x)
                 )
             )
-            ; else
-            (x) ; prevent hax - say no to hacks
+            ; else - hax attempt
+            (x)
         )
     )
 
