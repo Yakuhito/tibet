@@ -234,110 +234,173 @@
     )
 
     ; begin main methods
-
-    (defun-inline add_liquidity (
-        token_amount
-        to_puzzle_hash
-        )
-        ; step 1: check user-supplied params are ok
-        (if (all
-                (> token_amount 0)
-                (> (xch_amount_from_token_amount token_amount) 0)
-                (> (liquidity_minted_from_token_amount token_amount) 0)
-                (= (strlen to_puzzle_hash) 32) ;; todo: is this necessarry ?
-            )
-            (if (> liquidity 0)
-                (list
-                    (+ LIQUIDITY (liquidity_minted_from_token_amount token_amount))
-                    (+ XCH_RESERVE (xch_amount_from_token_amount token_amount))
-                    (+ TOKEN_RESERVE token_amount)
-                    (list
-                        (create_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
-                    )
-                )
-                ; else liquidity <= 0
-                (if (all
-                        (= liquidity 0)
-                        (=
-                            (* 2 (/ (add_liquidity_xch_amount_from_params params) 2))
-                            (add_liquidity_xch_amount_from_params params)
-                        ) ; is even
-                    )
-                    (list
-                        (add_liquidity_xch_amount_from_params params)
-                        (add_liquidity_xch_amount_from_params params)
-                        token_amount
-                        (list
-                            (create_liquidity_tokens_condition (add_liquidity_xch_amount_from_params params) to_puzzle_hash)
-                        )
-                    )
-                    ; else liquidity < 0 or hax - wtf???
-                    (x)
-                )
-            )
-            ; else - hax attempt
-            (x)
-        )
-    )
-
-    (defun-inline remove_liqiudity (
-        liquidity_parent_id
+    (defun-inline add_liquidity_ok (
+        liquidity
         liquidity_tokens_amount
-        liquidity_inner_puzzle_hash
+    )
+        (all
+            (> token_amount 0)
+            (> (xch_amount_from_token_amount token_amount) 0)
+            (> (liquidity_minted_from_token_amount token_amount) 0)
+            (= (strlen to_puzzle_hash) 32) ;; todo: is this necessarry ?
         )
-        (if (all
-                (> LIQUIDITY 0)
-                (> LIQUIDITY liquidity_tokens_amount)
-                (= (* 2 (/ liquidity_tokens_amount 2)) liquidity_tokens_amount) ; is even
-            )
-            (list
-                LIQUIDITY
-                (- XCH_RESERVE (xch_amount_from_liquidity_amount liquidity_tokens_amount))
-                (- TOKEN_RESERVE (token_amount_from_liquidity_amount liquidity_tokens_amount))
-                (list
-                    (burn_liquidity_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
-                    (assert_liquidity_burn_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
-                )
-            )
-            ; else - hax attempt
-            (x)
+    )
+    ; todo: if liquidity < 0, test new parameter
+
+    ;; gt0 = liquidity > 0
+    ;; 0 = liquidity = 0
+    (defun-inline add_liquidity_gt0_liquidity (
+            liquidity
+            token_amount
+        )
+        (+ liquidity (liquidity_minted_from_token_amount token_amount))
+    )
+
+    (defun-inline add_liquidity_gt0_xch_reserve (
+            xch_reserve
+            token_amount
+        )
+        (+ xch_reserve (xch_amount_from_token_amount token_amount))
+    )
+
+    (defun-inline add_liquidity_gt0_token_reserve (
+            token_reserve
+            token_amount
+        )
+        (+ TOKEN_RESERVE token_amount)
+    )
+
+    (defun-inline add_liquidity_gt0_conditions (
+            token_amount
+            to_puzzle_hash
+        )
+        (list
+            (create_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
         )
     )
 
-    (defun-inline xch_to_token (
+    (defun-inline add_liquidity_0_liquidity (
+            xch_amount
+        )
         xch_amount
+    )
+
+    (defun-inline add_liquidity_0_xch_reserve (
+            xch_amount
         )
-        (if (all
-                (> LIQUIDITY 0)
-                (> xch_amount 0)
-            )
-            ; (new_liquidity new_xch_reserve_amount new_token_reserve_amount extra_conditions)
-            (list
-                LIQUIDITY
-                (+ XCH_RESERVE xch_amount)
-                (- TOKEN_RESERVE (get_input_price xch_amount XCH_RESERVE TOKEN_RESERVE))
-                ()
-            )
-            ; else prevent hax
-            (x)
+        xch_amount
+    )
+
+    (defun-inline add_liquidity_0_token_reserve (
+            token_amount
+        )
+        token_amount
+    )
+
+    (defun-inline add_liquidity_0_conditions (
+            xch_amount
+            to_puzzle_hash
+        )
+        (list
+            (create_liquidity_tokens_condition xch_amount to_puzzle_hash)
+        )
+
+    )
+
+    ; remove liquidity
+    (defun-inline remove_liqiudity_ok (
+        liquidity
+        liquidity_tokens_amount
+    )
+        (all
+            (> liquidity 0)
+            (> liquidity liquidity_tokens_amount)
+            (= (* 2 (/ liquidity_tokens_amount 2)) liquidity_tokens_amount) ; is even
         )
     )
 
-    (defun-inline token_to_xch (token_amount)
-        (if (all
-                (> LIQUIDITY 0)
-                (> token_amount 0)
-            )
-            ; (new_liquidity new_xch_reserve_amount new_token_reserve_amount extra_conditions)
-            (list
-                LIQUIDITY
-                (- XCH_RESERVE xch_amount (get_input_price token_amount TOKEN_RESERVE XCH_RESERVE))
-                (+ TOKEN_RESERVE token_amount)
-                ()
-            )
-            ; else prevent hax
-            (x)
+    (defun-inline remove_liqiudity_liquidity (
+            liquidity
+            liquidity_tokens_amount
         )
+        (- liquidity liquidity_tokens_amount)
+    )
+
+    (defun-inline remove_liqiudity_xch_reserve (
+            xch_reserve
+            liquidity_tokens_amount
+        )
+        (- xch_reserve (xch_amount_from_liquidity_amount liquidity_tokens_amount))
+    )
+
+    (defun-inline remove_liqiudity_token_reserve (
+            token_reserve
+            liquidity_tokens_amount
+        )
+        (- token_reserve (token_amount_from_liquidity_amount liquidity_tokens_amount))
+    )
+
+    (defun-inline remove_liquidity_conditions (
+            liquidity_parent_id
+            liquidity_inner_puzzle_hash
+            liquidity_tokens_amount
+        )
+        (list
+            (burn_liquidity_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
+            (assert_liquidity_burn_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
+        )
+    )
+
+    ; xch to token
+    (defun-inline xch_to_token_ok (
+        liquidity
+        xch_amount
+    )
+        (all
+            (> liquidity 0)
+            (> xch_amount 0)
+        )
+    )
+
+    (defun-inline xch_to_token_xch_reserve (
+            xch_reserve
+            xch_amount
+        )
+        (+ xch_reserve xch_amount)
+    )
+
+    (defun-inline xch_to_token_token_reserve (
+            xch_reserve
+            token_reserve
+            xch_amount
+        )
+        (- token_reserve (get_input_price xch_amount xch_reserve token_reserve))
+    )
+
+    ; token to xch
+    (defun-inline token_to_xch_ok (
+        liquidity
+        token_amount
+    )
+        (all
+            (> liquidity 0)
+            (> token_amount 0)
+        )
+    )
+
+    (defun-inline token_to_xch_xch_reserve (
+            xch_reserve
+            token_reserve
+            token_amount
+        )
+        (- xch_reserve xch_amount (get_input_price token_amount token_reserve xch_reserve))
+    )
+
+    (defun-inline token_to_xch_token_reserve (
+            token_reserve
+            token_amount
+        )
+        (+ token_reserve token_amount)
     )
 
     (defun-inline create_output_conditions (
@@ -431,3 +494,5 @@
 ;; function return format:
 ;; (new_liquidity new_xch_reserve_amount new_token_reserve_amount extra_conditions)
 ;; future function format: inline; func_name_VARIABLE (a function to calculate each param; more efficient this way - stager design since we do not have access to the assign operator)
+
+;; todo: take another look at uniswap v1 (mainly input_price vs. output_price)
