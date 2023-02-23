@@ -270,10 +270,7 @@
 
     ; begin main methods
 
-    (defun-inline add_liqiudity (
-        my_coin_id
-        xch_reserve_coin_id
-        token_reserve_coin_id
+    (defun-inline add_liquidity (
         token_amount
         to_puzzle_hash
         )
