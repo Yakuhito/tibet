@@ -1,0 +1,36 @@
+(
+    ; from curry-and-treehash.clinc (which can't be included in the same file as curry.clinc *-*)
+    (defun sha256tree (TREE)
+        (if (l TREE)
+            (sha256 2 (sha256tree (f TREE)) (sha256tree (r TREE)))
+            (sha256 1 TREE)))
+
+    (defconstant b32 32)
+
+    (defun-inline size_b32 (var)
+        (= (strlen var) b32)
+    )
+
+    (defun calculate_coin_id (parent puzzlehash amount)
+        (if (all (size_b32 parent) (size_b32 puzzlehash) (> amount -1))
+            (sha256 parent puzzlehash amount)
+            (x)
+        )
+    )
+    ; end curry-and-treehash.clinc
+    ; shamelessly stolen from cat_v2.clvm
+
+    ; take two lists and merge them into one
+    (defun merge_list (list_a list_b)
+      (if list_a
+        (c (f list_a) (merge_list (r list_a) list_b))
+        list_b
+      )
+    )
+    ; end of stolen code from cat_v2.clvm
+
+    ; SINGLETON_STRUCT
+    (defun-inline singleton_mod_hash_from_struct (singleton_struct) (f singleton_struct))
+    (defun-inline singleton_launcher_from_struct (singleton_struct) (f (r singleton_struct)))
+    (defun-inline singleton_launcher_puzzle_hash_from_struct (singleton_struct) (f (r (r singleton_struct))))
+)
