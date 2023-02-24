@@ -44,12 +44,6 @@
 
     (include pair_utils.clinc)
 
-    ; function codes
-    (defconstant ACTION_ADD_LIQUIDITY 0)
-    (defconstant ACTION_REMOVE_LIQUIDITY 1)
-    (defconstant ACTION_XCH_TO_TOKEN 2)
-    (defconstant ACTION_TOKEN_TO_XCH 3)
-
     ; params
     ;; -1 - coin ids
     (defun-inline my_coin_id_from_coin_ids (coin_ids) (f coin_ids))
@@ -72,12 +66,6 @@
     ;; 3 - token to xch
     (defun-inline token_to_xch_token_amount_from_params (params) (f params))
 
-    ;; function output
-    (defun-inline new_liquidity_from_function_output (output) (f output))
-    (defun-inline new_xch_reserve_amount_from_function_output (output) (f (r output)))
-    (defun-inline new_token_reserve_amount_from_function_output (output) (f (r (r output))))
-    (defun-inline extra_conditions_from_function_output (output) (f (r (r (r output)))))
-
     ;; liquidity-related converters
     (defun-inline xch_amount_from_token_amount (token_amount)
         (/ (* token_amount XCH_RESERVE) TOKEN_RESERVE)
@@ -95,7 +83,19 @@
         (- (logior (/ (* token_amount LIQUIDITY) TOKEN_RESERVE) 1) 1) ; make sure it's even
     )
 
-    ;; deposit-related
+    ;; exchange-related
+
+    ; https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy#L106
+    (defun-inline get_input_price (input_amount input_reserve output_reserve)
+        (/
+            ; numerator
+            (* output_reserve (* input_amount INVERSE_FEE))
+            ; denominator
+            (+ (* input_reserve 1000) (* input_amount INVERSE_FEE))
+        )
+    )
+
+    ;; deposit/reserve-related
     (defun-inline p2_singleton_puzzle_hash (SINGLETON_STRUCT)
         (curry_hashes_inline P2_SINGLETON_MOD_HASH
             (singleton_mod_hash_from_struct SINGLETON_STRUCT)
@@ -144,7 +144,7 @@
     (defun-inline assert_token_reserve_condition (my_coin_id amount)
         (list
             ASSERT_PUZZLE_ANNOUNCEMENT
-            SETTLEMENT_PAYMENTS_MOD_HASH
+            SETTLEMENT_PAYMENTS_MOD_HASH ; todo: does this work? probably not. wrap with CAT puzzle
             (settlement_cat_announcement
                 my_coin_id
                 TAIL_HASH
@@ -193,18 +193,6 @@
                 liquidity_token_amount
             )
             'Y'
-        )
-    )
-
-    ;; exchange-related
-
-    ; https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy#L106
-    (defun-inline get_input_price (input_amount input_reserve output_reserve)
-        (/
-            ; numerator
-            (* output_reserve (* input_amount INVERSE_FEE))
-            ; denominator
-            (+ (* input_reserve 1000) (* input_amount INVERSE_FEE))
         )
     )
 
@@ -407,7 +395,10 @@
             my_coin_id
             xch_reserve_coin_id
             token_reserve_coin_id
-            function_output
+            new_liquidity
+            new_xch_reserve
+            new_token_reserve
+            extra_conditions
         )
         (merge_list
             (list
@@ -421,7 +412,7 @@
                 ; create new XCH reserve
                 (assert_xch_reserve_condition
                     my_coin_id
-                    (new_xch_reserve_amount_from_function_output function_output)
+                    new_xch_reserve
                 )
 
                 ; spend token reserve
@@ -431,19 +422,41 @@
                 ; create new token reserve
                 (assert_token_reserve_condition
                     my_coin_id
-                    (new_token_reserve_amount_from_function_output function_output)
+                    new_token_reserve
                 )
 
                 ; recreate self
                 (recreate_self_condition
-                    (new_liquidity_from_function_output function_output)
-                    (new_xch_reserve_amount_from_function_output function_output)
-                    (new_token_reserve_amount_from_function_output function_output)
+                    new_liquidity
+                    new_xch_reserve
+                    new_token_reserve
                 )
             )
-            (extra_conditions_from_function_output function_output)
+            extra_conditions
         )
     )
+
+    ; function codes
+    (defconstant ACTION_ADD_LIQUIDITY 0)
+    (defconstant ACTION_REMOVE_LIQUIDITY 1)
+    (defconstant ACTION_XCH_TO_TOKEN 2)
+    (defconstant ACTION_TOKEN_TO_XCH 3)
+
+    ; main
+    (if (> action ACTION_REMOVE_LIQUIDITY)
+        (if (= action ACTION_XCH_TO_TOKEN)
+            (x)
+            ; else action > ACTION_REMOVE_LIQUIDITY, action != ACTION_XCH_TO_TOKEN -> action = ACTION_TOKEN_TO_XCH
+            (x)
+        )
+        ; else action <= ACTION_REMOVE_LIQUIDITY
+        (if (= action ACTION_REMOVE_LIQUIDITY)
+            (x)
+            ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
+            (x)
+        )
+    )
+)
 
     (defun-inline do_action ()
         (if (= action ACTION_ADD_LIQUIDITY)
@@ -482,7 +495,6 @@
         (token_reserve_coin_id_from_coin_ids coin_ids)
         (do_action)
     )
-)
 
 ; NOTES FOR FUTURE SELF
 
