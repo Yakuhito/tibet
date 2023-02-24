@@ -142,3 +142,4 @@ main.sym
 .coverage
 .idea
 .DS_Store
+.pytest_cache
