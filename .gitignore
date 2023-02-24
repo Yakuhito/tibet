@@ -143,3 +143,9 @@ main.sym
 .idea
 .DS_Store
 .pytest_cache
+
+# not secure if the account is live
+# but this one is for testing and will only have a few mojos before the router is launched
+master_private_key.txt
+
+router_launcher_id.txt
