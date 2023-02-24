@@ -130,3 +130,15 @@ dmypy.json
 
 # clvm
 main.sym
+
+# https://github.com/Chia-Network/chia-dev-tools/blob/main/.gitignore
+/chia_dev_tools.egg-info
+/build
+/venv
+/dist
+/.eggs
+__pycache__/
+main.sym
+.coverage
+.idea
+.DS_Store
