@@ -9,7 +9,7 @@
             ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
         P2_SINGLETON_MOD_HASH ; sha256tree of the p2_singleton module (uncurried)
         CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
-        LIQUIDITY_TAIL_MOD_HASH ; sha256 tree of the singleton delegated tail module (uncurried)
+        LIQUIDITY_TAIL_MOD_HASH ; sha256 tree of the liquidity TAIL (uncurried)
         SETTLEMENT_PAYMENTS_MOD_HASH ; sha256 tree of settlement_payments.clvm (not that it has any curried arguments, but still)
 
         TAIL_HASH ; identifies the token this pair holds
@@ -41,7 +41,7 @@
     (include curry.clinc)
     (include condition_codes.clvm)
 
-    (include pair_utils.clinc)
+    (include pair_utils.clib)
 
     ; params
     ;; -1 - coin ids
@@ -143,7 +143,7 @@
     (defun-inline assert_token_reserve_condition (my_coin_id amount)
         (list
             ASSERT_PUZZLE_ANNOUNCEMENT
-            SETTLEMENT_PAYMENTS_MOD_HASH ; todo: does this work? probably not. wrap with CAT puzzle
+            (cat_puzzle_hash TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH)
             (settlement_cat_announcement
                 my_coin_id
                 TAIL_HASH

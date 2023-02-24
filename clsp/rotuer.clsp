@@ -1,0 +1,116 @@
+; the V1 router
+; author: yakuhito
+
+;; only used to create pairs!
+
+(mod (
+        ; curried args - used for deploying pair
+        PAIR_MOD_HASH
+        SINGLETON_MOD_HASH ; pay attention here - it's not SINGLETON_STRUCT
+        P2_SINGLETON_MOD_HASH
+        CAT_MOD_HASH
+        LIQUIDITY_TAIL_MOD_HASH
+        SETTLEMENT_PAYMENTS_MOD_HASH
+        INVERSE_FEE
+
+        ; required for the router to work
+        LAUNCHER_PUZZLE_HASH
+        ROUTER_MOD_HASH ; my mod hash (for re-creation)
+
+        ; states
+        PAIRS ; list (tail_hash singleton_launcher_id)
+
+        ; inputs
+        my_coin_id
+        new_pair_tail_hash ; hash of TAIL
+    )
+
+    (include pair_utils.clib) ; lol
+    (include condition_codes.clvm)
+    (include curry.clinc)
+
+    (defun check_pair_not_in_pairs (pair_tail_hash pairs)
+        (if pairs
+            (if = pair_tail_hash (f (f pairs))
+                ()
+                (check_pair_not_in_pairs pair_tail_hash (r pairs))
+            )
+            ; else
+            1
+        )
+    )
+
+    (defun-inline new_pair_launcher_id ()
+        ; launcher amount needs to be 2, since 1 would mean wrapping it in our singleton top layer puzzle
+        (calculate_coin_id (my_coin_id LAUNCHER_PUZZLE_HASH 2))
+    )
+
+    (defun-inline new_pair_singleton_struct ()
+        (list SINGLETON_MOD_HASH (new_pair_launcher_id) LAUNCHER_PUZZLE_HASH)
+    )
+
+    (defun-inline pair_puzzle_hash (tail_hash)
+        (curry_hashes_inline PAIR_MOD_HASH
+            PAIR_MOD_HASH
+            (new_pair_singleton_struct) ; SINGLETON_STRUCT
+            P2_SINGLETON_MOD_HASH
+            CAT_MOD_HASH
+            LIQUIDITY_TAIL_MOD_HASH
+            SETTLEMENT_PAYMENTS_MOD_HASH
+
+
+
+            tail_hash
+            INVERSE_FEE
+            0 ; initial liquidity
+            0 ; initial xch reserve
+            0 ; initial toke nreserve
+        )
+    )
+
+    (defun-inline my_puzzle_hash (pairs)
+        (curry_hashes_inline ROUTER_MOD_HASH
+            PAIR_MOD_HASH
+            SINGLETON_MOD_HASH
+            P2_SINGLETON_MOD_HASH
+            CAT_MOD_HASH
+            LIQUIDITY_TAIL_MOD_HASH
+            SETTLEMENT_PAYMENTS_MOD_HASH
+            INVERSE_FEE
+            LAUNCHER_PUZZLE_HASH
+            ROUTER_MOD_HASH
+            pairs
+        )
+    )
+
+    (defun-inline output_conditions (pair_launcher_id)
+        (list
+            (list ASSERT_MY_COIN_ID my_coin_id)
+            (list CREATE_COIN pair_launcher_id 2)
+            (list CREATE_COIN
+                (my_puzzle_hash
+                    (merge_list
+                        PAIRS
+                        (list new_pair_tail_hash pair_launcher_id)
+                    )
+                )
+                1
+            )
+            ; make sure the pair singleton is launched
+            (list
+                ASSERT_COIN_ANNOUNCEMENT
+                pair_launcher_id
+                (sha256tree (list (pair_puzzle_hash new_pair_tail_hash) 1 ()))
+            )
+        )
+    )
+
+    ; main
+    (if (check_pair_not_in_pairs new_pair_tail_hash pairs)
+        (output_conditions
+            (new_pair_launcher_id new_pair_tail_hash)
+        )
+        ; else
+        (x)
+    )
+)
