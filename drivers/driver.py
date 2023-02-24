@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import List
 
@@ -9,8 +10,9 @@ from chia.util.hash import std_hash
 from chia.util.ints import uint64
 from clvm.casts import int_to_bytes
 
-import cdv.clibs as std_lib
-from cdv.util.load_clvm import load_clvm
+from chia.wallet.puzzles.load_clvm import load_clvm
 
-clibs_path: Path = Path(std_lib.__file__).parent
-ROUTER_MOD: Program = load_clvm("router.clsp", "clsp", search_paths=[clibs_path])
+ROUTER_MOD: Program = load_clvm("../../../../../../../clvm/router.clvm", recompile=False)
+PAIR_MOD: Program = load_clvm("../../../../../../../clvm/pair.clvm", recompile=False)
+
+print(ROUTER_MOD)
