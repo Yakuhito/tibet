@@ -14,10 +14,10 @@ from chia.util.ints import uint64
 from clvm.casts import int_to_bytes
 from cdv.cmds.rpc import get_client
 from chia.wallet.puzzles.load_clvm import load_clvm
-from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, SINGLETON_MOD_HASH, SINGLETON_MOD, P2_SINGLETON_MOD, SINGLETON_LAUNCHER_HASH, SINGLETON_LAUNCHER, lineage_proof_for_coinsol, puzzle_for_singleton, solution_for_singleton, generate_launcher_coin
+from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, pay_to_singleton_puzzle, SINGLETON_MOD_HASH, SINGLETON_MOD, P2_SINGLETON_MOD, SINGLETON_LAUNCHER_HASH, SINGLETON_LAUNCHER, lineage_proof_for_coinsol, puzzle_for_singleton, solution_for_singleton, generate_launcher_coin
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import puzzle_for_pk, calculate_synthetic_secret_key, DEFAULT_HIDDEN_PUZZLE_HASH, puzzle_for_synthetic_public_key, solution_for_delegated_puzzle
-from chia.wallet.puzzles.cat_loader import CAT_MOD_HASH
-from chia.wallet.trading.offer import OFFER_MOD_HASH
+from chia.wallet.puzzles.cat_loader import CAT_MOD_HASH, CAT_MOD
+from chia.wallet.trading.offer import OFFER_MOD_HASH, OFFER_MOD
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
 from cdv.cmds.sim_utils import SIMULATOR_ROOT_PATH
 from chia.simulator.simulator_full_node_rpc_client import SimulatorFullNodeRpcClient
@@ -37,6 +37,15 @@ from chia.wallet.cat_wallet.cat_utils import (
     SpendableCAT,
     construct_cat_puzzle,
     unsigned_spend_bundle_for_spendable_cats,
+)
+from chia.wallet.trading.offer import Offer
+from chia.util.bech32m import decode_puzzle_hash, encode_puzzle_hash
+from chia.types.spend_bundle import SpendBundle
+from chia.util.bech32m import bech32_decode, bech32_encode, convertbits
+from chia.wallet.util.puzzle_compression import (
+    compress_object_with_puzzles,
+    decompress_object_with_puzzles,
+    lowest_best_version,
 )
 
 ROUTER_MOD: Program = load_clvm("../../../../../../../clvm/router.clvm", recompile=False)
@@ -399,11 +408,11 @@ async def create_pair_cmd(tail_hash):
     master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
     router_launcher_id = get_router_launcher_id()
     if router_launcher_id == "":
-        print("Please set the router luncher id first.")
+        print("Please set the router launcher id first.")
         return
 
     coin, synth_secret_key = await select_std_coin(client, master_sk, 2)
-    pair_launcher_id, sb = create_new_pair(client, coin, synth_secret_key, router_launcher_id, tail_hash)
+    pair_launcher_id, sb = await create_pair(client, coin, synth_secret_key, router_launcher_id, tail_hash)
     print(f"Pair launcher id: {pair_launcher_id}")
 
     print("Pair ready to be created.")
@@ -418,9 +427,111 @@ async def create_pair_cmd(tail_hash):
     client.close()
     await client.await_closed()
     
+def pair_initial_liquidity_inner_solution(pair_coin_id, token_amount, xch_amount, to_puzzle_hash):
+    return Program.to([
+        Program.to([pair_coin_id, b"\x00" * 32, b"\x00" * 32]),
+        0,
+        Program.to([token_amount, to_puzzle_hash, xch_amount])
+    ])
+
+async def deposit_liquidity_offer_initial(client, pair_id, tail_hash, token_amount, xch_amount, to_puzzle_hash, current_pair_coin=None, last_singleton_spend=None):
+    if current_pair_coin is None or last_singleton_spend == None:
+        current_pair_coin, last_singleton_spend = await get_unspent_singleton_info(client, pair_id)
+    
+    p2_singleton_puzzle = pay_to_singleton_puzzle(bytes.fromhex(pair_id))
+    p2_singleton_puzzle_cat =  construct_cat_puzzle(CAT_MOD, bytes.fromhex(tail_hash), p2_singleton_puzzle)
+
+    pair_puzzle = get_pair_puzzle(bytes.fromhex(pair_id), bytes.fromhex(tail_hash), 0, 0, 0)
+
+    pair_inner_solution = pair_initial_liquidity_inner_solution(current_pair_coin.name(), token_amount, xch_amount, bytes.fromhex(to_puzzle_hash))
+    lineage_proof = lineage_proof_for_coinsol(last_singleton_spend)
+    pair_solution = solution_for_singleton(lineage_proof, current_pair_coin.amount, pair_inner_solution)
+    
+    singleton_spend = CoinSpend(current_pair_coin, pair_puzzle, pair_solution)
+    
+    eph_xch_reserve_coin = Coin(
+        b"\x00" * 32,
+        OFFER_MOD_HASH,
+        xch_amount
+    )
+    eph_xch_reserve_solution = Program.to([
+        Program.to([
+            current_pair_coin.name(),
+            [p2_singleton_puzzle.get_tree_hash(), xch_amount]
+        ])
+    ])
+    eph_xch_reserve_spend = CoinSpend(eph_xch_reserve_coin, OFFER_MOD, eph_xch_reserve_solution)
+
+    eph_token_reserve_puzzle = construct_cat_puzzle(CAT_MOD, bytes.fromhex(tail_hash), OFFER_MOD)
+    eph_token_reserve_coin = Coin(
+        b"\x00" * 32,
+        eph_token_reserve_puzzle.get_tree_hash(),
+        token_amount
+    )
+    eph_token_reserve_inner_solution = Program.to([
+        Program.to([
+            current_pair_coin.name(),
+            [p2_singleton_puzzle_cat.get_tree_hash(), token_amount]
+        ])
+    ])
+    cat_sb = unsigned_spend_bundle_for_spendable_cats(
+        CAT_MOD,
+        [
+            SpendableCAT(
+                eph_token_reserve_coin,
+                bytes.fromhex(tail_hash),
+                OFFER_MOD,
+                eph_token_reserve_inner_solution,
+            )
+        ]
+    )
+    eph_token_reserve_spend = cat_sb.coin_spends[0]
+
+    sb = SpendBundle(
+        [singleton_spend, eph_xch_reserve_spend, eph_token_reserve_spend],
+        AugSchemeMPL.aggregate([])
+    )
+
+    mods: List[bytes] = [bytes(s.puzzle_reveal.to_program().uncurry()[0]) for s in sb.coin_spends]
+    version = max(lowest_best_version(mods), 6)  # Clients lower than version 6 should not be able to parse
+    offer_bytes = compress_object_with_puzzles(bytes(sb), version)
+    offer_str = bech32_encode("offer:tibet:add_initial_liquidity", convertbits(list(offer_bytes), 8, 5))
+
+    return offer_str
+
+async def deposit_liquidity_offer(client, router_launcher_id, pair_id, token_amount, xch_amount=0):
+    current_pair_coin, last_singleton_spend = await get_unspent_singleton_info(client, pair_id)
+    # todo: get pair tail hash from last_singleton_spend or router if last spend is launcher
+    if last_singleton_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
+        return await deposit_liquidity_offer_initial(client, pair_id, "dd0aeaff6cd317a0e130cfbec714b0fab447b64790c036899fb809f6e3e34659", token_amount, xch_amount, decode_puzzle_hash("txch1ymz0cpqcqwnhw5xp5j6gllmy6353xal54f72g5eu5m35pfs4jlzqxvxepc").hex(), current_pair_coin=current_pair_coin, last_singleton_spend=last_singleton_spend)
+
+    # todo: normal offer
+
+    return "offer1"
+
+async def deposit_liquidity_cmd(pair_id, token_amount, xch_amount):
+    client = await get_full_node_client()
+    router_launcher_id = get_router_launcher_id()
+    # master_sk_hex = ""
+    # try:
+    #     master_sk_hex = open("master_private_key.txt", "r").read().strip()
+    # except:
+    #     master_sk_hex = input("Master Private Key: ")
+    # master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
+    # if router_launcher_id == "":
+    #     print("Please set the router launcher id first.")
+    #     return
+
+    # coin, synth_secret_key = await select_std_coin(client, master_sk, 2)
+    offer = await deposit_liquidity_offer(client, router_launcher_id, pair_id, token_amount, xch_amount=xch_amount)
+    print(offer)
+
+    client.close()
+    await client.await_closed()
+
 async def main():
     if len(sys.argv) < 2:
-        print("Possible commands: launch_router, set_router, launch_test_token, create_pair")
+        print("Possible commands: launch_router, set_router, launch_test_token, create_pair, deposit_liquidity")
     elif sys.argv[1] == "launch_router":
         await launch_router()
     elif sys.argv[1] == "set_router":
@@ -435,6 +546,14 @@ async def main():
             await create_pair_cmd(sys.argv[2])
         else:
             print("Usage: create_pair [tail_hash_of_asset]")
+    elif sys.argv[1] == "deposit_liquidity":
+        if len(sys.argv) == 4 or len(sys.argv) == 5:
+            xch_amount = 0
+            if len(sys.argv) == 5:
+                xch_amount = int(sys.argv[4])
+            await deposit_liquidity_cmd(sys.argv[2], int(sys.argv[3]), xch_amount)
+        else:
+            print("Usage: deposit_liquidity [pair_launcher_id] [amount_token] [amount_xch_if_first_deposit]")
     else:
         print("Unknown command.")
 
@@ -442,6 +561,3 @@ if __name__ == "__main__":
     asyncio.run(main())
 
 # TAIL ID for simulator: dd0aeaff6cd317a0e130cfbec714b0fab447b64790c036899fb809f6e3e34659
-# TAIL ID 2: 835adf775240dcc4bcd8c1359ecc81a6aa6c0a6ae3503e164a8576997ed404b9
-# TAIL ID 3: 61833ebe885a61e8f70a39543afecb0202d9f8baaa9978cc7425dd5718076fa7
-# 4: c132584ee1a9b4f3f9ed022175c588ee7cae7e552379598bb5f49cbf2815b364

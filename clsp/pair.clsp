@@ -52,7 +52,7 @@
     ;; 0 - add liquidity
     (defun-inline add_liquidity_token_amount_from_params (params) (f params))
     (defun-inline add_liquidity_to_puzzle_hash_from_params (params) (f (r params)))
-    (defun-inline add_liquidity_xch_amount_from_params (params) (f (r params)))
+    (defun-inline add_liquidity_xch_amount_from_params (params) (f (r (r params))))
 
     ;; 1 - remove liquidity
     (defun-inline remove_liquidity_liquidity_tokens_amount_from_params (params) (f params))
@@ -95,11 +95,11 @@
     )
 
     ;; deposit/reserve-related
-    (defun-inline p2_singleton_puzzle_hash (SINGLETON_STRUCT)
+    (defun-inline p2_singleton_puzzle_hash ()
         (curry_hashes_inline P2_SINGLETON_MOD_HASH
-            (singleton_mod_hash_from_struct SINGLETON_STRUCT)
-            (singleton_launcher_from_struct SINGLETON_STRUCT)
-            (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT)
+            (sha256tree (singleton_mod_hash_from_struct SINGLETON_STRUCT))
+            (sha256tree (singleton_launcher_from_struct SINGLETON_STRUCT))
+            (sha256tree (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT))
         )
     )
 
@@ -107,7 +107,7 @@
         (sha256tree
             (list
                 my_coin_id
-                (list (p2_singleton_puzzle_hash SINGLETON_STRUCT) amount)
+                (list (p2_singleton_puzzle_hash) amount)
             )
         )
     )
@@ -115,8 +115,10 @@
     (defun-inline assert_xch_reserve_condition (my_coin_id amount)
         (list
             ASSERT_PUZZLE_ANNOUNCEMENT
-            SETTLEMENT_PAYMENTS_MOD_HASH
-            (settlement_announcement my_coin_id amount)
+            (sha256
+                SETTLEMENT_PAYMENTS_MOD_HASH
+                (settlement_announcement my_coin_id amount)
+            )
         )
     )
 
@@ -133,7 +135,7 @@
             (list
                 my_coin_id
                 (list
-                    (cat_puzzle_hash tail_hash (p2_singleton_puzzle_hash SINGLETON_STRUCT))
+                    (cat_puzzle_hash tail_hash (p2_singleton_puzzle_hash))
                     amount
                 )
             )
@@ -143,11 +145,13 @@
     (defun-inline assert_token_reserve_condition (my_coin_id amount)
         (list
             ASSERT_PUZZLE_ANNOUNCEMENT
-            (cat_puzzle_hash TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH)
-            (settlement_cat_announcement
-                my_coin_id
-                TAIL_HASH
-                amount
+            (sha256
+                (cat_puzzle_hash TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH)
+                (settlement_cat_announcement
+                    my_coin_id
+                    TAIL_HASH
+                    amount
+                )
             )
         )
     )
@@ -162,7 +166,7 @@
 
     (defun-inline create_liquidity_tokens_condition (amount to_puzzle_hash)
         (create_token_condition
-            (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH SINGLETON_STRUCT)
+            (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT))
             to_puzzle_hash
             amount
         )
@@ -175,7 +179,7 @@
             (sha256 
                 (calculate_coin_id
                     liquidity_parent_id
-                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH SINGLETON_STRUCT) liquidity_inner_puzzle_hash)
+                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
                     liquidity_token_amount
                 )
                 liquidity_token_amount
@@ -186,12 +190,14 @@
     (defun-inline assert_liquidity_burn_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash)
         (list
             ASSERT_COIN_ANNOUNCEMENT
-            (calculate_coin_id
-                liquidity_parent_id
-                (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH SINGLETON_STRUCT) liquidity_inner_puzzle_hash)
-                liquidity_token_amount
+            (sha256
+                (calculate_coin_id
+                    liquidity_parent_id
+                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
+                    liquidity_token_amount
+                )
+                'Y'
             )
-            'Y'
         )
     )
 
@@ -201,19 +207,19 @@
         (list
             CREATE_COIN
             (curry_hashes_inline PAIR_MOD_HASH
-                PAIR_MOD_HASH
-                SINGLETON_STRUCT
-                P2_SINGLETON_MOD_HASH
-                CAT_MOD_HASH
-                LIQUIDITY_TAIL_MOD_HASH
-                SETTLEMENT_PAYMENTS_MOD_HASH
+                (sha256tree PAIR_MOD_HASH)
+                (sha256tree SINGLETON_STRUCT)
+                (sha256tree P2_SINGLETON_MOD_HASH)
+                (sha256tree CAT_MOD_HASH)
+                (sha256tree LIQUIDITY_TAIL_MOD_HASH)
+                (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
 
-                TAIL_HASH
-                INVERSE_FEE
+                (sha256tree TAIL_HASH)
+                (sha256tree INVERSE_FEE)
 
-                new_liquidity
-                new_xch_reserve
-                new_token_reserve
+                (sha256tree new_liquidity)
+                (sha256tree new_xch_reserve)
+                (sha256tree new_token_reserve)
             )
             1
         )
@@ -229,7 +235,6 @@
             (> token_amount 0)
             (> (xch_amount_from_token_amount token_amount) 0)
             (> (liquidity_minted_from_token_amount token_amount) 0)
-            (= (strlen to_puzzle_hash) 32)
         )
     )
 
@@ -265,10 +270,9 @@
         token_amount
     )
         (all
-            (> token_amount 100) ; min token amount: 0.1
-            (> xch_amount 0) ; min XCH amount: 1000000000 (4 cents at the time of writing this, probably less than a million in the future)
+            (> token_amount 99) ; min token amount: 0.1
+            (> xch_amount 999999999) ; min XCH amount: 1000000000 (4 cents at the time of writing this, probably less than a million in the future)
             (= (* 2 (/ xch_amount 2)) xch_amount) ; xch_amount is even
-            (= (strlen to_puzzle_hash) 32)
         )
     )
 
@@ -393,6 +397,7 @@
             new_xch_reserve
             new_token_reserve
             extra_output_conditions
+            is_initial_liquidity_deposit
         )
         (if ok_condition
             (merge_list
@@ -400,19 +405,11 @@
                     ; assert my id
                     (list ASSERT_MY_COIN_ID my_coin_id)
                 
-                    ; spend XCH reserve
-                    (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
-                    (list ASSERT_COIN_ANNOUNCEMENT xch_reserve_coin_id '$')
-
                     ; create new XCH reserve
                     (assert_xch_reserve_condition
                         my_coin_id
                         new_xch_reserve
                     )
-
-                    ; spend token reserve
-                    (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
-                    (list ASSERT_COIN_ANNOUNCEMENT token_reserve_coin_id '$')
 
                     ; create new token reserve
                     (assert_token_reserve_condition
@@ -427,7 +424,18 @@
                         new_token_reserve
                     )
                 )
-                extra_output_conditions
+                (if is_initial_liquidity_deposit
+                    extra_output_conditions
+                    (merge_list extra_output_conditions (list
+                        ; spend XCH reserve
+                        (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
+                        (list ASSERT_COIN_ANNOUNCEMENT (sha256 xch_reserve_coin_id '$'))
+
+                        ; spend token reserve
+                        (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
+                        (list ASSERT_COIN_ANNOUNCEMENT (sha256 token_reserve_coin_id '$'))
+                    ))   
+                )
             )
             ; else
             (x)
@@ -458,6 +466,7 @@
                     (xch_to_token_xch_amount_from_params params)
                 )
                 ()
+                ()
             )
             ; else action > ACTION_REMOVE_LIQUIDITY, action != ACTION_XCH_TO_TOKEN -> action = ACTION_TOKEN_TO_XCH
             (create_output_conditions
@@ -474,6 +483,7 @@
                 (token_to_xch_token_reserve
                     (token_to_xch_token_amount_from_params params)
                 )
+                ()
                 ()
             )
         )
@@ -500,10 +510,11 @@
                     (remove_liqiudity_liquidity_inner_puzzle_hash_from_params params)
                     (remove_liquidity_liquidity_tokens_amount_from_params params)
                 )
+                ()
             )
             ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
             ; add_liquidity behaves differently if the 
-            (if (= liquidity 0)
+            (if (= LIQUIDITY 0)
                 (create_output_conditions
                     (my_coin_id_from_coin_ids coin_ids)
                     (xch_reserve_coin_id_from_coin_ids coin_ids)
@@ -525,6 +536,7 @@
                         (add_liquidity_xch_amount_from_params params)
                         (add_liquidity_to_puzzle_hash_from_params params)
                     )
+                    1
                 )
                 ; else liquidity > 0
                 (create_output_conditions
@@ -547,6 +559,7 @@
                         (add_liquidity_token_amount_from_params params)
                         (add_liquidity_to_puzzle_hash_from_params params)
                     )
+                    ()
                 )
             )
         )
