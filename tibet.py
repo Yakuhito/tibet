@@ -3,7 +3,6 @@ import sys
 import asyncio
 from pathlib import Path
 from typing import List
-
 from chia.wallet.sign_coin_spends import sign_coin_spends
 from blspy import PrivateKey, AugSchemeMPL
 from chia.types.blockchain_format.coin import Coin
@@ -27,6 +26,9 @@ from chia.util.ints import uint16, uint32
 from chia.wallet.derive_keys import master_sk_to_wallet_sk_unhardened
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.types.coin_spend import CoinSpend
+from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
+from chia.wallet.puzzles.tails import GenesisById
+from chia.wallet.puzzles.cat_loader import CAT_MOD, CAT_MOD_HASH
 
 ROUTER_MOD: Program = load_clvm("../../../../../../../clvm/router.clvm", recompile=False)
 PAIR_MOD: Program = load_clvm("../../../../../../../clvm/pair.clvm", recompile=False)
@@ -92,7 +94,18 @@ async def get_full_node_client() -> FullNodeRpcClient:
 
     return node_client
 
+async def sign_std_coin_spends(coin_spends, synth_sk):
+    async def pk_to_sk(pk):
+       return synth_sk
 
+    return await sign_coin_spends(
+        coin_spends,
+        pk_to_sk,
+        DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA,
+        DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
+    )
+
+    
 async def launch_router_with_sk(parent_coin, synth_secret_key):
     conds, launcher_coin_spend = deploy_router_conditions_and_coinspend(parent_coin)
     if parent_coin.amount > 1:
@@ -104,21 +117,16 @@ async def launch_router_with_sk(parent_coin, synth_secret_key):
             ],
         ))
 
-
-    async def pk_to_sk(pk):
-       return synth_secret_key
-
     p2_coin_spend = CoinSpend(
         parent_coin,
         puzzle_for_synthetic_public_key(synth_secret_key.get_g1()),
         solution_for_delegated_puzzle(Program.to((1, conds)), [])
     )
+    print(p2_coin_spend)
         
-    sb = await sign_coin_spends(
+    sb = await sign_std_coin_spends(
         [launcher_coin_spend, p2_coin_spend],
-        pk_to_sk,
-        DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA,
-        DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
+        synth_secret_key
     )
 
     launcher_id = launcher_coin_spend.coin.name().hex()
@@ -160,7 +168,7 @@ async def select_std_coin(client, master_sk, min_amount):
         coin = coin_record.coin
         synth_secret_key = ph_to_wallet_sk[coin.puzzle_hash]
 
-        return coin, synt_secret_key
+        return coin, synth_secret_key
 
     print("No coins big enough at the given address :(")
 
@@ -173,9 +181,9 @@ async def launch_router():
         master_sk_hex = input("Master Private Key: ")
 
     master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
-    parent_coin_record, synt_secret_key = await select_std_coin(client, master_sk, 2)
+    parent_coin, synth_secret_key = await select_std_coin(client, master_sk, 3)
         
-    launcher_id, sb = await launch_router_with_sk(client, parent_coin, synth_secret_key, interactive=True)
+    launcher_id, sb = await launch_router_with_sk(parent_coin, synth_secret_key)
 
     print(f"Router launcher coin id: {launcher_id}")
     print("Spend bundle: ", sb)
@@ -192,13 +200,107 @@ async def launch_router():
     client.close()
     await client.await_closed()
 
-def launch_test_token():
+from chia.wallet.cat_wallet.cat_utils import (
+    SpendableCAT,
+    construct_cat_puzzle,
+    unsigned_spend_bundle_for_spendable_cats,
+)
+async def launch_test_token():
+    client = await get_full_node_client()
+    master_sk_hex = ""
+    try:
+        master_sk_hex = open("master_private_key.txt", "r").read().strip()
+    except:
+        master_sk_hex = input("Master Private Key: ")
+
+    master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
+    TOKEN_AMOUNT = 1000000
+    coin, synth_secret_key = await select_std_coin(client, master_sk, TOKEN_AMOUNT * 10000)
+    coin_id = coin.name()
+
+    tail = GenesisById.construct([coin_id])
+    tail_hash = tail.get_tree_hash()
+    cat_inner_puzzle = puzzle_for_synthetic_public_key(synth_secret_key.get_g1())
+
+    print(f"TAIL hash: {tail_hash.hex()}")
+    cat_puzzle = construct_cat_puzzle(CAT_MOD, tail_hash, cat_inner_puzzle)
+    cat_puzzle_hash = cat_puzzle.get_tree_hash()
+
+    cat_creation_tx = CoinSpend(
+        coin,
+        cat_inner_puzzle, # same as this coin's puzzle
+        solution_for_delegated_puzzle(Program.to((1, [
+            [ConditionOpcode.CREATE_COIN, cat_puzzle_hash, TOKEN_AMOUNT * 10000],
+            [ConditionOpcode.CREATE_COIN, coin.puzzle_hash, coin.amount - TOKEN_AMOUNT * 10000],
+        ])), [])
+    )
+    
+    cat_coin = Coin(
+        coin.name(), # parent
+        cat_puzzle_hash,
+        TOKEN_AMOUNT * 10000
+    )
+
+    cat_inner_solution = solution_for_delegated_puzzle(
+        Program.to((1, [
+            [ConditionOpcode.CREATE_COIN, 0, -113, tail, []],
+            [ConditionOpcode.CREATE_COIN, cat_inner_puzzle.get_tree_hash(), cat_coin.amount]
+        ])), []
+    )
+
+    cat_eve_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+        CAT_MOD,
+        [
+            SpendableCAT(
+                cat_coin,
+                tail_hash,
+                cat_inner_puzzle,
+                cat_inner_solution,
+                limitations_program_reveal=tail,
+            )
+        ],
+    )
+    cat_eve_spends = cat_eve_spend_bundle.coin_spends
+    
+    sb = await sign_std_coin_spends([cat_creation_tx] + cat_eve_spends, synth_secret_key)
+
+    print("Spend bundle: ", sb)
+    check = input("Type 'liftoff' to broadcast tx: ")
+    if check.strip() == 'liftoff':
+        resp = await client.push_tx(sb)
+        print(resp)
+    else:
+        print("that's another word *-*")
+
+    client.close()
+    await client.await_closed()
+
+unspent_singletons = {} # map launcher_id (hex string) -> last_coin_id (bytes)
+async def get_unspent_singleton(client, launcher_id):
+    coin_id = unspent_singletons.get(launcher_id, bytes.fromhex(launcher_id))
+
+    res = await client.get_coin_record_by_name(coin_id)
+    while res.spent:
+        coin_spend = await client.get_puzzle_and_solution(coin_id, res.spent_block_index)
+        print(coin_spend)
+        break
+
+    unspent_singletons[launcher_id] = coin_id
+    return coin_id
 
 async def create_pair(tail_hash):
+    client = await get_full_node_client()
+
     router_launcher_id = get_router_launcher_id()
     if router_launcher_id == "":
         print("Please set the router luncher id first.")
         return
+
+    current_router_coin = await get_unspent_singleton(client, router_launcher_id)
+    print(current_router_coin)
+
+    client.close()
+    await client.await_closed()
     
 async def main():
     if len(sys.argv) < 2:
@@ -220,3 +322,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+# TAIL ID for simulator: dd0aeaff6cd317a0e130cfbec714b0fab447b64790c036899fb809f6e3e34659
