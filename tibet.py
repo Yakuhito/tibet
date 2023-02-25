@@ -14,7 +14,7 @@ from chia.util.ints import uint64
 from clvm.casts import int_to_bytes
 from cdv.cmds.rpc import get_client
 from chia.wallet.puzzles.load_clvm import load_clvm
-from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, SINGLETON_MOD_HASH, P2_SINGLETON_MOD, SINGLETON_LAUNCHER_HASH
+from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, SINGLETON_MOD_HASH, SINGLETON_MOD, P2_SINGLETON_MOD, SINGLETON_LAUNCHER_HASH, SINGLETON_LAUNCHER, lineage_proof_for_coinsol, puzzle_for_singleton, solution_for_singleton, generate_launcher_coin
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import puzzle_for_pk, calculate_synthetic_secret_key, DEFAULT_HIDDEN_PUZZLE_HASH, puzzle_for_synthetic_public_key, solution_for_delegated_puzzle
 from chia.wallet.puzzles.cat_loader import CAT_MOD_HASH
 from chia.wallet.trading.offer import OFFER_MOD_HASH
@@ -29,6 +29,15 @@ from chia.types.coin_spend import CoinSpend
 from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
 from chia.wallet.puzzles.tails import GenesisById
 from chia.wallet.puzzles.cat_loader import CAT_MOD, CAT_MOD_HASH
+from chia_rs import run_chia_program
+from chia.types.blockchain_format.program import INFINITE_COST, Program
+from chia.util.condition_tools import conditions_dict_for_solution
+from chia.wallet.lineage_proof import LineageProof
+from chia.wallet.cat_wallet.cat_utils import (
+    SpendableCAT,
+    construct_cat_puzzle,
+    unsigned_spend_bundle_for_spendable_cats,
+)
 
 ROUTER_MOD: Program = load_clvm("../../../../../../../clvm/router.clvm", recompile=False)
 PAIR_MOD: Program = load_clvm("../../../../../../../clvm/pair.clvm", recompile=False)
@@ -40,7 +49,7 @@ LIQUIDITY_TAIL_MOD_HASH = LIQUIDITY_TAIL_MOD.get_tree_hash()
 
 P2_SINGLETON_MOD_HASH = P2_SINGLETON_MOD.get_tree_hash()
 
-def get_router_puzzle_hash(pairs):
+def get_router_puzzle(pairs):
     return ROUTER_MOD.curry(
         PAIR_MOD_HASH,
         SINGLETON_MOD_HASH,
@@ -51,13 +60,14 @@ def get_router_puzzle_hash(pairs):
         997,
         SINGLETON_LAUNCHER_HASH,
         ROUTER_MOD_HASH,
-        pairs
+        Program.to(pairs)
     )
 
-def get_pair_puzzle_hash(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
+def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
     return PAIR_MOD.curry(
         PAIR_MOD_HASH,
         (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
+        P2_SINGLETON_MOD_HASH,
         CAT_MOD_HASH,
         LIQUIDITY_TAIL_MOD_HASH,
         OFFER_MOD_HASH,
@@ -68,9 +78,15 @@ def get_pair_puzzle_hash(singleton_launcher_id, tail_hash, liquidity, xch_reserv
         token_reserve
     )
 
+def get_pair_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
+    return puzzle_for_singleton(
+        singleton_launcher_id,
+        get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve)
+    )
+
 def deploy_router_conditions_and_coinspend(parent_coin):
     comment: List[Tuple[str, str]] = [("tibet", "v1")]
-    return launch_conditions_and_coinsol(parent_coin, get_router_puzzle_hash(0), comment, 1)
+    return launch_conditions_and_coinsol(parent_coin, get_router_puzzle(0), comment, 1)
 
 
 async def get_full_node_client() -> FullNodeRpcClient:
@@ -200,11 +216,6 @@ async def launch_router():
     client.close()
     await client.await_closed()
 
-from chia.wallet.cat_wallet.cat_utils import (
-    SpendableCAT,
-    construct_cat_puzzle,
-    unsigned_spend_bundle_for_spendable_cats,
-)
 async def launch_test_token():
     client = await get_full_node_client()
     master_sk_hex = ""
@@ -275,29 +286,121 @@ async def launch_test_token():
     client.close()
     await client.await_closed()
 
-unspent_singletons = {} # map launcher_id (hex string) -> last_coin_id (bytes)
-async def get_unspent_singleton(client, launcher_id):
-    coin_id = unspent_singletons.get(launcher_id, bytes.fromhex(launcher_id))
+unspent_singletons = {} # map launcher_id (hex string) -> [coin, creation_spend]
+async def get_unspent_singleton_info(client, launcher_id):
+    coin_id, creation_spend = unspent_singletons.get(launcher_id, [bytes.fromhex(launcher_id), None])
 
     res = await client.get_coin_record_by_name(coin_id)
     while res.spent:
         coin_spend = await client.get_puzzle_and_solution(coin_id, res.spent_block_index)
-        print(coin_spend)
-        break
+        _, conditions_dict, __ = conditions_dict_for_solution(coin_spend.puzzle_reveal, coin_spend.solution, INFINITE_COST)
+        for cwa in conditions_dict[ConditionOpcode.CREATE_COIN]: #cwa = condition with args
+            if len(cwa.vars) >= 2 and cwa.vars[1] == b"\x01":
+                creation_spend = coin_spend
+                new_coin = Coin(
+                    coin_id,
+                    cwa.vars[0],
+                    1
+                )
+                coin_id = new_coin.name()
+                break
+        res = await client.get_coin_record_by_name(coin_id)
 
-    unspent_singletons[launcher_id] = coin_id
-    return coin_id
+    unspent_singletons[launcher_id] = [res.coin, creation_spend]
+    return unspent_singletons[launcher_id]
+
+def get_pairs(last_router_coin_spend):
+    pairs = []
+    if last_router_coin_spend.coin.puzzle_hash != SINGLETON_LAUNCHER_HASH:
+        creation_inner_puzzle_hash = Program.from_bytes(bytes(last_router_coin_spend.puzzle_reveal)).uncurry()[1]
+        pair_launcher_id = Coin(last_router_coin_spend.coin.name(), SINGLETON_LAUNCHER_HASH, 2).name()
+
+        arr = Program.from_bytes(bytes(last_router_coin_spend.solution)).as_python()[-1]
+        pairs = Program.from_bytes(bytes([_ for _ in creation_inner_puzzle_hash.as_iter()][-1])).uncurry()[-1]
+        pairs = [_ for _ in pairs.as_iter()][-1].as_python()
+        pairs.append((arr[1], pair_launcher_id))
+    return pairs
 
 async def create_pair(tail_hash):
     client = await get_full_node_client()
-
+    master_sk_hex = ""
+    try:
+        master_sk_hex = open("master_private_key.txt", "r").read().strip()
+    except:
+        master_sk_hex = input("Master Private Key: ")
+    master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
     router_launcher_id = get_router_launcher_id()
     if router_launcher_id == "":
         print("Please set the router luncher id first.")
         return
 
-    current_router_coin = await get_unspent_singleton(client, router_launcher_id)
-    print(current_router_coin)
+    current_router_coin, creation_spend = await get_unspent_singleton_info(client, router_launcher_id)
+
+    
+    lineage_proof = lineage_proof_for_coinsol(creation_spend)
+    pairs = get_pairs(creation_spend)
+        
+    router_inner_puzzle = get_router_puzzle(pairs)
+    router_inner_solution = Program.to([
+        current_router_coin.name(),
+        bytes.fromhex(tail_hash)
+    ])
+
+    router_singleton_puzzle = puzzle_for_singleton(bytes.fromhex(router_launcher_id), router_inner_puzzle)
+    router_singleton_solution = solution_for_singleton(lineage_proof, current_router_coin.amount, router_inner_solution)
+    router_singleton_spend = CoinSpend(current_router_coin, router_singleton_puzzle, router_singleton_solution)
+
+    pair_launcher_coin = Coin(current_router_coin.name(), SINGLETON_LAUNCHER_HASH, 2)
+    pair_puzzle = get_pair_puzzle(
+        pair_launcher_coin.name(),
+        bytes.fromhex(tail_hash),
+        0, 0, 0
+    )
+
+    comment: List[Tuple[str, str]] = []
+
+    # launch_conditions_and_coinsol would not work here since we spend a coin with amount 2
+    # and the solution says the amount is 1 *-*
+    pair_launcher_solution = Program.to(
+        [
+            pair_puzzle.get_tree_hash(),
+            1,
+            comment,
+        ]
+    )
+    assert_launcher_announcement = [
+        ConditionOpcode.ASSERT_COIN_ANNOUNCEMENT,
+        std_hash(pair_launcher_coin.name() + pair_launcher_solution.get_tree_hash()),
+    ]
+    pair_launcher_spend = CoinSpend(
+        pair_launcher_coin,
+        SINGLETON_LAUNCHER,
+        pair_launcher_solution,
+    )
+
+    # first condition is CREATE_COIN, which we took care of
+    # important to note: router also takes care of assert_launcher_announcement, but we need it to link the fund spend to the bundle
+    
+    coin, synth_secret_key = await select_std_coin(client, master_sk, 2)
+    fund_spend = CoinSpend(
+        coin,
+        puzzle_for_synthetic_public_key(synth_secret_key.get_g1()),
+        solution_for_delegated_puzzle(Program.to((1, [
+            [ConditionOpcode.CREATE_COIN, coin.puzzle_hash, coin.amount - 2],
+            assert_launcher_announcement
+        ])), [])
+    )
+    
+    sb = await sign_std_coin_spends([router_singleton_spend, pair_launcher_spend, fund_spend], synth_secret_key)
+    
+    print("Pair ready to be created.")
+    check = input("Type 'magic' to broadcast tx: ")
+
+    if check.strip() == 'magic':
+        resp = await client.push_tx(sb)
+        print(resp)
+    else:
+        print("that's another word *-*")
 
     client.close()
     await client.await_closed()
@@ -319,8 +422,13 @@ async def main():
             await create_pair(sys.argv[2])
         else:
             print("Usage: create_pair [tail_hash_of_asset]")
+    else:
+        print("Unknown command.")
 
 if __name__ == "__main__":
     asyncio.run(main())
 
 # TAIL ID for simulator: dd0aeaff6cd317a0e130cfbec714b0fab447b64790c036899fb809f6e3e34659
+# TAIL ID 2: 835adf775240dcc4bcd8c1359ecc81a6aa6c0a6ae3503e164a8576997ed404b9
+# TAIL ID 3: 61833ebe885a61e8f70a39543afecb0202d9f8baaa9978cc7425dd5718076fa7
+# 4: c132584ee1a9b4f3f9ed022175c588ee7cae7e552379598bb5f49cbf2815b364
