@@ -138,7 +138,6 @@ async def launch_router_with_sk(parent_coin, synth_secret_key):
         puzzle_for_synthetic_public_key(synth_secret_key.get_g1()),
         solution_for_delegated_puzzle(Program.to((1, conds)), [])
     )
-    print(p2_coin_spend)
         
     sb = await sign_std_coin_spends(
         [launcher_coin_spend, p2_coin_spend],
@@ -216,24 +215,14 @@ async def launch_router():
     client.close()
     await client.await_closed()
 
-async def launch_test_token():
-    client = await get_full_node_client()
-    master_sk_hex = ""
-    try:
-        master_sk_hex = open("master_private_key.txt", "r").read().strip()
-    except:
-        master_sk_hex = input("Master Private Key: ")
-
-    master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
+async def create_test_cat(coin, synth_secret_key):
     TOKEN_AMOUNT = 1000000
-    coin, synth_secret_key = await select_std_coin(client, master_sk, TOKEN_AMOUNT * 10000)
     coin_id = coin.name()
 
     tail = GenesisById.construct([coin_id])
     tail_hash = tail.get_tree_hash()
     cat_inner_puzzle = puzzle_for_synthetic_public_key(synth_secret_key.get_g1())
 
-    print(f"TAIL hash: {tail_hash.hex()}")
     cat_puzzle = construct_cat_puzzle(CAT_MOD, tail_hash, cat_inner_puzzle)
     cat_puzzle_hash = cat_puzzle.get_tree_hash()
 
@@ -274,6 +263,21 @@ async def launch_test_token():
     cat_eve_spends = cat_eve_spend_bundle.coin_spends
     
     sb = await sign_std_coin_spends([cat_creation_tx] + cat_eve_spends, synth_secret_key)
+    return tail_hash.hex(), sb
+
+async def launch_test_token_cmd():
+    client = await get_full_node_client()
+    master_sk_hex = ""
+    try:
+        master_sk_hex = open("master_private_key.txt", "r").read().strip()
+    except:
+        master_sk_hex = input("Master Private Key: ")
+
+    master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
+    coin, synth_secret_key = await select_std_coin(client, master_sk, TOKEN_AMOUNT * 10000)
+    
+    tail_hash, sb = create_test_cat(coin, synth_secret_key)
+    print(f"New TAIL: {tail_hash}")
 
     print("Spend bundle: ", sb)
     check = input("Type 'liftoff' to broadcast tx: ")
@@ -288,23 +292,25 @@ async def launch_test_token():
 
 unspent_singletons = {} # map launcher_id (hex string) -> [coin, creation_spend]
 async def get_unspent_singleton_info(client, launcher_id):
-    coin_id, creation_spend = unspent_singletons.get(launcher_id, [bytes.fromhex(launcher_id), None])
+    coin, creation_spend = unspent_singletons.get(launcher_id, [None, None])
+    if coin == None:
+        res = await client.get_coin_record_by_name(bytes.fromhex(launcher_id))
+        coin = res.coin
+    res = await client.get_coin_record_by_name(coin.name())
 
-    res = await client.get_coin_record_by_name(coin_id)
     while res.spent:
-        coin_spend = await client.get_puzzle_and_solution(coin_id, res.spent_block_index)
+        coin_spend = await client.get_puzzle_and_solution(coin.name(), res.spent_block_index)
         _, conditions_dict, __ = conditions_dict_for_solution(coin_spend.puzzle_reveal, coin_spend.solution, INFINITE_COST)
         for cwa in conditions_dict[ConditionOpcode.CREATE_COIN]: #cwa = condition with args
             if len(cwa.vars) >= 2 and cwa.vars[1] == b"\x01":
                 creation_spend = coin_spend
-                new_coin = Coin(
-                    coin_id,
+                coin = Coin(
+                    coin.name(),
                     cwa.vars[0],
                     1
                 )
-                coin_id = new_coin.name()
                 break
-        res = await client.get_coin_record_by_name(coin_id)
+        res = await client.get_coin_record_by_name(coin.name())
 
     unspent_singletons[launcher_id] = [res.coin, creation_spend]
     return unspent_singletons[launcher_id]
@@ -318,24 +324,13 @@ def get_pairs(last_router_coin_spend):
         arr = Program.from_bytes(bytes(last_router_coin_spend.solution)).as_python()[-1]
         pairs = Program.from_bytes(bytes([_ for _ in creation_inner_puzzle_hash.as_iter()][-1])).uncurry()[-1]
         pairs = [_ for _ in pairs.as_iter()][-1].as_python()
+        if len(pairs) == 0:
+            pairs = []
         pairs.append((arr[1], pair_launcher_id))
     return pairs
 
-async def create_pair(tail_hash):
-    client = await get_full_node_client()
-    master_sk_hex = ""
-    try:
-        master_sk_hex = open("master_private_key.txt", "r").read().strip()
-    except:
-        master_sk_hex = input("Master Private Key: ")
-    master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
-    router_launcher_id = get_router_launcher_id()
-    if router_launcher_id == "":
-        print("Please set the router luncher id first.")
-        return
-
+async def create_pair(client, coin, synth_secret_key, router_launcher_id, tail_hash):
     current_router_coin, creation_spend = await get_unspent_singleton_info(client, router_launcher_id)
-
     
     lineage_proof = lineage_proof_for_coinsol(creation_spend)
     pairs = get_pairs(creation_spend)
@@ -380,8 +375,7 @@ async def create_pair(tail_hash):
 
     # first condition is CREATE_COIN, which we took care of
     # important to note: router also takes care of assert_launcher_announcement, but we need it to link the fund spend to the bundle
-    
-    coin, synth_secret_key = await select_std_coin(client, master_sk, 2)
+
     fund_spend = CoinSpend(
         coin,
         puzzle_for_synthetic_public_key(synth_secret_key.get_g1()),
@@ -391,8 +385,27 @@ async def create_pair(tail_hash):
         ])), [])
     )
     
+    pair_launcher_id = Coin(current_router_coin.name(), SINGLETON_LAUNCHER_HASH, 2).name().hex()
     sb = await sign_std_coin_spends([router_singleton_spend, pair_launcher_spend, fund_spend], synth_secret_key)
-    
+    return pair_launcher_id, sb
+
+async def create_pair_cmd(tail_hash):
+    client = await get_full_node_client()
+    master_sk_hex = ""
+    try:
+        master_sk_hex = open("master_private_key.txt", "r").read().strip()
+    except:
+        master_sk_hex = input("Master Private Key: ")
+    master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
+    router_launcher_id = get_router_launcher_id()
+    if router_launcher_id == "":
+        print("Please set the router luncher id first.")
+        return
+
+    coin, synth_secret_key = await select_std_coin(client, master_sk, 2)
+    pair_launcher_id, sb = create_new_pair(client, coin, synth_secret_key, router_launcher_id, tail_hash)
+    print(f"Pair launcher id: {pair_launcher_id}")
+
     print("Pair ready to be created.")
     check = input("Type 'magic' to broadcast tx: ")
 
@@ -416,10 +429,10 @@ async def main():
         else:
             print("Usage: set_router [launcher_id]")
     elif sys.argv[1] == "launch_test_token":
-        await launch_test_token()
+        await launch_test_token_cmd()
     elif sys.argv[1] == "create_pair":
         if len(sys.argv) == 3:
-            await create_pair(sys.argv[2])
+            await create_pair_cmd(sys.argv[2])
         else:
             print("Usage: create_pair [tail_hash_of_asset]")
     else:
