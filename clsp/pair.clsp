@@ -30,7 +30,7 @@
             ;; 2 - XCH to token (sell XCH, buy token)
             ;; 3 - token to XCH (buy XCH, sell token)
         params ; params for the called method
-            ;; add liquidity: (token_amount to_puzzle_hash [xch_amount])
+            ;; add liquidity: (token_amount liquidity_inner_puzzle_hash liquidity_parent_id [xch_amount])
             ;;;      [xch_amount] - optional; ONLY taken into account IF there is no liquidity (this is the initial deposit)
             ;; remove liquidity: (liquidity_tokens_amount liquidity_inner_puzzle_hash liquidity_parent_id)
             ;; xch to token: (xch_amount)
@@ -51,8 +51,9 @@
 
     ;; 0 - add liquidity
     (defun-inline add_liquidity_token_amount_from_params (params) (f params))
-    (defun-inline add_liquidity_to_puzzle_hash_from_params (params) (f (r params)))
-    (defun-inline add_liquidity_xch_amount_from_params (params) (f (r (r params))))
+    (defun-inline add_liquidity_liquidity_inner_puzzle_hash_from_params (params) (f (r params)))
+    (defun-inline add_liquidity_liquidity_parent_id_from_params (params) (f (r (r params))))
+    (defun-inline add_liquidity_xch_amount_from_params (params) (f (r (r (r params)))))
 
     ;; 1 - remove liquidity
     (defun-inline remove_liquidity_liquidity_tokens_amount_from_params (params) (f params))
@@ -156,23 +157,6 @@
         )
     )
 
-    (defun-inline create_token_condition (tail_hash inner_puzzle_hash amount)
-        (list
-            CREATE_COIN
-            (cat_puzzle_hash tail_hash inner_puzzle_hash)
-            amount    
-        )
-    )
-
-    ;;;;;; REMOVE
-    (defun-inline create_liquidity_tokens_condition (amount to_puzzle_hash)
-        (create_token_condition
-            (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT))
-            to_puzzle_hash
-            amount
-        )
-    )
-
     (defun-inline burn_liquidity_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash)
         (list
             CREATE_PUZZLE_ANNOUNCEMENT
@@ -188,7 +172,23 @@
         )
     )
 
-    (defun-inline assert_liquidity_burn_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash)
+    ; liquidity TAIL
+
+    (defun-inline create_liquidity_tokens_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword)
+        (list
+            CREATE_PUZZLE_ANNOUNCEMENT
+            (sha256 
+                (calculate_coin_id
+                    liquidity_parent_id
+                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
+                    liquidity_token_amount
+                )
+                (sha256 keyword liquidity_token_amount)
+            )
+        )
+    )
+    
+    (defun-inline assert_liquidity_tokens_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword)
         (list
             ASSERT_COIN_ANNOUNCEMENT
             (sha256
@@ -197,11 +197,10 @@
                     (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
                     liquidity_token_amount
                 )
-                'Y'
+                keyword
             )
         )
     )
-    ;;;;;; REMOVE
 
     ;; self-propagation
 
@@ -260,10 +259,12 @@
 
     (defun-inline add_liquidity_gt0_conditions (
             token_amount
-            to_puzzle_hash
+            liquidity_parent_id
+            liquidity_inner_puzzle_hash
         )
         (list
-            (create_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) to_puzzle_hash)
+            (create_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
+            (assert_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
         )
     )
 
@@ -298,10 +299,13 @@
 
     (defun-inline add_liquidity_0_conditions (
             xch_amount
-            to_puzzle_hash
+            liquidity_parent_id
+            liquidity_inner_puzzle_hash
         )
         (list
-            (create_liquidity_tokens_condition xch_amount to_puzzle_hash)
+            (create_liquidity_tokens_condition xch_amount liquidity_pare
+            nt_id liquidity_inner_puzzle_hash MINT_KEYWORD)
+            (assert_liquidity_tokens_condition xch_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
         )
 
     )
@@ -341,8 +345,8 @@
             liquidity_tokens_amount
         )
         (list
-            (burn_liquidity_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
-            (assert_liquidity_burn_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash)
+            (create_liquidity_tokens_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
+            (assert_liquidity_tokens_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
         )
     )
 
@@ -381,7 +385,7 @@
     (defun-inline token_to_xch_xch_reserve (
             token_amount
         )
-        (- XCH_RESERVE xch_amount (get_input_price token_amount TOKEN_RESERVE XCH_RESERVE))
+        (- XCH_RESERVE (get_input_price token_amount TOKEN_RESERVE XCH_RESERVE))
     )
 
     (defun-inline token_to_xch_token_reserve (
@@ -536,7 +540,8 @@
                     )
                     (add_liquidity_0_conditions
                         (add_liquidity_xch_amount_from_params params)
-                        (add_liquidity_to_puzzle_hash_from_params params)
+                        (add_liquidity_liquidity_inner_puzzle_hash_from_params params)
+                        (add_liquidity_liquidity_parent_id_from_params params)
                     )
                     1
                 )
@@ -559,7 +564,8 @@
                     )
                     (add_liquidity_gt0_conditions
                         (add_liquidity_token_amount_from_params params)
-                        (add_liquidity_to_puzzle_hash_from_params params)
+                        (add_liquidity_liquidity_inner_puzzle_hash_from_params params)
+                        (add_liquidity_liquidity_parent_id_from_params params)
                     )
                     ()
                 )

@@ -33,4 +33,8 @@
     (defun-inline singleton_mod_hash_from_struct (singleton_struct) (f singleton_struct))
     (defun-inline singleton_launcher_from_struct (singleton_struct) (f (r singleton_struct)))
     (defun-inline singleton_launcher_puzzle_hash_from_struct (singleton_struct) (r (r singleton_struct)))
+
+    ; liquidity token
+    (defconstant MINT_KEYWORD "mint")
+    (defconstant BURN_KEYWORD "burn")
 )
