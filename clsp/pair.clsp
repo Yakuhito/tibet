@@ -280,9 +280,9 @@
     )
 
     (defun-inline add_liquidity_0_liquidity (
-            xch_amount
+            token_amount
         )
-        xch_amount
+        token_amount
     )
 
     (defun-inline add_liquidity_0_xch_reserve (
@@ -433,7 +433,7 @@
                 (if is_initial_liquidity_deposit
                     extra_output_conditions
                     (merge_list extra_output_conditions (list
-                        ; spend XCH reserve
+                        ; spend xch reserve
                         (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
                         (list ASSERT_COIN_ANNOUNCEMENT (sha256 xch_reserve_coin_id '$'))
 
@@ -530,7 +530,7 @@
                         (add_liquidity_token_amount_from_params params)
                     )
                     (add_liquidity_0_liquidity
-                        (add_liquidity_xch_amount_from_params params)
+                        (add_liquidity_token_amount_from_params params)
                     )
                     (add_liquidity_0_xch_reserve
                         (add_liquidity_xch_amount_from_params params)
