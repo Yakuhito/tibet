@@ -164,6 +164,7 @@
         )
     )
 
+    ;;;;;; REMOVE
     (defun-inline create_liquidity_tokens_condition (amount to_puzzle_hash)
         (create_token_condition
             (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT))
@@ -200,6 +201,7 @@
             )
         )
     )
+    ;;;;;; REMOVE
 
     ;; self-propagation
 

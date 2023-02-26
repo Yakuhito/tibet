@@ -283,9 +283,9 @@ async def launch_test_token_cmd():
         master_sk_hex = input("Master Private Key: ")
 
     master_sk = PrivateKey.from_bytes(bytes.fromhex(master_sk_hex))
-    coin, synth_secret_key = await select_std_coin(client, master_sk, TOKEN_AMOUNT * 10000)
+    coin, synth_secret_key = await select_std_coin(client, master_sk, 1000000 * 10000)
     
-    tail_hash, sb = create_test_cat(coin, synth_secret_key)
+    tail_hash, sb = await create_test_cat(coin, synth_secret_key)
     print(f"New TAIL: {tail_hash}")
 
     print("Spend bundle: ", sb)
@@ -434,7 +434,7 @@ def pair_initial_liquidity_inner_solution(pair_coin_id, token_amount, xch_amount
         Program.to([token_amount, to_puzzle_hash, xch_amount])
     ])
 
-async def deposit_liquidity_offer_initial(client, pair_id, tail_hash, token_amount, xch_amount, to_puzzle_hash, current_pair_coin=None, last_singleton_spend=None):
+async def add_liquidity_offer_initial(client, pair_id, tail_hash, token_amount, xch_amount, to_puzzle_hash, current_pair_coin=None, last_singleton_spend=None):
     if current_pair_coin is None or last_singleton_spend == None:
         current_pair_coin, last_singleton_spend = await get_unspent_singleton_info(client, pair_id)
     
@@ -474,18 +474,11 @@ async def deposit_liquidity_offer_initial(client, pair_id, tail_hash, token_amou
             [p2_singleton_puzzle_cat.get_tree_hash(), token_amount]
         ])
     ])
-    cat_sb = unsigned_spend_bundle_for_spendable_cats(
-        CAT_MOD,
-        [
-            SpendableCAT(
-                eph_token_reserve_coin,
-                bytes.fromhex(tail_hash),
-                OFFER_MOD,
-                eph_token_reserve_inner_solution,
-            )
-        ]
+    eph_token_reserve_spend = CoinSpend(
+        eph_token_reserve_coin,
+        eph_token_reserve_puzzle,
+        eph_token_reserve_inner_solution
     )
-    eph_token_reserve_spend = cat_sb.coin_spends[0]
 
     sb = SpendBundle(
         [singleton_spend, eph_xch_reserve_spend, eph_token_reserve_spend],
@@ -493,23 +486,24 @@ async def deposit_liquidity_offer_initial(client, pair_id, tail_hash, token_amou
     )
 
     mods: List[bytes] = [bytes(s.puzzle_reveal.to_program().uncurry()[0]) for s in sb.coin_spends]
-    version = max(lowest_best_version(mods), 6)  # Clients lower than version 6 should not be able to parse
+    version = max(lowest_best_version(mods), 6)
+    # version = min(lowest_best_version(mods), 6)  # for mixch.dev
     offer_bytes = compress_object_with_puzzles(bytes(sb), version)
     offer_str = bech32_encode("offer:tibet:add_initial_liquidity", convertbits(list(offer_bytes), 8, 5))
 
     return offer_str
 
-async def deposit_liquidity_offer(client, router_launcher_id, pair_id, token_amount, xch_amount=0):
+async def add_liquidity_offer(client, router_launcher_id, pair_id, token_amount, xch_amount=0):
     current_pair_coin, last_singleton_spend = await get_unspent_singleton_info(client, pair_id)
     # todo: get pair tail hash from last_singleton_spend or router if last spend is launcher
     if last_singleton_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
-        return await deposit_liquidity_offer_initial(client, pair_id, "dd0aeaff6cd317a0e130cfbec714b0fab447b64790c036899fb809f6e3e34659", token_amount, xch_amount, decode_puzzle_hash("txch1ymz0cpqcqwnhw5xp5j6gllmy6353xal54f72g5eu5m35pfs4jlzqxvxepc").hex(), current_pair_coin=current_pair_coin, last_singleton_spend=last_singleton_spend)
+        return await add_liquidity_offer_initial(client, pair_id, "fdfcc7c429630e45c54212c3f5915977dd18458e8786dfd08d54beeafc8d92d7", token_amount, xch_amount, decode_puzzle_hash("txch1gv0q45swhy87qve2jtxpjn6h0dhy4hpcjn5hn33jhwqvwvr7djwsz5d0nj").hex(), current_pair_coin=current_pair_coin, last_singleton_spend=last_singleton_spend)
 
     # todo: normal offer
 
     return "offer1"
 
-async def deposit_liquidity_cmd(pair_id, token_amount, xch_amount):
+async def add_liquidity_cmd(pair_id, token_amount, xch_amount):
     client = await get_full_node_client()
     router_launcher_id = get_router_launcher_id()
     # master_sk_hex = ""
@@ -523,15 +517,16 @@ async def deposit_liquidity_cmd(pair_id, token_amount, xch_amount):
     #     return
 
     # coin, synth_secret_key = await select_std_coin(client, master_sk, 2)
-    offer = await deposit_liquidity_offer(client, router_launcher_id, pair_id, token_amount, xch_amount=xch_amount)
-    print(offer)
+    offer = await add_liquidity_offer(client, router_launcher_id, pair_id, token_amount, xch_amount=xch_amount)
+    open("/tmp/offer", "w").write(offer) # debug
+    print("Offer written to /tmp/offer.") # debug
 
     client.close()
     await client.await_closed()
 
 async def main():
     if len(sys.argv) < 2:
-        print("Possible commands: launch_router, set_router, launch_test_token, create_pair, deposit_liquidity")
+        print("Possible commands: launch_router, set_router, launch_test_token, create_pair, add_liquidity")
     elif sys.argv[1] == "launch_router":
         await launch_router()
     elif sys.argv[1] == "set_router":
@@ -546,18 +541,19 @@ async def main():
             await create_pair_cmd(sys.argv[2])
         else:
             print("Usage: create_pair [tail_hash_of_asset]")
-    elif sys.argv[1] == "deposit_liquidity":
+    elif sys.argv[1] == "add_liquidity":
         if len(sys.argv) == 4 or len(sys.argv) == 5:
             xch_amount = 0
             if len(sys.argv) == 5:
                 xch_amount = int(sys.argv[4])
-            await deposit_liquidity_cmd(sys.argv[2], int(sys.argv[3]), xch_amount)
+            await add_liquidity_cmd(sys.argv[2], int(sys.argv[3]), xch_amount)
         else:
-            print("Usage: deposit_liquidity [pair_launcher_id] [amount_token] [amount_xch_if_first_deposit]")
+            print("Usage: add_liquidity [pair_launcher_id] [amount_token] [amount_xch_if_first_deposit]")
     else:
         print("Unknown command.")
 
 if __name__ == "__main__":
     asyncio.run(main())
 
-# TAIL ID for simulator: dd0aeaff6cd317a0e130cfbec714b0fab447b64790c036899fb809f6e3e34659
+# TAIL ID for simulator: fdfcc7c429630e45c54212c3f5915977dd18458e8786dfd08d54beeafc8d92d7
+# pair ID: ca5e2b4d06c2f038521eaab4f1b9c8e519a7de8e631fa378cef73a1ca4d90e5f
