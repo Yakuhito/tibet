@@ -149,3 +149,7 @@ main.sym
 master_private_key.txt
 
 router_launcher_id.txt
+
+config.json
+offer.txt
+spend_bundle.json
