@@ -24,11 +24,10 @@
     ; tail solution to function args
     (defun-inline singleton_inner_puzzle_hash_from_solution (tail_solution) (f tail_solution))
 
-    ; https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/did_innerpuz.clvm#L56
     (defun-inline calculate_full_puzzle_hash (inner_puzzle_hash)
-        (curry_hashes_inline (singleton_mod_hash_from_struct SINGLETON_STRUCT)
-            inner_puzzle_hash
+       (curry_hashes_inline (singleton_mod_hash_from_struct SINGLETON_STRUCT)
             (sha256tree SINGLETON_STRUCT)
+            inner_puzzle_hash
         )
     )
 
@@ -44,7 +43,7 @@
                 (sha256
                     (calculate_full_puzzle_hash singleton_inner_puzzle_hash)
                     (sha256 keyword my_id my_amount)
-                )
+               )
             )
             (list CREATE_COIN_ANNOUNCEMENT keyword)
         )

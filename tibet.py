@@ -47,6 +47,8 @@ from chia.wallet.util.puzzle_compression import (
     decompress_object_with_puzzles,
     lowest_best_version,
 )
+from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
+from chia.util.hash import std_hash
 
 ROUTER_MOD: Program = load_clvm("../../../../../../../clvm/router.clvm", recompile=False)
 PAIR_MOD: Program = load_clvm("../../../../../../../clvm/pair.clvm", recompile=False)
@@ -91,6 +93,11 @@ def get_pair_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, to
     return puzzle_for_singleton(
         singleton_launcher_id,
         get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve)
+    )
+
+def pair_liquidity_tail_puzzle(pair_launcher_id):
+    return LIQUIDITY_TAIL_MOD.curry(
+        (SINGLETON_MOD_HASH, (pair_launcher_id, SINGLETON_LAUNCHER_HASH))
     )
 
 def deploy_router_conditions_and_coinspend(parent_coin):
@@ -427,28 +434,161 @@ async def create_pair_cmd(tail_hash):
     client.close()
     await client.await_closed()
     
-def pair_initial_liquidity_inner_solution(pair_coin_id, token_amount, xch_amount, to_puzzle_hash):
+def pair_initial_liquidity_inner_solution(pair_coin_id, token_amount, xch_amount, liquidity_inner_puzzle_hash, liquidity_parent_id):
     return Program.to([
         Program.to([pair_coin_id, b"\x00" * 32, b"\x00" * 32]),
         0,
-        Program.to([token_amount, to_puzzle_hash, xch_amount])
+        Program.to([token_amount, liquidity_inner_puzzle_hash, liquidity_parent_id, xch_amount])
     ])
 
-async def add_liquidity_offer_initial(client, pair_id, tail_hash, token_amount, xch_amount, to_puzzle_hash, current_pair_coin=None, last_singleton_spend=None):
+async def add_liquidity_offer_initial(client, pair_id, tail_hash, token_amount, xch_amount, initial_offer_str, current_pair_coin=None, last_singleton_spend=None):
     if current_pair_coin is None or last_singleton_spend == None:
         current_pair_coin, last_singleton_spend = await get_unspent_singleton_info(client, pair_id)
     
+    # how does a deposit offer look like? well, I'm glad you asked
+    # ephemeral = will appear in the 'offered' section of the offer
+    #        ---------------------COIN ANNOUNCEMENT--|
+    #        |                                      \/                    
+    # user offer -> initial offer coin -> intermediary liquidity cat -> ephemeral liquidity cat
+    #                                              /\ \/
+    #                                           pair singleton
+    #                                           \/          \/
+    #                                 new xch reserve       new token reserve
+    # thank god I have a whiteboard
+
+    # 1. identify initial offer coin
+    initial_offer = Offer.from_bech32(initial_offer_str)
+    initial_offer_coin = None
+    for addition in initial_offer.additions():
+        if addition.puzzle_hash == OFFER_MOD_HASH:
+            initial_offer_coin = addition
+            break
+    if initial_offer_coin is None:
+        print("sth is wrong with the offer :(")
+        sys.exit(1)
+
+    # 2. identify announcements to assert
+    announcement_asserts = []
+    intial_spend_bundle = initial_offer.to_spend_bundle()
+    for coin_spend in intial_spend_bundle.coin_spends:
+        if coin_spend.coin.parent_coin_info == b"\x00" * 32:
+            continue
+
+        _, conditions_dict, __ = conditions_dict_for_solution(coin_spend.puzzle_reveal, coin_spend.solution, INFINITE_COST)
+        # std coins create coin announcements that need to be asserted
+        for cwa in conditions_dict.get(ConditionOpcode.CREATE_COIN_ANNOUNCEMENT, []): #cwa = condition with args
+            announcement_asserts.append([
+                ConditionOpcode.ASSERT_COIN_ANNOUNCEMENT,
+                std_hash(coin_spend.coin.name() + cwa.vars[0])
+            ])
+
+    # 3. create intermediary spend
+    pair_inner_puzzle = get_pair_inner_puzzle(bytes.fromhex(pair_id), bytes.fromhex(tail_hash), 0, 0, 0)
+    
+    liquidity_cat_tail = pair_liquidity_tail_puzzle(bytes.fromhex(pair_id))
+    intermediary_liquidity_cat_tail_solution = Program.to([pair_inner_puzzle.get_tree_hash()])
+    intermediary_liquidity_cat_inner_puzzle = Program.to(
+        (1, [
+            [ConditionOpcode.CREATE_COIN, 0, -113, liquidity_cat_tail, intermediary_liquidity_cat_tail_solution],
+            [ConditionOpcode.CREATE_COIN, OFFER_MOD_HASH, token_amount]
+        ] + announcement_asserts)
+    )
+    
+    intermediary_liquidity_cat_inner_solution = Program.to([])
+    intermediary_liquidity_cat_puzzle = construct_cat_puzzle(CAT_MOD, liquidity_cat_tail.get_tree_hash(), intermediary_liquidity_cat_inner_puzzle)
+    intermediary_liquidity_cat = Coin(initial_offer_coin.name(), intermediary_liquidity_cat_puzzle.get_tree_hash(), token_amount)
+    
+    intermediary_liquidity_cat_solution = Program.to([
+        intermediary_liquidity_cat_inner_solution,
+        [],
+        intermediary_liquidity_cat.name(),
+        [initial_offer_coin.name(), intermediary_liquidity_cat_puzzle.get_tree_hash(), token_amount],
+        [initial_offer_coin.name(), intermediary_liquidity_cat_inner_puzzle.get_tree_hash(), token_amount],
+        [],
+        []
+    ])
+    intermediary_liquidity_cat_spend = CoinSpend(intermediary_liquidity_cat, intermediary_liquidity_cat_puzzle, intermediary_liquidity_cat_solution)
+
+    # debug
+    open("/tmp/p", "w").write(bytes(intermediary_liquidity_cat_spend.puzzle_reveal).hex())
+    open("/tmp/s", "w").write(bytes(intermediary_liquidity_cat_spend.solution).hex())
+    print("coin name: ", intermediary_liquidity_cat_spend.coin.name().hex())
+    os.system("brun -x $(cat /tmp/p) $(cat /tmp/s)")
+    a = b'00' # input("announcement hash: ").strip().encode()
+    print(a)
+    print("final annoucnement assert: ", std_hash(intermediary_liquidity_cat_spend.coin.name() + a).hex())
+    print("singleton inner puzzle hash: ", pair_inner_puzzle.get_tree_hash().hex())
+    # input("SLEEP")
+    # debug
+
+    # 4. spend the initial offer coin
+    initial_offer_coin_solution = Program.to([
+        Program.to([
+            initial_offer_coin.name(),
+            [intermediary_liquidity_cat_puzzle.get_tree_hash(), token_amount],
+            [OFFER_MOD_HASH, initial_offer_coin.amount - token_amount] # really interesting stuff going on here
+            # we're basically re-offering the change (giving it back)
+        ])
+    ])
+    initial_offer_coin_spend = CoinSpend(initial_offer_coin, OFFER_MOD, initial_offer_coin_solution)
+
+    # 5. create ephemereal cat spend
+    # take nonce from given offer
+
+    # debug
+    # REMOVE
+    a = None
+    for k in initial_offer.get_requested_payments().keys():
+        a = k
+    notarized_payment = initial_offer.get_requested_payments()[a][0]
+
+    # notarized_payment = initial_offer.get_requested_payments()[liquidity_cat_tail.get_tree_hash()][0]
+    eph_cat_nonce = notarized_payment.nonce
+    eph_cat_memos = notarized_payment.memos
+
+    eph_cat_puzzle = construct_cat_puzzle(CAT_MOD, liquidity_cat_tail.get_tree_hash(), OFFER_MOD)
+    eph_cat = Coin(intermediary_liquidity_cat.name(), eph_cat_puzzle.get_tree_hash(), token_amount)
+    eph_cat_inner_solution = Program.to([
+        Program.to([
+            eph_cat_nonce,
+            [eph_cat_memos[0], token_amount, eph_cat_memos]
+        ])
+    ])
+
+    eph_cat_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+        CAT_MOD,
+        [
+            SpendableCAT(
+                eph_cat,
+                liquidity_cat_tail.get_tree_hash(),
+                OFFER_MOD,
+                eph_cat_inner_solution,
+                lineage_proof=LineageProof(intermediary_liquidity_cat.parent_coin_info, intermediary_liquidity_cat_inner_puzzle.get_tree_hash(), token_amount)
+            )
+        ],
+    )
+    eph_cat_spend = eph_cat_spend_bundle.coin_spends[0]
+
+    # 4. Spend pair / singleton
     p2_singleton_puzzle = pay_to_singleton_puzzle(bytes.fromhex(pair_id))
     p2_singleton_puzzle_cat =  construct_cat_puzzle(CAT_MOD, bytes.fromhex(tail_hash), p2_singleton_puzzle)
-
+    
     pair_puzzle = get_pair_puzzle(bytes.fromhex(pair_id), bytes.fromhex(tail_hash), 0, 0, 0)
-
-    pair_inner_solution = pair_initial_liquidity_inner_solution(current_pair_coin.name(), token_amount, xch_amount, bytes.fromhex(to_puzzle_hash))
+    
+    pair_inner_solution = pair_initial_liquidity_inner_solution(
+        current_pair_coin.name(),
+        token_amount,
+        xch_amount,
+        intermediary_liquidity_cat_inner_puzzle.get_tree_hash(),
+        intermediary_liquidity_cat.parent_coin_info
+    )
     lineage_proof = lineage_proof_for_coinsol(last_singleton_spend)
     pair_solution = solution_for_singleton(lineage_proof, current_pair_coin.amount, pair_inner_solution)
     
+    print("pair puzzle hash: ", pair_puzzle.get_tree_hash().hex())
     singleton_spend = CoinSpend(current_pair_coin, pair_puzzle, pair_solution)
-    
+
+    # 5. create ephemeral XCH reserve coin
     eph_xch_reserve_coin = Coin(
         b"\x00" * 32,
         OFFER_MOD_HASH,
@@ -462,6 +602,7 @@ async def add_liquidity_offer_initial(client, pair_id, tail_hash, token_amount, 
     ])
     eph_xch_reserve_spend = CoinSpend(eph_xch_reserve_coin, OFFER_MOD, eph_xch_reserve_solution)
 
+    # 6. create ephemeral token reserve coin
     eph_token_reserve_puzzle = construct_cat_puzzle(CAT_MOD, bytes.fromhex(tail_hash), OFFER_MOD)
     eph_token_reserve_coin = Coin(
         b"\x00" * 32,
@@ -480,30 +621,49 @@ async def add_liquidity_offer_initial(client, pair_id, tail_hash, token_amount, 
         eph_token_reserve_inner_solution
     )
 
+    initial_offer_sb = initial_offer.to_spend_bundle()
+    cs_from_initial_offer = [cs for cs in initial_offer_sb.coin_spends if cs.coin.parent_coin_info != b"\x00" * 32]
+
     sb = SpendBundle(
-        [singleton_spend, eph_xch_reserve_spend, eph_token_reserve_spend],
-        AugSchemeMPL.aggregate([])
+        [
+            initial_offer_coin_spend,
+            singleton_spend,
+            intermediary_liquidity_cat_spend,
+            eph_cat_spend,
+            eph_xch_reserve_spend,
+            eph_token_reserve_spend
+        ] + cs_from_initial_offer,
+        initial_offer_sb.aggregated_signature # AugSchemeMPL.aggregate([])
     )
 
     mods: List[bytes] = [bytes(s.puzzle_reveal.to_program().uncurry()[0]) for s in sb.coin_spends]
-    version = max(lowest_best_version(mods), 6)
-    # version = min(lowest_best_version(mods), 6)  # for mixch.dev
+    
+    # debug
+    version = max(lowest_best_version(mods), 5)
+    # version = max(lowest_best_version(mods), 6)
     offer_bytes = compress_object_with_puzzles(bytes(sb), version)
     offer_str = bech32_encode("offer:tibet:add_initial_liquidity", convertbits(list(offer_bytes), 8, 5))
 
+    # offer = Offer.from_bech32(offer_str)
+    # final_offer = Offer.aggregate([offer, initial_offer])
+    # debug
+    # final_offer = offer
+
+    # debug
+    # return final_offer.to_bech32("offer:tibet:add_initial_liquidity")
     return offer_str
 
-async def add_liquidity_offer(client, router_launcher_id, pair_id, token_amount, xch_amount=0):
+async def add_liquidity_offer(client, router_launcher_id, pair_id, token_tail, token_amount, initial_offer, xch_amount=0):
     current_pair_coin, last_singleton_spend = await get_unspent_singleton_info(client, pair_id)
     # todo: get pair tail hash from last_singleton_spend or router if last spend is launcher
     if last_singleton_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
-        return await add_liquidity_offer_initial(client, pair_id, "fdfcc7c429630e45c54212c3f5915977dd18458e8786dfd08d54beeafc8d92d7", token_amount, xch_amount, decode_puzzle_hash("txch1gv0q45swhy87qve2jtxpjn6h0dhy4hpcjn5hn33jhwqvwvr7djwsz5d0nj").hex(), current_pair_coin=current_pair_coin, last_singleton_spend=last_singleton_spend)
+        return await add_liquidity_offer_initial(client, pair_id, token_tail, token_amount, xch_amount, initial_offer, current_pair_coin=current_pair_coin, last_singleton_spend=last_singleton_spend)
 
     # todo: normal offer
 
     return "offer1"
 
-async def add_liquidity_cmd(pair_id, token_amount, xch_amount):
+async def add_liquidity_cmd(offer, pair_launcher_id, token_tail_hash, token_amount, xch_amount):
     client = await get_full_node_client()
     router_launcher_id = get_router_launcher_id()
     # master_sk_hex = ""
@@ -517,9 +677,9 @@ async def add_liquidity_cmd(pair_id, token_amount, xch_amount):
     #     return
 
     # coin, synth_secret_key = await select_std_coin(client, master_sk, 2)
-    offer = await add_liquidity_offer(client, router_launcher_id, pair_id, token_amount, xch_amount=xch_amount)
-    open("/tmp/offer", "w").write(offer) # debug
-    print("Offer written to /tmp/offer.") # debug
+    offer = await add_liquidity_offer(client, router_launcher_id, pair_id, "da4c8b525434b5ee171221ae02aa74dd53fba70516d59eb5e9cee44c310e69c1", token_amount, offer, xch_amount=xch_amount)
+    open("/tmp/deposit_offer", "w").write(offer) # debug
+    print("Deposit offer written to /tmp/deposit_offer.") # debug
 
     client.close()
     await client.await_closed()
@@ -542,18 +702,29 @@ async def main():
         else:
             print("Usage: create_pair [tail_hash_of_asset]")
     elif sys.argv[1] == "add_liquidity":
-        if len(sys.argv) == 4 or len(sys.argv) == 5:
+        if len(sys.argv) == 5 or len(sys.argv) == 6:
             xch_amount = 0
-            if len(sys.argv) == 5:
-                xch_amount = int(sys.argv[4])
-            await add_liquidity_cmd(sys.argv[2], int(sys.argv[3]), xch_amount)
+            if len(sys.argv) == 6:
+                xch_amount = int(sys.argv[5])
+
+            pair_launcher_id = bytes.fromhex(sys.argv[2])
+            token_tail_hash = bytes.fromhex(sys.argv[3])
+            liquidity_tail_hash = pair_liquidity_tail_puzzle(pair_launcher_id).get_tree_hash()
+
+            print(f"Liquidity asset id: {liquidity_tail_hash.hex()}")
+            print(f"Token asset id: {token_tail_hash.hex()}")
+            print(f"Generating offer...")
+            # chia wallet make_offer -o 10:2 -o 1:0.003 -r 11:1 -p /tmp/deposit_offer
+            # debug
+            offer = open("/tmp/deposit_offer", "r").read()
+            await add_liquidity_cmd(offer, pair_launcher_id, token_tail_hash, int(sys.argv[4]), xch_amount)
         else:
-            print("Usage: add_liquidity [pair_launcher_id] [amount_token] [amount_xch_if_first_deposit]")
+            print("Usage: add_liquidity [pair_launcher_id] [token_asset_id] [amount_token] [amount_xch_if_first_deposit]")
     else:
         print("Unknown command.")
 
 if __name__ == "__main__":
     asyncio.run(main())
 
-# TAIL ID for simulator: fdfcc7c429630e45c54212c3f5915977dd18458e8786dfd08d54beeafc8d92d7
-# pair ID: ca5e2b4d06c2f038521eaab4f1b9c8e519a7de8e631fa378cef73a1ca4d90e5f
+# TAIL ID for simulator: d08398e38f8e20f0304a13f38d4f4cf4e488993e149149e91ac258d933af9274
+# pair ID: c5deaf6f7acb36d0c661e1a91b08c9ac4b1f840d73d2954f69e1f035357774c5

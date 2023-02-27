@@ -157,33 +157,18 @@
         )
     )
 
-    (defun-inline burn_liquidity_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash)
+    ; liquidity TAIL
+    (defun-inline create_liquidity_tokens_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword)
         (list
             CREATE_PUZZLE_ANNOUNCEMENT
-            ; program with no solution needed
-            (sha256 
+            (sha256
+                keyword 
                 (calculate_coin_id
                     liquidity_parent_id
                     (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
                     liquidity_token_amount
                 )
                 liquidity_token_amount
-            )
-        )
-    )
-
-    ; liquidity TAIL
-
-    (defun-inline create_liquidity_tokens_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword)
-        (list
-            CREATE_PUZZLE_ANNOUNCEMENT
-            (sha256 
-                (calculate_coin_id
-                    liquidity_parent_id
-                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
-                    liquidity_token_amount
-                )
-                (sha256 keyword liquidity_token_amount)
             )
         )
     )
@@ -274,8 +259,7 @@
     )
         (all
             (> token_amount 99) ; min token amount: 0.1
-            (> xch_amount 999999999) ; min XCH amount: 1000000000 (4 cents at the time of writing this, probably less than a million in the future)
-            (= (* 2 (/ xch_amount 2)) xch_amount) ; xch_amount is even
+            (> xch_amount 99999999) ; min XCH amount: 100,000,000 (0.4 cents at the time of writing this, probably less than a million in the future)
         )
     )
 
@@ -298,14 +282,13 @@
     )
 
     (defun-inline add_liquidity_0_conditions (
-            xch_amount
+            liquidity_token_amount
             liquidity_parent_id
             liquidity_inner_puzzle_hash
         )
         (list
-            (create_liquidity_tokens_condition xch_amount liquidity_pare
-            nt_id liquidity_inner_puzzle_hash MINT_KEYWORD)
-            (assert_liquidity_tokens_condition xch_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
+            (create_liquidity_tokens_condition liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
+            (assert_liquidity_tokens_condition liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
         )
 
     )
@@ -317,7 +300,6 @@
         (all
             (> LIQUIDITY 0)
             (> LIQUIDITY liquidity_tokens_amount)
-            (= (* 2 (/ liquidity_tokens_amount 2)) liquidity_tokens_amount) ; is even
         )
     )
 
@@ -410,7 +392,7 @@
                 (list
                     ; assert my id
                     (list ASSERT_MY_COIN_ID my_coin_id)
-                
+
                     ; create new XCH reserve
                     (assert_xch_reserve_condition
                         my_coin_id
@@ -539,9 +521,9 @@
                         (add_liquidity_token_amount_from_params params)
                     )
                     (add_liquidity_0_conditions
-                        (add_liquidity_xch_amount_from_params params)
-                        (add_liquidity_liquidity_inner_puzzle_hash_from_params params)
+                        (add_liquidity_token_amount_from_params params)
                         (add_liquidity_liquidity_parent_id_from_params params)
+                        (add_liquidity_liquidity_inner_puzzle_hash_from_params params)
                     )
                     1
                 )
@@ -564,8 +546,8 @@
                     )
                     (add_liquidity_gt0_conditions
                         (add_liquidity_token_amount_from_params params)
-                        (add_liquidity_liquidity_inner_puzzle_hash_from_params params)
                         (add_liquidity_liquidity_parent_id_from_params params)
+                        (add_liquidity_liquidity_inner_puzzle_hash_from_params params)
                     )
                     ()
                 )
@@ -577,3 +559,6 @@
 ; NOTES FOR FUTURE SELF
 
 ; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
+
+; update router: no need to keep state; people can use the first pool for a given token by social convention
+; and the blockchain will always say which is first (since the router is a sinlgeton and can only create one pool at a time)
