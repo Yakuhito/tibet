@@ -21,7 +21,6 @@ def get_config_item(*args):
     ret = cached_config
     for arg in args:
         if ret is None:
-            click.echo(f"Could not find {'->'.join(args)} - is this an error on your part?")
             return ret
         ret = ret.get(arg, None)
     
@@ -95,7 +94,7 @@ def launch_router(push_tx):
 async def _launch_router(push_tx):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(2, WalletType.STANDARD_WALLET, min_coin_amount=2) # wallet id 1, amount 2
+    coins = await wallet_client.select_coins(2, 1, min_coin_amount=2) # wallet id 1, amount 2
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -141,7 +140,7 @@ async def _launch_test_token(amount, push_tx):
     click.echo(f"Creating test CAT with a supply of {amount} ({amount * 1000} mojos used)...")
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(amount * 1000, WalletType.STANDARD_WALLET, min_coin_amount=amount * 1000) # wallet id 1 = XCH
+    coins = await wallet_client.select_coins(amount * 1000, 1, min_coin_amount=amount * 1000) # wallet id 1 = XCH
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -214,7 +213,7 @@ async def _create_pair(tail_hash, push_tx):
         save_config(config)
 
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
-    coins = await wallet_client.select_coins(2, WalletType.STANDARD_WALLET, min_coin_amount=2) # wallet id 1 = XCH
+    coins = await wallet_client.select_coins(2, 1, min_coin_amount=2) # wallet id 1 = XCH
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -307,6 +306,11 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
     click.echo("Depositing liquidity...")
     offer_str = ""
 
+    pair_launcher_id = get_config_item("pairs", token_tail_hash)
+    if pair_launcher_id is None:
+        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or launch-pair.")
+        sys.exit(1)
+
     if offer is not None:
         click.echo("No need to generate new offer.")
         if os.path.isfile(offer):
@@ -315,10 +319,6 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
             offer_str = offer
     else:
         click.echo("Generating new offer...")
-        pair_launcher_id = get_config_item("pairs", token_tail_hash)
-        if pair_launcher_id is None:
-            click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or launch-pair.")
-            sys.exit(1)
 
         if xch_amount == 0 or token_amount == 0:
             click.echo("Please set --xch-amount and --token-amount to use this option.")
@@ -354,7 +354,45 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         wallet_client.close()
         await wallet_client.await_closed()
 
-    print(offer_str)
+    click.echo("Syncing with pair...")
+    
+    full_node_client = await get_full_node_client(get_config_item("chia_root"))
+
+    last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
+    last_synced_pair_id_not_none = last_synced_pair_id
+    if last_synced_pair_id_not_none is None:
+        last_synced_pair_id_not_none = pair_launcher_id
+
+    current_pair_coin, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none)
+    current_pair_coin_id = current_pair_coin.name().hex()
+    click.echo(f"Current pair coin id: {current_pair_coin_id}")
+
+    if current_pair_coin_id != last_synced_pair_id:
+        click.echo("Pair state updated since last sync; saving it...")
+        config = get_config()
+        config["pair_sync"] = config.get("pair_sync", {})
+        config["pair_sync"][pair_launcher_id] = current_pair_coin_id
+        save_config(config)
+
+    # debug
+    full_node_client.close()
+    await full_node_client.await_closed()
+
+    sb = await respond_to_deposit_liquidity_offer(
+        bytes.fromhex(pair_launcher_id),
+        current_pair_coin,
+        bytes.fromhex(token_tail_hash),
+        pair_state["liquidity"],
+        pair_state["xch_reserve"],
+        pair_state["token_reserve"],
+        offer_str
+    )
+    open("spend_bundle.json", "w").write(str(sb))
+    print("written to spend_bundle.json ser")
+    # debug
+
+    # full_node_client.close()
+    # await full_node_client.await_closed()
 
 
 if __name__ == "__main__":

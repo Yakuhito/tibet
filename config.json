@@ -1,9 +1,6 @@
 {
     "chia_root": "/home/yakuhito/.chia/simulator/main",
-    "pairs": {
-        "342298eb602f9ea9ea4044e6f7db307690d6091844a3f5ff78da3efc1cb5f9ff": "d4879527ef99f8d5c2472f053afd944c26a958f6d8bfeeab8047676f7e307cd7",
-        "4dc3c13c4e53f23e17117000b6b38da1f5ee2e636b60d220b487d61ac84d64d8": "cef922b35f1b6c9d37d7bf19f93d21fda8d76588565c3c2aebf0716c7c6eb18a"
-    },
-    "router_last_processed_id": "24923b21520ec417ce52c9b8d41db120c2e21169ef26b2bcce77676e25d0f3dc",
-    "router_launcher_id": "75143f3a7937cdd4e54ded433e6d2327b62d393e5b1f78e90443baa92aaae699"
+    "pairs": {},
+    "router_last_processed_id": "c92dc5e474163d5a8c45c6c724818a339360aa3534b9a9828cf5eeebe76e1bac",
+    "router_launcher_id": "f94cc1f4d2436bd7438d50fc489daa4fce87751b8e8d2ffa59ff55df440c2ae6"
 }
