@@ -24,4 +24,5 @@ python3 tibet.py launch-test-token
 python3 tibet.py launch-test-token --push-tx
 python3 tibet.py create-pair --asset-id [asset_id_from_last_output]
 python3 tibet.py create-pair --asset-id [asset_id_from_last_output] --push-tx
+python3 tibet.py sync-pairs
 ```

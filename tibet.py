@@ -401,5 +401,6 @@ if __name__ == "__main__":
     cli.add_command(launch_router)
     cli.add_command(launch_test_token)
     cli.add_command(create_pair)
+    cli.add_command(sync_pairs)
     cli.add_command(deposit_liquidity)
     cli()
