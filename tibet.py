@@ -262,15 +262,29 @@ def sync_pairs():
 
 async def _sync_pairs():
     router_last_processed_id = get_config_item("router_last_processed_id")
-    if router_last_processed_id is None or len(router_last_processed_id) != 32:
-        router_last_processed_id = get_config_item("router_launcher_id")
-        if router_last_processed_id is None:
-            click.echo("No router launcher id. Please either set it or launch a new router.")
-            os.exit(1)
+    if router_last_processed_id is None or len(router_last_processed_id) != 64:
+        click.echo("No router launcher id. Please either set it or launch a new router.")
+        sys.exit(1)
     
     full_node_client = await get_full_node_client(get_config_item("chia_root"))
-    resp = await full_node_client.get_blockchain_state()
-    print(resp) # todo
+
+    current_router_coin, latest_creation_spend, pairs = await sync_router(full_node_client, router_last_processed_id)
+    router_last_processed_id_new = current_router_coin.name().hex()
+    click.echo(f"Last router id: {router_last_processed_id_new}")
+
+    if len(pairs) != 0 or router_last_processed_id_new != router_last_processed_id:
+        click.echo("New pairs found! Saving them...")
+        router_last_processed_id = router_last_processed_id_new
+
+        config = get_config()
+        config["router_last_processed_id"] = router_last_processed_id
+        config["pairs"] = config.get("pairs", {})
+        for pair in pairs:
+            if config["pairs"].get(pair[0], -1) == -1:
+                config["pairs"][pair[0]] = pair[1]
+        save_config(config)
+
+    click.echo("Bye!")
     full_node_client.close()
     await full_node_client.await_closed()
 
