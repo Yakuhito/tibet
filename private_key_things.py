@@ -107,3 +107,4 @@ async def sign_spend_bundle(wallet_client, sb, no_max_keys = 1):
         i += 1
 
     return sb
+    
