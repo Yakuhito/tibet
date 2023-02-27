@@ -555,10 +555,3 @@
         )
     )
 )
-
-; NOTES FOR FUTURE SELF
-
-; DO NOT REMOVE UNTIL CODE IS FINISHED: test all CREATE_COINs; make sure they are even
-
-; update router: no need to keep state; people can use the first pool for a given token by social convention
-; and the blockchain will always say which is first (since the router is a sinlgeton and can only create one pool at a time)

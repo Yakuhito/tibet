@@ -1,0 +1,7 @@
+{
+    "node": {
+        "chia_root": "/home/yakuhito/.chia/simulator/main",
+        "full_node_rpc_port": 10568,
+        "wallet_rpc_port": 11269
+    }
+}
