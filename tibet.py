@@ -5,6 +5,7 @@ import os
 import asyncio
 from tibet_lib import *
 from private_key_things import *
+from chia.wallet.util.wallet_types import WalletType
 
 @click.group()
 def cli():
@@ -94,7 +95,7 @@ def launch_router(push_tx):
 async def _launch_router(push_tx):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(2, 1, min_coin_amount=2) # wallet id 1, amount 2
+    coins = await wallet_client.select_coins(2, WalletType.STANDARD_WALLET, min_coin_amount=2) # wallet id 1, amount 2
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -122,9 +123,9 @@ async def _launch_router(push_tx):
         save_config(config)
         click.echo("Done.")
     else:
-        click.echo("Here's your spend bundle:")
-        click.echo(str(signed_sb))
-        click.echo("Use --push-tx to push this spend.")
+        open("spend_bundle.json", "w").write(str(signed_sb))
+        click.echo("Spend bundle written to spend_bundle.json.")
+        click.echo("Use --push-tx to broadcast this spend.")
 
     wallet_client.close()
     await wallet_client.await_closed()
@@ -140,7 +141,7 @@ async def _launch_test_token(amount, push_tx):
     click.echo(f"Creating test CAT with a supply of {amount} ({amount * 1000} mojos used)...")
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(amount * 1000, 1, min_coin_amount=amount * 1000) # wallet id 1 = XCH
+    coins = await wallet_client.select_coins(amount * 1000, WalletType.STANDARD_WALLET, min_coin_amount=amount * 1000) # wallet id 1 = XCH
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -165,9 +166,9 @@ async def _launch_test_token(amount, push_tx):
         click.echo(resp)
         click.echo("Done.")
     else:
-        click.echo("Here's your spend bundle:")
-        click.echo(str(signed_sb))
-        click.echo("Use --push-tx to push this spend.")
+        open("spend_bundle.json", "w").write(str(signed_sb))
+        click.echo("Spend bundle written to spend_bundle.json.")
+        click.echo("Use --push-tx to broadcast this spend.")
 
     wallet_client.close()
     await wallet_client.await_closed()
@@ -213,7 +214,7 @@ async def _create_pair(tail_hash, push_tx):
         save_config(config)
 
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
-    coins = await wallet_client.select_coins(2, 1, min_coin_amount=2) # wallet id 1 = XCH
+    coins = await wallet_client.select_coins(2, WalletType.STANDARD_WALLET, min_coin_amount=2) # wallet id 1 = XCH
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -245,9 +246,9 @@ async def _create_pair(tail_hash, push_tx):
         click.echo(resp)
         click.echo("Done.")
     else:
-        click.echo("Here's your spend bundle:")
-        click.echo(str(signed_sb))
-        click.echo("Use --push-tx to push this spend.")
+        open("spend_bundle.json", "w").write(str(signed_sb))
+        click.echo("Spend bundle written to spend_bundle.json.")
+        click.echo("Use --push-tx to broadcast this spend.")
 
     wallet_client.close()
     await wallet_client.await_closed()
@@ -289,11 +290,78 @@ async def _sync_pairs():
     await full_node_client.await_closed()
 
 
+@click.command()
+@click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
+@click.option("--offer", default=None, help='Offer to build liquidity tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
+@click.option("--token-amount", default=0, help="If offer is none, this amount of tokens will be asked for in the offer. Unit is mojos (1 CAT = 1000 mojos).")
+@click.option("--xch-amount", default=0, help="If offer is none, this amount of XCH will be asked for in the generated offer. Unit is mojos.")
+@click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
+def deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx):
+    if len(asset_id) != 64:
+        click.echo("Oops! That asset id doesn't look right...")
+        sys.exit(1)
+    asyncio.run(_deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx))
+
+
+async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, push_tx):
+    click.echo("Depositing liquidity...")
+    offer_str = ""
+
+    if offer is not None:
+        click.echo("No need to generate new offer.")
+        if os.path.isfile(offer):
+            offer_str = open(offer, "r").read().strip()
+        else:
+            offer_str = offer
+    else:
+        click.echo("Generating new offer...")
+        pair_launcher_id = get_config_item("pairs", token_tail_hash)
+        if pair_launcher_id is None:
+            click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or launch-pair.")
+            sys.exit(1)
+
+        if xch_amount == 0 or token_amount == 0:
+            click.echo("Please set --xch-amount and --token-amount to use this option.")
+            sys.exit(1)
+
+        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
+        click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
+
+        wallet_client = await get_wallet_client(get_config_item("chia_root"))
+        wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
+        
+        token_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(token_tail_hash)), None)
+        liquidity_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(pair_liquidity_tail_hash)), None)
+
+        if token_wallet_id is None or liquidity_wallet_id is None:
+            click.echo("You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
+            wallet_client.close()
+            await wallet_client.await_closed()
+            sys.exit(1)
+
+        offer_dict = {}
+        offer_dict[1] = - xch_amount - token_amount # also for liqiudity TAIL creation
+        offer_dict[token_wallet_id] = -token_amount
+        offer_dict[liquidity_wallet_id] = token_amount
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer = offer_resp[0]
+
+        offer_str = offer.to_bech32()
+        open("offer.txt", "w").write(offer_str)
+
+        click.offer("Offer successfully generated and saved to offer.txt.")
+
+        wallet_client.close()
+        await wallet_client.await_closed()
+
+    print(offer_str)
+
+
 if __name__ == "__main__":
     cli.add_command(config_node)
     cli.add_command(test_node_config)
     cli.add_command(launch_router)
     cli.add_command(launch_test_token)
     cli.add_command(create_pair)
-    cli.add_command(sync_pairs)
+    cli.add_command(deposit_liquidity)
     cli()
