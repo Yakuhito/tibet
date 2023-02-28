@@ -343,12 +343,21 @@ async def sync_pair(full_node_client, last_synced_coin_id):
     last_synced_coin = coin_record.coin
 
     if coin_record.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
-        return last_synced_coin, state
+        creation_spend = await full_node_client.get_puzzle_and_solution(last_synced_coin_id, coin_record.spent_block_index)
+        _, conditions_dict, __ = conditions_dict_for_solution(
+            creation_spend.puzzle_reveal,
+            creation_spend.solution,
+            INFINITE_COST
+        )
+        last_synced_coin = Coin(coin_record.coin.name(), conditions_dict[ConditionOpcode.CREATE_COIN][0].vars[0], 1)
+        return last_synced_coin, creation_spend, state
+
     if not coin_record.spent:
         # hack
-        current_pair_coin, state = await sync_router(full_node_client, coin_record.coin.parent_coin_info.hex())
-        return current_pair_coin, state
+        current_pair_coin, creation_spend, state = await sync_pair(full_node_client, coin_record.coin.parent_coin_info.hex())
+        return current_pair_coin, creation_spend, state
 
+    creation_spend = None
     while coin_record.spent:
         creation_spend = await full_node_client.get_puzzle_and_solution(last_synced_coin_id, coin_record.spent_block_index)
         _, conditions_dict, __ = conditions_dict_for_solution(
@@ -371,19 +380,19 @@ async def sync_pair(full_node_client, last_synced_coin_id):
     # debug
     print("REACHED TODO SECTION SER LINE 370 PROB THX FOR CODING")
     input("SLEEP")
-    return last_synced_coin, state
+    return last_synced_coin, creation_spend, state
 
 
 async def respond_to_deposit_liquidity_offer(
     pair_launcher_id,
     current_pair_coin,
+    creation_spend,
     token_tail_hash,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
     offer_str
 ):
-
     # 1. Detect ephemeral coins (those created by the offer that we're allowed to use)
     offer = Offer.from_bech32(offer_str)
     offer_spend_bundle = offer.to_spend_bundle()
@@ -395,8 +404,8 @@ async def respond_to_deposit_liquidity_offer(
     eph_token_coin_creation_spend = None # needed when spending eph_token_coin since it's a CAT
     announcement_asserts = [] # assert everything when the liquidity cat is minted
 
-    ephemeral_token_puzzle = construct_cat_puzzle(CAT_MOD, token_tail_hash, OFFER_MOD)
-    ephemeral_token_puzzle_hash = ephemeral_token_puzzle.get_tree_hash()
+    ephemeral_token_coin_puzzle = construct_cat_puzzle(CAT_MOD, token_tail_hash, OFFER_MOD)
+    ephemeral_token_coin_puzzle_hash = ephemeral_token_coin_puzzle.get_tree_hash()
 
     cs_from_initial_offer = [] # all valid coin spends (i.e., not 'hints' for offered assets or coins)
 
@@ -419,7 +428,7 @@ async def respond_to_deposit_liquidity_offer(
             if puzzle_hash == OFFER_MOD_HASH:
                 eph_xch_coin = Coin(coin_spend.coin.name(), puzzle_hash, amount)
             
-            if puzzle_hash == ephemeral_token_puzzle_hash:
+            if puzzle_hash == ephemeral_token_coin_puzzle_hash:
                 eph_token_coin = Coin(coin_spend.coin.name(), puzzle_hash, amount)
                 eph_token_coin_creation_spend = coin_spend
 
@@ -455,34 +464,178 @@ async def respond_to_deposit_liquidity_offer(
     eph_token_coin_inner_solution = Program.to([
         Program.to([
             current_pair_coin.name(),
-            [p2_singleton_puzzle_cat.get_tree_hash(), deposited_token_amount]
+            [p2_singleton_puzzle_cat.get_tree_hash(), deposited_token_amount + pair_xch_reserve]
         ])
     ])
-    eph_cat_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+    
+    spendable_cats_for_token_reserve = []
+    spendable_cats_for_token_reserve.append(
+        SpendableCAT(
+            eph_token_coin,
+            token_tail_hash,
+            OFFER_MOD,
+            eph_token_coin_inner_solution,
+            lineage_proof=LineageProof(
+                eph_token_coin_creation_spend.coin.parent_coin_info,
+                get_innerpuzzle_from_puzzle(eph_token_coin_creation_spend.puzzle_reveal).get_tree_hash(),
+                eph_token_coin_creation_spend.coin.amount
+            )
+        )
+    )
+
+    token_reserve_creation_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+        CAT_MOD, spendable_cats_for_token_reserve
+    )
+    token_reserve_creation_spends = token_reserve_creation_spend_bundle.coin_spends
+    
+    # 4. spend the xch ephemeral coin
+    liquidity_cat_tail = pair_liquidity_tail_puzzle(pair_launcher_id)
+    liquidity_cat_tail_hash = liquidity_cat_tail.get_tree_hash()
+    pair_singleton_inner_puzzle = get_pair_inner_puzzle(
+        pair_launcher_id,
+        token_tail_hash,
+        pair_liquidity,
+        pair_xch_reserve,
+        pair_token_reserve
+    )
+
+    liquidity_cat_mint_coin_tail_solution = Program.to([pair_singleton_inner_puzzle.get_tree_hash()])
+    # output everything from solution
+    # this is usually not safe to use, but in this case we don't really care since we are accepting an offer
+    # that is asking for liquidity tokens - it's kind of circular; if we don't get out tokens, 
+    # the transaction doesn't go through because a puzzle announcemet from the parents of eph coins would fail
+    liquidity_cat_mint_coin_inner_puzzle = Program.from_bytes(b"\x01")
+    liquidity_cat_mint_coin_inner_puzzle_hash = liquidity_cat_mint_coin_inner_puzzle.get_tree_hash()
+    liquidity_cat_mint_coin_puzzle = construct_cat_puzzle(
+        CAT_MOD, liquidity_cat_tail_hash, liquidity_cat_mint_coin_inner_puzzle
+    )
+    liquidity_cat_mint_coin_puzzle_hash = liquidity_cat_mint_coin_puzzle.get_tree_hash()
+
+    eph_xch_coin_settlement_things = [
+        Program.to([
+            current_pair_coin.name(),
+            [p2_singleton_puzzle.get_tree_hash(), pair_xch_reserve + deposited_xch_amount]
+        ]),
+        Program.to([
+            current_pair_coin.name(),
+            [liquidity_cat_mint_coin_puzzle_hash, new_liquidity_token_amount]
+        ])
+    ]
+    eph_xch_coin_solution = Program.to(eph_xch_coin_settlement_things)
+    eph_xch_coin_spend = CoinSpend(eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
+
+    # 5. Re-create the pair singleton (spend it)
+    pair_singleton_puzzle = get_pair_puzzle(
+        pair_launcher_id,
+        token_tail_hash,
+        pair_liquidity,
+        pair_xch_reserve,
+        pair_token_reserve
+    )
+    pair_singleton_inner_solution = Program.to([
+        Program.to([current_pair_coin.name(), b"\x00" * 32, b"\x00" * 32]),
+        0,
+        Program.to([
+            deposited_token_amount,
+            liquidity_cat_mint_coin_inner_puzzle_hash,
+            eph_xch_coin.name(), # parent of liquidity cat mint coin
+            deposited_xch_amount
+        ])
+    ])
+    lineage_proof = lineage_proof_for_coinsol(creation_spend)
+    pair_singleton_solution = solution_for_singleton(
+        lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
+    )
+    pair_singleton_spend = CoinSpend(current_pair_coin, pair_singleton_puzzle, pair_singleton_solution)
+
+    # 6. Spend liquidity cat mint coin
+    liquidity_cat_mint_coin = Coin(
+        eph_xch_coin.name(),
+        liquidity_cat_mint_coin_puzzle_hash,
+        new_liquidity_token_amount
+    )
+
+    output_conditions = announcement_asserts
+    if fee > 0:
+        output_conditions.append([ConditionOpcode.RESERVE_FEE, fee])
+
+    output_conditions.append([ConditionOpcode.CREATE_COIN, OFFER_MOD_HASH, new_liquidity_token_amount])
+
+    liquidity_cat_mint_coin_tail_puzzle = pair_liquidity_tail_puzzle(pair_launcher_id)
+    output_conditions.append([
+        ConditionOpcode.CREATE_COIN,
+        0,
+        -113,
+        liquidity_cat_mint_coin_tail_puzzle,
+        liquidity_cat_mint_coin_tail_solution
+    ])
+
+    # also assert the XCH ephemeral coin announcement
+    # specifically, for the payment made to mint liquidity tokens
+    eph_xch_settlement_announcement = eph_xch_coin_settlement_things[-1].get_tree_hash()
+    output_conditions.append([
+        ConditionOpcode.ASSERT_PUZZLE_ANNOUNCEMENT,
+        std_hash(eph_xch_coin.puzzle_hash + eph_xch_settlement_announcement)
+    ])
+
+    liquidity_cat_mint_coin_solution = Program.to([
+        output_conditions,
+        [],
+        liquidity_cat_mint_coin.name(),
+        [liquidity_cat_mint_coin.parent_coin_info, liquidity_cat_mint_coin.puzzle_hash, new_liquidity_token_amount],
+        [liquidity_cat_mint_coin.parent_coin_info, liquidity_cat_mint_coin_inner_puzzle_hash, new_liquidity_token_amount],
+        [],
+        []
+    ])
+    liquidity_cat_mint_coin_spend = CoinSpend(
+        liquidity_cat_mint_coin,
+        liquidity_cat_mint_coin_puzzle,
+        liquidity_cat_mint_coin_solution
+    )
+
+    # 7. Ephemeral liquidity cat and we're done
+    ephemeral_liquidity_cat_coin_puzzle = construct_cat_puzzle(CAT_MOD, liquidity_cat_tail_hash, OFFER_MOD)
+    ephemeral_liquidity_cat_coin_puzzle_hash = ephemeral_liquidity_cat_coin_puzzle.get_tree_hash()
+
+    ephemeral_liquidity_cat = Coin(
+        liquidity_cat_mint_coin.name(),
+        ephemeral_liquidity_cat_coin_puzzle_hash,
+        new_liquidity_token_amount
+    )
+
+    notarized_payment = offer.get_requested_payments()[liquidity_cat_tail_hash][0]
+    nonce = notarized_payment.nonce
+    memos = notarized_payment.memos
+    ephemeral_liquidity_cat_inner_solution = Program.to([
+        Program.to([
+            nonce,
+            [memos[0], new_liquidity_token_amount, memos]
+        ])
+    ])
+    ephemeral_liquidity_cat_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
         CAT_MOD,
         [
             SpendableCAT(
-                eph_token_coin,
-                token_tail_hash,
+                ephemeral_liquidity_cat,
+                liquidity_cat_tail_hash,
                 OFFER_MOD,
-                eph_token_coin_inner_solution,
+                ephemeral_liquidity_cat_inner_solution,
                 lineage_proof=LineageProof(
-                    eph_token_coin_creation_spend.coin.name(),
-                    get_innerpuzzle_from_puzzle(eph_token_coin_creation_spend.puzzle_reveal).get_tree_hash(),
-                    eph_token_coin_creation_spend.coin.amount
+                    liquidity_cat_mint_coin.parent_coin_info,
+                    liquidity_cat_mint_coin_inner_puzzle_hash,
+                    new_liquidity_token_amount
                 )
             )
         ],
     )
-    token_reserve_creation_spends = eph_cat_spend_bundle.coin_spends
-
-    print(f"Creation coin name: {eph_token_coin_creation_spend.coin.name().hex()}") # debug
-    print(f"Creation coin inner puzz: {get_innerpuzzle_from_puzzle(eph_token_coin_creation_spend.puzzle_reveal).get_tree_hash().hex()}") # debug
-    print(f"Creation coin name: {eph_token_coin_creation_spend.coin.amount}") # debug
+    ephemeral_liquidity_cat_spend = ephemeral_liquidity_cat_spend_bundle.coin_spends[0]
 
     sb = SpendBundle(
         [
-           # todo
+           eph_xch_coin_spend,
+           pair_singleton_spend,
+           liquidity_cat_mint_coin_spend,
+           ephemeral_liquidity_cat_spend
         ] + token_reserve_creation_spends + cs_from_initial_offer,
         offer_spend_bundle.aggregated_signature
     )

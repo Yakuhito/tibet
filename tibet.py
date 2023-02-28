@@ -122,7 +122,7 @@ async def _launch_router(push_tx):
         save_config(config)
         click.echo("Done.")
     else:
-        open("spend_bundle.json", "w").write(str(signed_sb))
+        open("spend_bundle.json", "w").write(json.dumps(signed_sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -165,7 +165,7 @@ async def _launch_test_token(amount, push_tx):
         click.echo(resp)
         click.echo("Done.")
     else:
-        open("spend_bundle.json", "w").write(str(signed_sb))
+        open("spend_bundle.json", "w").write(json.dumps(signed_sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -245,7 +245,7 @@ async def _create_pair(tail_hash, push_tx):
         click.echo(resp)
         click.echo("Done.")
     else:
-        open("spend_bundle.json", "w").write(str(signed_sb))
+        open("spend_bundle.json", "w").write(json.dumps(signed_sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -320,8 +320,8 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
     else:
         click.echo("Generating new offer...")
 
-        if xch_amount == 0 or token_amount == 0:
-            click.echo("Please set --xch-amount and --token-amount to use this option.")
+        if token_amount == 0:
+            click.echo("Please set ---token-amount to use this option.")
             sys.exit(1)
 
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
@@ -349,7 +349,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         offer_str = offer.to_bech32()
         open("offer.txt", "w").write(offer_str)
 
-        click.offer("Offer successfully generated and saved to offer.txt.")
+        click.echo("Offer successfully generated and saved to offer.txt.")
 
         wallet_client.close()
         await wallet_client.await_closed()
@@ -363,7 +363,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none)
+    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none)
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
@@ -374,25 +374,29 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         config["pair_sync"][pair_launcher_id] = current_pair_coin_id
         save_config(config)
 
-    # debug
-    full_node_client.close()
-    await full_node_client.await_closed()
-
     sb = await respond_to_deposit_liquidity_offer(
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
+        creation_spend,
         bytes.fromhex(token_tail_hash),
         pair_state["liquidity"],
         pair_state["xch_reserve"],
         pair_state["token_reserve"],
         offer_str
     )
-    open("spend_bundle.json", "w").write(str(sb))
-    print("written to spend_bundle.json ser")
-    # debug
 
-    # full_node_client.close()
-    # await full_node_client.await_closed()
+    if push_tx:
+        click.echo(f"Pushing tx...")
+        resp = await full_node_client.push_tx(sb)
+        click.echo(resp)
+        click.echo("Enjoy your lp fees!")
+    else:
+        open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+        click.echo("Spend bundle written to spend_bundle.json.")
+        click.echo("Use --push-tx to broadcast this spend.")
+
+    full_node_client.close()
+    await full_node_client.await_closed()
 
 
 if __name__ == "__main__":

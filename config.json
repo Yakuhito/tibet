@@ -1,5 +1,9 @@
 {
     "chia_root": "/home/yakuhito/.chia/simulator/main",
+    "pair_sync": {
+        "7c1b20130756cbb2be7b5f43c8fe9ea8249d58ed692741fbdba72d4c58fb1d1a": "078525806cc99828ca424b8b1868e1a142108248e3398cbe3d9bd3d2948ba7fc",
+        "aaa7c1b20130756cbb2be7b5f43c8fe9ea8249d58ed692741fbdba72d4c58fb1d1a": "078525806cc99828ca424b8b1868e1a142108248e3398cbe3d9bd3d2948ba7fc"
+    },
     "pairs": {
         "c3252c0d423b067ae4cf1e2c28fdfc4acbd7aeb7074c65ffea704583785f1840": "7c1b20130756cbb2be7b5f43c8fe9ea8249d58ed692741fbdba72d4c58fb1d1a"
     },
