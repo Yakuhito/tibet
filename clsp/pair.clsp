@@ -58,7 +58,7 @@
     ;; 1 - remove liquidity
     (defun-inline remove_liquidity_liquidity_tokens_amount_from_params (params) (f params))
     (defun-inline remove_liqiudity_liquidity_inner_puzzle_hash_from_params (params) (f (r params)))
-    (defun-inline remove_liqiudity_liquidity_parent_id_from_params (params) (f (r (r coin_ids))))
+    (defun-inline remove_liqiudity_liquidity_parent_id_from_params (params) (f (r (r params))))
 
     ;; 2 - xch to token
     (defun-inline xch_to_token_xch_amount_from_params (params) (f params))
@@ -321,13 +321,13 @@
     )
 
     (defun-inline remove_liquidity_conditions (
-            liquidity_parent_id
-            liquidity_inner_puzzle_hash
             liquidity_tokens_amount
+            liquidity_inner_puzzle_hash
+            liquidity_parent_id
         )
         (list
-            (create_liquidity_tokens_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
-            (assert_liquidity_tokens_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
+            (create_liquidity_tokens_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD)
+            (assert_liquidity_tokens_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD)
         )
     )
 
@@ -493,9 +493,9 @@
                     (remove_liquidity_liquidity_tokens_amount_from_params params)
                 )
                 (remove_liquidity_conditions
-                    (remove_liqiudity_liquidity_parent_id_from_params params)
-                    (remove_liqiudity_liquidity_inner_puzzle_hash_from_params params)
                     (remove_liquidity_liquidity_tokens_amount_from_params params)
+                    (remove_liqiudity_liquidity_inner_puzzle_hash_from_params params)
+                    (remove_liqiudity_liquidity_parent_id_from_params params)
                 )
                 ()
             )

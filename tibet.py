@@ -425,7 +425,7 @@ def remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx):
     asyncio.run(_remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx))
 
 
-async def _remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx):
+async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push_tx):
     click.echo("Removing liquidity...")
     offer_str = ""
 
@@ -473,10 +473,14 @@ async def _remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx):
             await wallet_client.await_closed()
             sys.exit(1)
 
+        
+        token_amount = pair_state['token_reserve'] * liquidity_token_amount // pair_state['liquidity']
+        xch_amount = pair_state['xch_reserve'] * liquidity_token_amount // pair_state['liquidity']
+
         offer_dict = {}
-        offer_dict[1] = - xch_amount - token_amount # also for liqiudity TAIL creation
-        offer_dict[token_wallet_id] = -token_amount
-        offer_dict[liquidity_wallet_id] = token_amount
+        offer_dict[1] = xch_amount + liquidity_token_amount # also offer xch from liquidity cat burn
+        offer_dict[token_wallet_id] = token_amount
+        offer_dict[liquidity_wallet_id] = -liquidity_token_amount
         offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
         offer = offer_resp[0]
 
@@ -503,7 +507,7 @@ async def _remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx):
         config["pair_sync"][pair_launcher_id] = current_pair_coin_id
         save_config(config)
 
-    sb = await respond_to_deposit_liquidity_offer(
+    sb = await respond_to_remove_liquidity_offer(
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         creation_spend,
@@ -539,4 +543,5 @@ if __name__ == "__main__":
     cli.add_command(create_pair)
     cli.add_command(sync_pairs)
     cli.add_command(deposit_liquidity)
+    cli.add_command(remove_liquidity)
     cli()
