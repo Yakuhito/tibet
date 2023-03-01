@@ -465,11 +465,11 @@ async def get_pair_reserve_info(
                     if cwa2.vars[0] in [p2_singleton_puzzle_hash, p2_singleton_cat_puzzle_hash]:
                         amount = SExp.to(cwa2.vars[1]).as_int()
                 if spend.coin.puzzle_hash == OFFER_MOD_HASH:
-                    xch_reserve_coin = Coin(spend.coin.name(), spend.coin.puzzle_hash, amount)
+                    xch_reserve_coin = Coin(spend.coin.name(), p2_singleton_puzzle_hash, amount)
                 else: # OFFER_MOD_HASH but wrapped in CAT puzzle
-                    token_reserve_coin = Coin(spend.coin.name(), spend.coin.puzzle_hash, amount)
+                    token_reserve_coin = Coin(spend.coin.name(), p2_singleton_cat_puzzle_hash, amount)
                     token_reserve_lineage_proof = [
-                        spend.coin.name(),
+                        spend.coin.parent_coin_info,
                         OFFER_MOD_HASH,
                         spend.coin.amount
                     ]
@@ -580,6 +580,7 @@ async def respond_to_deposit_liquidity_offer(
             )
         )
     )
+    print(eph_token_coin)
 
     pair_singleton_inner_puzzle = get_pair_inner_puzzle(
         pair_launcher_id,
@@ -589,13 +590,12 @@ async def respond_to_deposit_liquidity_offer(
         pair_token_reserve
     )
     if last_token_reserve_coin is not None:
-        print(last_token_reserve_coin)
         spendable_cats_for_token_reserve.append(
             SpendableCAT(
                 last_token_reserve_coin,
                 token_tail_hash,
                 p2_singleton_puzzle,
-                solution_for_p2_singleton(creation_spend.coin, pair_singleton_inner_puzzle.get_tree_hash()),
+                solution_for_p2_singleton(last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()),
                 lineage_proof=LineageProof(
                     last_token_reserve_lineage_proof[0],
                     last_token_reserve_lineage_proof[1],
@@ -752,7 +752,11 @@ async def respond_to_deposit_liquidity_offer(
     last_xch_reserve_spend_maybe = []
 
     if last_xch_reserve_coin != None:
-        print(last_xch_reserve_coin)
+        last_xch_reserve_coin_puzzle = p2_singleton_puzzle
+        last_xch_reserve_coin_solution = solution_for_p2_singleton(last_xch_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash())
+        last_xch_reserve_spend_maybe.append(
+            CoinSpend(last_xch_reserve_coin, last_xch_reserve_coin_puzzle, last_xch_reserve_coin_solution)
+        )
 
     sb = SpendBundle(
         [
