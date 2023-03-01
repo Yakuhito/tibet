@@ -293,7 +293,7 @@ async def _sync_pairs():
 @click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
 @click.option("--offer", default=None, help='Offer to build liquidity tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
 @click.option("--token-amount", default=0, help="If offer is none, this amount of tokens will be asked for in the offer. Unit is mojos (1 CAT = 1000 mojos).")
-@click.option("--xch-amount", default=0, help="If offer is none, this amount of XCH will be asked for in the generated offer. Unit is mojos.")
+@click.option("--xch-amount", default=0, help="Only required if pair has no liquidity. If offer is none, this amount of XCH will be asked for in the generated offer. Unit is mojos.")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
 def deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx):
     if len(asset_id) != 64:
@@ -311,6 +311,17 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or launch-pair.")
         sys.exit(1)
 
+    full_node_client = await get_full_node_client(get_config_item("chia_root"))
+
+    last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
+    last_synced_pair_id_not_none = last_synced_pair_id
+    if last_synced_pair_id_not_none is None:
+        last_synced_pair_id_not_none = pair_launcher_id
+
+    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin_id = current_pair_coin.name().hex()
+    click.echo(f"Current pair coin id: {current_pair_coin_id}")
+
     if offer is not None:
         click.echo("No need to generate new offer.")
         if os.path.isfile(offer):
@@ -322,6 +333,129 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 
         if token_amount == 0:
             click.echo("Please set ---token-amount to use this option.")
+            sys.exit(1)
+
+        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
+        click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
+
+        wallet_client = await get_wallet_client(get_config_item("chia_root"))
+        wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
+        
+        token_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(token_tail_hash)), None)
+        liquidity_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(pair_liquidity_tail_hash)), None)
+
+        if token_wallet_id is None or liquidity_wallet_id is None:
+            click.echo("You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
+            wallet_client.close()
+            await wallet_client.await_closed()
+            sys.exit(1)
+
+        liquidity_token_amount = token_amount
+        if pair_state['liquidity'] != 0:
+            liquidity_token_amount = pair_state['liquidity'] * token_amount // pair_state['token_reserve']
+            xch_amount = liquidity_token_amount * pair_state['xch_reserve'] // pair_state['liquidity']
+
+        offer_dict = {}
+        offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
+        offer_dict[token_wallet_id] = -token_amount
+        offer_dict[liquidity_wallet_id] = liquidity_token_amount
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer = offer_resp[0]
+
+        offer_str = offer.to_bech32()
+        open("offer.txt", "w").write(offer_str)
+
+        click.echo("Offer successfully generated and saved to offer.txt.")
+
+        wallet_client.close()
+        await wallet_client.await_closed()
+
+    xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+        full_node_client,
+        bytes.fromhex(pair_launcher_id),
+        current_pair_coin,
+        bytes.fromhex(token_tail_hash),
+        creation_spend
+    )
+
+    if current_pair_coin_id != last_synced_pair_id:
+        click.echo("Pair state updated since last sync; saving it...")
+        config = get_config()
+        config["pair_sync"] = config.get("pair_sync", {})
+        config["pair_sync"][pair_launcher_id] = current_pair_coin_id
+        save_config(config)
+
+    sb = await respond_to_deposit_liquidity_offer(
+        bytes.fromhex(pair_launcher_id),
+        current_pair_coin,
+        creation_spend,
+        bytes.fromhex(token_tail_hash),
+        pair_state["liquidity"],
+        pair_state["xch_reserve"],
+        pair_state["token_reserve"],
+        offer_str,
+        xch_reserve_coin,
+        token_reserve_coin,
+        token_reserve_lineage_proof
+    )
+
+    if push_tx:
+        click.echo(f"Pushing tx...")
+        resp = await full_node_client.push_tx(sb)
+        click.echo(resp)
+        click.echo("Enjoy your lp fees!")
+    else:
+        open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+        click.echo("Spend bundle written to spend_bundle.json.")
+        click.echo("Use --push-tx to broadcast this spend.")
+
+    full_node_client.close()
+    await full_node_client.await_closed()
+
+
+@click.command()
+@click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
+@click.option("--offer", default=None, help='Offer to build liquidity removal tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
+@click.option("--liquidity-token-amount", default=0, help="If offer is none, this amount of liqudity tokens will be included in the offer. Unit is mojos (1 CAT = 1000 mojos).")
+@click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
+def remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx):
+    if len(asset_id) != 64:
+        click.echo("Oops! That asset id doesn't look right...")
+        sys.exit(1)
+    asyncio.run(_remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx))
+
+
+async def _remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx):
+    click.echo("Removing liquidity...")
+    offer_str = ""
+
+    pair_launcher_id = get_config_item("pairs", token_tail_hash)
+    if pair_launcher_id is None:
+        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs.")
+        sys.exit(1)
+
+    full_node_client = await get_full_node_client(get_config_item("chia_root"))
+
+    last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
+    last_synced_pair_id_not_none = last_synced_pair_id
+    if last_synced_pair_id_not_none is None:
+        last_synced_pair_id_not_none = pair_launcher_id
+
+    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin_id = current_pair_coin.name().hex()
+    click.echo(f"Current pair coin id: {current_pair_coin_id}")
+
+    if offer is not None:
+        click.echo("No need to generate new offer.")
+        if os.path.isfile(offer):
+            offer_str = open(offer, "r").read().strip()
+        else:
+            offer_str = offer
+    else:
+        click.echo("Generating new offer...")
+
+        if liquidity_token_amount == 0:
+            click.echo("Please set ---liquidity-token-amount to use this option.")
             sys.exit(1)
 
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
@@ -353,19 +487,6 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 
         wallet_client.close()
         await wallet_client.await_closed()
-
-    click.echo("Syncing with pair...")
-    
-    full_node_client = await get_full_node_client(get_config_item("chia_root"))
-
-    last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
-    last_synced_pair_id_not_none = last_synced_pair_id
-    if last_synced_pair_id_not_none is None:
-        last_synced_pair_id_not_none = pair_launcher_id
-
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
-    current_pair_coin_id = current_pair_coin.name().hex()
-    click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
     xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
         full_node_client,

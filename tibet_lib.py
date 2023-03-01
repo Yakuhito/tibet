@@ -15,7 +15,7 @@ from chia.util.ints import uint64
 from clvm.casts import int_to_bytes
 from cdv.cmds.rpc import get_client
 from chia.wallet.puzzles.load_clvm import load_clvm
-from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, pay_to_singleton_puzzle, SINGLETON_MOD_HASH, SINGLETON_MOD, P2_SINGLETON_MOD, SINGLETON_LAUNCHER_HASH, SINGLETON_LAUNCHER, lineage_proof_for_coinsol, puzzle_for_singleton, solution_for_singleton, generate_launcher_coin, solution_for_p2_singleton
+from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, SINGLETON_MOD_HASH, SINGLETON_MOD, SINGLETON_LAUNCHER_HASH, SINGLETON_LAUNCHER, lineage_proof_for_coinsol, puzzle_for_singleton, solution_for_singleton, generate_launcher_coin
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import puzzle_for_pk, calculate_synthetic_secret_key, DEFAULT_HIDDEN_PUZZLE_HASH, puzzle_for_synthetic_public_key, solution_for_delegated_puzzle
 from chia.wallet.puzzles.cat_loader import CAT_MOD_HASH, CAT_MOD
 from chia.wallet.trading.offer import OFFER_MOD_HASH, OFFER_MOD
@@ -55,18 +55,18 @@ from chia.util.hash import std_hash
 ROUTER_MOD: Program = load_clvm("../../../../../../../clvm/router.clvm", recompile=False)
 PAIR_MOD: Program = load_clvm("../../../../../../../clvm/pair.clvm", recompile=False)
 LIQUIDITY_TAIL_MOD: Program = load_clvm("../../../../../../../clvm/liquidity_tail.clvm", recompile=False)
+P2_SINGLETON_FLASHLOAN_MOD: Program = load_clvm("../../../../../../../clvm/p2_singleton_flashloan.clvm", recompile=False)
 
 ROUTER_MOD_HASH = ROUTER_MOD.get_tree_hash()
 PAIR_MOD_HASH = PAIR_MOD.get_tree_hash()
 LIQUIDITY_TAIL_MOD_HASH = LIQUIDITY_TAIL_MOD.get_tree_hash()
-
-P2_SINGLETON_MOD_HASH = P2_SINGLETON_MOD.get_tree_hash()
+P2_SINGLETON_FLASHLOAN_MOD_HASH = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
 
 def get_router_puzzle():
     return ROUTER_MOD.curry(
         PAIR_MOD_HASH,
         SINGLETON_MOD_HASH,
-        P2_SINGLETON_MOD_HASH,
+        P2_SINGLETON_FLASHLOAN_MOD_HASH,
         CAT_MOD_HASH,
         LIQUIDITY_TAIL_MOD_HASH,
         OFFER_MOD_HASH,
@@ -80,7 +80,7 @@ def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reser
     return PAIR_MOD.curry(
         PAIR_MOD_HASH,
         (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
-        P2_SINGLETON_MOD_HASH,
+        P2_SINGLETON_FLASHLOAN_MOD_HASH,
         CAT_MOD_HASH,
         LIQUIDITY_TAIL_MOD_HASH,
         OFFER_MOD_HASH,
@@ -103,6 +103,19 @@ def pair_liquidity_tail_puzzle(pair_launcher_id):
     return LIQUIDITY_TAIL_MOD.curry(
         (SINGLETON_MOD_HASH, (pair_launcher_id, SINGLETON_LAUNCHER_HASH))
     )
+
+# https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/singleton_top_layer_v1_1.py
+def pay_to_singleton_flashloan_puzzle(launcher_id: bytes32) -> Program:
+    return P2_SINGLETON_FLASHLOAN_MOD.curry(SINGLETON_MOD_HASH, launcher_id, SINGLETON_LAUNCHER_HASH)
+
+# https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/singleton_top_layer_v1_1.py
+def solution_for_p2_singleton_flashloan(
+    p2_singleton_coin: Coin,
+    singleton_inner_puzhash: bytes32,
+    extra_conditions = []
+) -> Program:
+    solution: Program = Program.to([singleton_inner_puzhash, p2_singleton_coin.name(), extra_conditions])
+    return solution
 
 
 async def get_full_node_client(
@@ -438,7 +451,7 @@ async def get_pair_reserve_info(
     if len(puzzle_announcements_asserts) == 0:
         return None, None, None # new pair
 
-    p2_singleton_puzzle = pay_to_singleton_puzzle(pair_launcher_id)
+    p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_hash = p2_singleton_puzzle.get_tree_hash()
     p2_singleton_cat_puzzle = construct_cat_puzzle(CAT_MOD, token_tail_hash, p2_singleton_puzzle)
     p2_singleton_cat_puzzle_hash = p2_singleton_cat_puzzle.get_tree_hash()
@@ -556,7 +569,7 @@ async def respond_to_deposit_liquidity_offer(
 
 
     # 3. spend the token ephemeral coin to create the token reserve coin
-    p2_singleton_puzzle = pay_to_singleton_puzzle(pair_launcher_id)
+    p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_cat =  construct_cat_puzzle(CAT_MOD, token_tail_hash, p2_singleton_puzzle)
     
     eph_token_coin_inner_solution = Program.to([
@@ -580,7 +593,6 @@ async def respond_to_deposit_liquidity_offer(
             )
         )
     )
-    print(eph_token_coin)
 
     pair_singleton_inner_puzzle = get_pair_inner_puzzle(
         pair_launcher_id,
@@ -595,7 +607,9 @@ async def respond_to_deposit_liquidity_offer(
                 last_token_reserve_coin,
                 token_tail_hash,
                 p2_singleton_puzzle,
-                solution_for_p2_singleton(last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()),
+                solution_for_p2_singleton_flashloan(
+                    last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
+                ),
                 lineage_proof=LineageProof(
                     last_token_reserve_lineage_proof[0],
                     last_token_reserve_lineage_proof[1],
@@ -753,7 +767,9 @@ async def respond_to_deposit_liquidity_offer(
 
     if last_xch_reserve_coin != None:
         last_xch_reserve_coin_puzzle = p2_singleton_puzzle
-        last_xch_reserve_coin_solution = solution_for_p2_singleton(last_xch_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash())
+        last_xch_reserve_coin_solution = solution_for_p2_singleton_flashloan(
+            last_xch_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
+        )
         last_xch_reserve_spend_maybe.append(
             CoinSpend(last_xch_reserve_coin, last_xch_reserve_coin_puzzle, last_xch_reserve_coin_solution)
         )
