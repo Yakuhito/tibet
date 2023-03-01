@@ -7,7 +7,7 @@
         PAIR_MOD_HASH ; sha256 of this module / puzzle (uncurried)
         SINGLETON_STRUCT  ; to quote did_innerpuz.clvm, 
             ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
-        P2_SINGLETON_MOD_HASH ; sha256tree of the p2_singleton module (uncurried)
+        P2_SINGLETON_FLASHLOAN_MOD_HASH ; sha256tree of the p2_singleton_flashloan module (uncurried)
         CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
         LIQUIDITY_TAIL_MOD_HASH ; sha256 tree of the liquidity TAIL (uncurried)
         SETTLEMENT_PAYMENTS_MOD_HASH ; sha256 tree of settlement_payments.clvm (not that it has any curried arguments, but still)
@@ -41,7 +41,7 @@
     (include curry.clinc)
     (include condition_codes.clvm)
 
-    (include pair_utils.clib)
+    (include tibet_utils.clib)
 
     ; params
     ;; -1 - coin ids
@@ -97,7 +97,7 @@
 
     ;; deposit/reserve-related
     (defun-inline p2_singleton_puzzle_hash ()
-        (curry_hashes_inline P2_SINGLETON_MOD_HASH
+        (curry_hashes_inline P2_SINGLETON_FLASHLOAN_MOD_HASH
             (sha256tree (singleton_mod_hash_from_struct SINGLETON_STRUCT))
             (sha256tree (singleton_launcher_from_struct SINGLETON_STRUCT))
             (sha256tree (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT))
@@ -194,7 +194,7 @@
             (curry_hashes_inline PAIR_MOD_HASH
                 (sha256tree PAIR_MOD_HASH)
                 (sha256tree SINGLETON_STRUCT)
-                (sha256tree P2_SINGLETON_MOD_HASH)
+                (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
                 (sha256tree CAT_MOD_HASH)
                 (sha256tree LIQUIDITY_TAIL_MOD_HASH)
                 (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)

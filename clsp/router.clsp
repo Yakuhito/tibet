@@ -7,7 +7,7 @@
         ; curried args - used for deploying pair
         PAIR_MOD_HASH
         SINGLETON_MOD_HASH ; pay attention here - it's not SINGLETON_STRUCT
-        P2_SINGLETON_MOD_HASH
+        P2_SINGLETON_FLASHLOAN_MOD_HASH
         CAT_MOD_HASH
         LIQUIDITY_TAIL_MOD_HASH
         SETTLEMENT_PAYMENTS_MOD_HASH
@@ -22,7 +22,7 @@
         new_pair_tail_hash ; hash of TAIL
     )
 
-    (include pair_utils.clib) ; lol
+    (include tibet_utils.clib) ; lol
     (include condition_codes.clvm)
     (include curry.clinc)
 
@@ -39,7 +39,7 @@
         (curry_hashes PAIR_MOD_HASH
             (sha256tree PAIR_MOD_HASH)
             (sha256tree (new_pair_singleton_struct)) ; SINGLETON_STRUCT
-            (sha256tree P2_SINGLETON_MOD_HASH)
+            (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
             (sha256tree CAT_MOD_HASH)
             (sha256tree LIQUIDITY_TAIL_MOD_HASH)
             (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
@@ -62,7 +62,7 @@
         (curry_hashes_inline ROUTER_MOD_HASH
             (sha256tree PAIR_MOD_HASH)
             (sha256tree SINGLETON_MOD_HASH)
-            (sha256tree P2_SINGLETON_MOD_HASH)
+            (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
             (sha256tree CAT_MOD_HASH)
             (sha256tree LIQUIDITY_TAIL_MOD_HASH)
             (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
