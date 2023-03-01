@@ -131,12 +131,12 @@
         )
     )
 
-    (defun-inline settlement_cat_announcement (my_coin_id tail_hash amount)
+    (defun-inline settlement_cat_announcement (my_coin_id amount)
         (sha256tree
             (list
                 my_coin_id
                 (list
-                    (cat_puzzle_hash tail_hash (p2_singleton_puzzle_hash))
+                    (p2_singleton_puzzle_hash)
                     amount
                 )
             )
@@ -150,7 +150,6 @@
                 (cat_puzzle_hash TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH)
                 (settlement_cat_announcement
                     my_coin_id
-                    TAIL_HASH
                     amount
                 )
             )

@@ -363,9 +363,17 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none)
+    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
+
+    xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+        full_node_client,
+        bytes.fromhex(pair_launcher_id),
+        current_pair_coin,
+        bytes.fromhex(token_tail_hash),
+        creation_spend
+    )
 
     if current_pair_coin_id != last_synced_pair_id:
         click.echo("Pair state updated since last sync; saving it...")
@@ -382,7 +390,10 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         pair_state["liquidity"],
         pair_state["xch_reserve"],
         pair_state["token_reserve"],
-        offer_str
+        offer_str,
+        xch_reserve_coin,
+        token_reserve_coin,
+        token_reserve_lineage_proof
     )
 
     if push_tx:

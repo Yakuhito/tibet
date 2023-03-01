@@ -25,8 +25,7 @@ python3 tibet.py launch-test-token --push-tx
 python3 tibet.py create-pair --asset-id [asset_id]
 python3 tibet.py create-pair --asset-id [asset_id] --push-tx
 python3 tibet.py sync-pairs
-python3 tibet.py  deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id]
-python3 tibet.py  deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id] --push-tx
-python3 tibet.py  deposit-liquidity --asset-id [asset_id] --token-amount 2000
-python3 tibet.py  deposit-liquidity --asset-id [asset_id] --token-amount 2000 --push-tx
+python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id] --push-tx
+python3 tibet.py deposit-liquidity --asset-id [asset_id] --token-amount 2000 --xch-amount 200000000
+python3 tibet.py deposit-liquidity --asset-id [asset_id] --token-amount 2000 --xch-amount 200000000 --push-tx
 ```
