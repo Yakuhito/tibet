@@ -333,6 +333,8 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 
         if token_amount == 0:
             click.echo("Please set ---token-amount to use this option.")
+            full_node_client.close()
+            await full_node_client.await_closed()
             sys.exit(1)
 
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
@@ -456,6 +458,8 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
 
         if liquidity_token_amount == 0:
             click.echo("Please set ---liquidity-token-amount to use this option.")
+            full_node_client.close()
+            await full_node_client.await_closed()
             sys.exit(1)
 
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
@@ -578,6 +582,8 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx):
 
         if xch_amount == 0:
             click.echo("Please set ---xch-amount to use this option.")
+            full_node_client.close()
+            await full_node_client.await_closed()
             sys.exit(1)
 
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
@@ -592,11 +598,18 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx):
             click.echo("You don't have a wallet for the token offered in the pair. Please set them up before using this command.")
             wallet_client.close()
             await wallet_client.await_closed()
+            full_node_client.close()
+            await full_node_client.await_closed()
             sys.exit(1)
         
         token_amount = 997 * xch_amount * pair_state['token_reserve'] // (1000 * pair_state['xch_reserve'] + 997 * xch_amount)
 
         click.echo(f"You'll receive {token_amount / 1000} tokens from this trade.")
+        if token_amount == 0:
+            wallet_client.close()
+            await wallet_client.await_closed()
+            full_node_client.close()
+            await full_node_client.await_closed()
 
         offer_dict = {}
         offer_dict[1] = -xch_amount # offer XCH
@@ -653,6 +666,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx):
 
     full_node_client.close()
     await full_node_client.await_closed()
+
 
 
 if __name__ == "__main__":

@@ -1268,7 +1268,7 @@ async def respond_to_swap_offer(
     intermediary_token_reserve_notarized_payments = [
         [
             current_pair_coin.name(),
-            [p2_singleton_cat_puzzle_hash, new_token_reserve_amount]
+            [p2_singleton_puzzle_hash, new_token_reserve_amount]
         ]
     ]
     if not eph_coin_is_cat:
@@ -1303,12 +1303,11 @@ async def respond_to_swap_offer(
         coin_spends.append(CoinSpend(eph_coin, OFFER_MOD, Program.to([])))
 
     # 7. Spend last xch reserve to create intermediary coin
-    # TODO you left here
     last_xch_reserve_coin_extra_conditions = [
         [
             ConditionOpcode.CREATE_COIN,
             OFFER_MOD_HASH,
-            new_xch_reserve_amount
+            new_xch_reserve_amount if eph_coin_is_cat else pair_xch_reserve
         ]
     ] + announcement_asserts
 
@@ -1317,11 +1316,43 @@ async def respond_to_swap_offer(
         pair_singleton_inner_puzzle.get_tree_hash(),
         extra_conditions=last_xch_reserve_coin_extra_conditions
     )
+
     last_xch_reserve_coin_spend = CoinSpend(
         last_xch_reserve_coin,
         p2_singleton_puzzle,
         last_xch_reserve_coin_solution
     )
+    coin_spends.append(last_xch_reserve_coin_spend)
+
+    # 8. Spend intermediary xch reserve coin
+    intermediary_xch_reserve_coin = Coin(
+        last_xch_reserve_coin.name(),
+        OFFER_MOD_HASH,
+        last_xch_reserve_coin.amount
+    )
+
+    intermediary_xch_reserve_coin_notarized_payments = [
+        [
+            current_pair_coin.name(),
+            [p2_singleton_puzzle_hash, new_xch_reserve_amount]
+        ]
+    ]
+    if eph_coin_is_cat:
+        notarized_payment = offer.get_requested_payments().get(None)[0]
+        intermediary_xch_reserve_coin_notarized_payments.append(
+            [
+                notarized_payment.nonce,
+                [notarized_payment.memos[0], pair_xch_reserve - new_xch_reserve_amount, notarized_payment.memos]
+            ]
+        )
+    intermediary_xch_reserve_coin_solution = Program.to(intermediary_xch_reserve_coin_notarized_payments)
+
+    intermediary_token_reserve_coin_spend = CoinSpend(
+        intermediary_xch_reserve_coin,
+        OFFER_MOD,
+        intermediary_xch_reserve_coin_solution
+    )
+    coin_spends.append(intermediary_token_reserve_coin_spend)
 
     return SpendBundle(
         coin_spends, offer_spend_bundle.aggregated_signature
