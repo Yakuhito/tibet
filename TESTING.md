@@ -1,4 +1,4 @@
-Set up [chia-dev-tools](https://github.com/Chia-Network/chia-dev-tools) first..
+Set up [chia-dev-tools](https://github.com/Chia-Network/chia-dev-tools) first.
 
 ```bash
 # environment stuff
