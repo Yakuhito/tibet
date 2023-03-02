@@ -7,6 +7,7 @@ Please see [contributors](CONTRIBUTORS.md) to know who to thank to.
 # Explanations
 
 Testers: see [TESTING.md](TESTING.md)
+
 Contributors: [CONTRIBUTORS.md](CONTRIBUTORS.md)
 
 ## Singletons
