@@ -30,6 +30,14 @@ python3 tibet.py create-pair --asset-id [asset_id] --push-tx
 
 python3 tibet.py sync-pairs
 
+# running one of the following commands will generate an offer
+# that is not cancelled even if --push-tx was not used
+# that's why the second command always uses --offer and reads the offer from
+# offer.txt, where the cli writes it for the first time
+
+# to clear offers, use:
+# chia wallet get_offers
+# chia wallet cancel_offer -id [id]
 python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id]
 python3 tibet.py deposit-liquidity --offer offer.txt --asset-id [asset_id] --push-tx
 
@@ -37,4 +45,5 @@ python3 tibet.py deposit-liquidity --asset-id [asset_id] --token-amount 4000
 python3 tibet.py deposit-liquidity --asset-id [asset_id] --offer offer.txt --push-tx
 
 python3 tibet.py remove-liquidity --asset-id [asset_id] --liquidity-token-amount 800
+python3 tibet.py remove-liquidity --asset-id [asset_id] --offer offer.txt --push-tx
 ```
