@@ -48,4 +48,10 @@ python3 tibet.py deposit-liquidity --asset-id [asset_id] --offer offer.txt --pus
 
 python3 tibet.py remove-liquidity --asset-id [asset_id] --liquidity-token-amount 800
 python3 tibet.py remove-liquidity --asset-id [asset_id] --offer offer.txt --push-tx
+
+python3 tibet.py xch-to-token --asset-id [asset_id] --xch-amount 100000000
+python3 tibet.py xch-to-token --asset-id [asset_id] --offer offer.txt --push-tx
+
+python3 tibet.py token-to-xch --asset-id [asset_id] --token-amount 1000
+python3 tibet.py token-to-xch --asset-id [asset_id] --offer offer.txt --push-tx
 ```
