@@ -1244,7 +1244,7 @@ async def respond_to_swap_offer(
                 Program.to([]),
                 lineage_proof=LineageProof(
                     eph_coin_creation_spend.coin.parent_coin_info,
-                    get_innerpuzzle_from_puzzle(eph_coin_creation_spend.puzzle_reveal),
+                    get_innerpuzzle_from_puzzle(eph_coin_creation_spend.puzzle_reveal).get_tree_hash(),
                     eph_coin_creation_spend.coin.amount
                 )
             )
@@ -1307,7 +1307,7 @@ async def respond_to_swap_offer(
         [
             ConditionOpcode.CREATE_COIN,
             OFFER_MOD_HASH,
-            new_xch_reserve_amount if eph_coin_is_cat else pair_xch_reserve
+            pair_xch_reserve
         ]
     ] + announcement_asserts
 
@@ -1342,7 +1342,7 @@ async def respond_to_swap_offer(
         intermediary_xch_reserve_coin_notarized_payments.append(
             [
                 notarized_payment.nonce,
-                [notarized_payment.memos[0], pair_xch_reserve - new_xch_reserve_amount, notarized_payment.memos]
+                [notarized_payment.puzzle_hash, pair_xch_reserve - new_xch_reserve_amount, notarized_payment.memos]
             ]
         )
     intermediary_xch_reserve_coin_solution = Program.to(intermediary_xch_reserve_coin_notarized_payments)
