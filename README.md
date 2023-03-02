@@ -6,6 +6,9 @@ Please see [contributors](CONTRIBUTORS.md) to know who to thank to.
 
 # Explanations
 
+Testers: see [TESTING.md](TESTING.md)
+Contributors: [CONTRIBUTORS.md](CONTRIBUTORS.md)
+
 ## Singletons
 
 The pair puzzles need to maintain a global state that only makes *valid* transitions. Using singletons as a top layer is the best approach. The one-spend-per-block can either be overcome by a) waiting for the multi-spend singleton feature to get released or b) looking up in the mempool for the tx that spends the last version of the singleton and adding your transaction to the spend-bundle (or having a service that does all that).
