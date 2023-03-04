@@ -1,11 +1,11 @@
 {
     "chia_root": "/home/yakuhito/.chia/simulator/main",
     "pair_sync": {
-        "cefb06aa5f839d8494376e3cc2ffd5eee71302ae2825848710e02050838c4c13": "4e250f31b5f9ab1f73acabbc22f73ded57cd223b067aceb75dcf197b48aadb69"
+        "4a6bca523de8f04527d3060a7df0754e89b6f658024b5bc6147f5c7c9a1480aa": "b768f55a995f85365ac419f93a8dca0b5f3f0c5a50b60c79390a8b1b69a3dade"
     },
     "pairs": {
-        "c3252c0d423b067ae4cf1e2c28fdfc4acbd7aeb7074c65ffea704583785f1840": "cefb06aa5f839d8494376e3cc2ffd5eee71302ae2825848710e02050838c4c13"
+        "82ac1eb865b728b9eb02771208726900524dd1e8b1c6c10f80a651fd8983aa94": "4a6bca523de8f04527d3060a7df0754e89b6f658024b5bc6147f5c7c9a1480aa"
     },
-    "router_last_processed_id": "4e4c3be4a897d635e87a4760200ca435eb5f5b63b13672c4dd66dec1c3123792",
-    "router_launcher_id": "f94cc1f4d2436bd7438d50fc489daa4fce87751b8e8d2ffa59ff55df440c2ae6"
+    "router_last_processed_id": "97ca6a5419c2533dc3392873a4dedf46b0a8a55dfe04268da9eb0aa8ffe6cd25",
+    "router_launcher_id": "5b468e1f320f8c1c75ba8ce389fa0e7e8454d00cb8d02f841762c4b86039034a"
 }

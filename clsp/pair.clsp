@@ -435,122 +435,162 @@
     (defconstant ACTION_XCH_TO_TOKEN 2)
     (defconstant ACTION_TOKEN_TO_XCH 3)
 
-    ; main
-    (if (> action ACTION_REMOVE_LIQUIDITY)
-        (if (= action ACTION_XCH_TO_TOKEN)
-            (create_output_conditions
-                (my_coin_id_from_coin_ids coin_ids)
-                (xch_reserve_coin_id_from_coin_ids coin_ids)
-                (token_reserve_coin_id_from_coin_ids coin_ids)
+    (defun-inline get_ok_condition ()
+        (if (> action ACTION_REMOVE_LIQUIDITY)
+            (if (= action ACTION_XCH_TO_TOKEN)
                 (xch_to_token_ok
                     (xch_to_token_xch_amount_from_params params)
                 )
-                LIQUIDITY
-                (xch_to_token_xch_reserve
-                    (xch_to_token_xch_amount_from_params params)
-                )
-                (xch_to_token_token_reserve
-                    (xch_to_token_xch_amount_from_params params)
-                )
-                ()
-                ()
-            )
-            ; else action > ACTION_REMOVE_LIQUIDITY, action != ACTION_XCH_TO_TOKEN -> action = ACTION_TOKEN_TO_XCH
-            (create_output_conditions
-                (my_coin_id_from_coin_ids coin_ids)
-                (xch_reserve_coin_id_from_coin_ids coin_ids)
-                (token_reserve_coin_id_from_coin_ids coin_ids)
+                ; else action > ACTION_REMOVE_LIQUIDITY, action != ACTION_XCH_TO_TOKEN -> action = ACTION_TOKEN_TO_XCH
                 (token_to_xch_ok
                     (token_to_xch_token_amount_from_params params)
                 )
-                LIQUIDITY
-                (token_to_xch_xch_reserve
-                    (token_to_xch_token_amount_from_params params)
-                )
-                (token_to_xch_token_reserve
-                    (token_to_xch_token_amount_from_params params)
-                )
-                ()
-                ()
             )
-        )
-        ; else action <= ACTION_REMOVE_LIQUIDITY
-        (if (= action ACTION_REMOVE_LIQUIDITY)
-            (create_output_conditions
-                (my_coin_id_from_coin_ids coin_ids)
-                (xch_reserve_coin_id_from_coin_ids coin_ids)
-                (token_reserve_coin_id_from_coin_ids coin_ids)
+            ; else action <= ACTION_REMOVE_LIQUIDITY
+            (if (= action ACTION_REMOVE_LIQUIDITY)
                 (remove_liqiudity_ok
                     (remove_liquidity_liquidity_tokens_amount_from_params params)
                 )
+                ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
+                ; add_liquidity behaves differently if the liquidity is 0 
+                (if (= LIQUIDITY 0)
+                    (add_liquidity_0_ok
+                        (add_liquidity_xch_amount_from_params params)
+                        (add_liquidity_token_amount_from_params params)
+                    )
+                    ; else liquidity > 0
+                    (add_liquidity_gt0_ok
+                        (add_liquidity_token_amount_from_params params)
+                    )
+                )
+            )
+        )
+    )
+
+    (defun-inline get_new_liquidity ()
+        (if (> action ACTION_REMOVE_LIQUIDITY)
+            LIQUIDITY
+            ; else action <= ACTION_REMOVE_LIQUIDITY
+            (if (= action ACTION_REMOVE_LIQUIDITY)
                 (remove_liqiudity_liquidity
                     (remove_liquidity_liquidity_tokens_amount_from_params params)
                 )
+                ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
+                ; add_liquidity behaves differently if the liquidity is 0 
+                (if (= LIQUIDITY 0)
+                    (add_liquidity_0_liquidity
+                        (add_liquidity_token_amount_from_params params)
+                    )
+                    ; else liquidity > 0
+                    (add_liquidity_gt0_liquidity
+                        (add_liquidity_token_amount_from_params params)
+                    )
+                )
+            )
+        )
+    )
+
+    (defun-inline get_new_xch_reserve ()
+        (if (> action ACTION_REMOVE_LIQUIDITY)
+            (if (= action ACTION_XCH_TO_TOKEN)
+                (xch_to_token_xch_reserve
+                    (xch_to_token_xch_amount_from_params params)
+                )
+                ; else action > ACTION_REMOVE_LIQUIDITY, action != ACTION_XCH_TO_TOKEN -> action = ACTION_TOKEN_TO_XCH
+                (token_to_xch_xch_reserve
+                    (token_to_xch_token_amount_from_params params)
+                )
+            )
+            ; else action <= ACTION_REMOVE_LIQUIDITY
+            (if (= action ACTION_REMOVE_LIQUIDITY)
                 (remove_liqiudity_xch_reserve
                     (remove_liquidity_liquidity_tokens_amount_from_params params)
                 )
+                ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
+                ; add_liquidity behaves differently if the liquidity is 0 
+                (if (= LIQUIDITY 0)
+                    (add_liquidity_0_xch_reserve
+                        (add_liquidity_xch_amount_from_params params)
+                    )
+                    ; else liquidity > 0
+                    (add_liquidity_gt0_xch_reserve
+                        (add_liquidity_token_amount_from_params params)
+                    )
+                )
+            )
+        )
+    )
+
+    (defun-inline get_new_token_reserve ()
+        (if (> action ACTION_REMOVE_LIQUIDITY)
+            (if (= action ACTION_XCH_TO_TOKEN)
+                (xch_to_token_token_reserve
+                    (xch_to_token_xch_amount_from_params params)
+                )
+                ; else action > ACTION_REMOVE_LIQUIDITY, action != ACTION_XCH_TO_TOKEN -> action = ACTION_TOKEN_TO_XCH
+                (token_to_xch_token_reserve
+                    (token_to_xch_token_amount_from_params params)
+                )
+            )
+            ; else action <= ACTION_REMOVE_LIQUIDITY
+            (if (= action ACTION_REMOVE_LIQUIDITY)
                 (remove_liqiudity_token_reserve
                     (remove_liquidity_liquidity_tokens_amount_from_params params)
                 )
+                ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
+                ; add_liquidity behaves differently if the liquidity is 0 
+                (if (= LIQUIDITY 0)
+                    (add_liquidity_0_token_reserve
+                        (add_liquidity_token_amount_from_params params)
+                    )
+                    ; else liquidity > 0
+                    (add_liquidity_gt0_token_reserve
+                        (add_liquidity_token_amount_from_params params)
+                    )
+                )
+            )
+        )
+    )
+
+    (defun-inline get_extra_output_conditions ()
+        (if (> action ACTION_REMOVE_LIQUIDITY)
+            ()
+            ; else action <= ACTION_REMOVE_LIQUIDITY
+            (if (= action ACTION_REMOVE_LIQUIDITY)
                 (remove_liquidity_conditions
                     (remove_liquidity_liquidity_tokens_amount_from_params params)
                     (remove_liqiudity_liquidity_inner_puzzle_hash_from_params params)
                     (remove_liqiudity_liquidity_parent_id_from_params params)
                 )
-                ()
-            )
-            ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
-            ; add_liquidity behaves differently if the 
-            (if (= LIQUIDITY 0)
-                (create_output_conditions
-                    (my_coin_id_from_coin_ids coin_ids)
-                    (xch_reserve_coin_id_from_coin_ids coin_ids)
-                    (token_reserve_coin_id_from_coin_ids coin_ids)
-                    (add_liquidity_0_ok
-                        (add_liquidity_xch_amount_from_params params)
-                        (add_liquidity_token_amount_from_params params)
-                    )
-                    (add_liquidity_0_liquidity
-                        (add_liquidity_token_amount_from_params params)
-                    )
-                    (add_liquidity_0_xch_reserve
-                        (add_liquidity_xch_amount_from_params params)
-                    )
-                    (add_liquidity_0_token_reserve
-                        (add_liquidity_token_amount_from_params params)
-                    )
+                ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
+                ; add_liquidity behaves differently if the liquidity is 0 
+                (if (= LIQUIDITY 0)
                     (add_liquidity_0_conditions
                         (add_liquidity_token_amount_from_params params)
                         (add_liquidity_liquidity_parent_id_from_params params)
                         (add_liquidity_liquidity_inner_puzzle_hash_from_params params)
                     )
-                    1
-                )
-                ; else liquidity > 0
-                (create_output_conditions
-                    (my_coin_id_from_coin_ids coin_ids)
-                    (xch_reserve_coin_id_from_coin_ids coin_ids)
-                    (token_reserve_coin_id_from_coin_ids coin_ids)
-                    (add_liquidity_gt0_ok
-                        (add_liquidity_token_amount_from_params params)
-                    )
-                    (add_liquidity_gt0_liquidity
-                        (add_liquidity_token_amount_from_params params)
-                    )
-                    (add_liquidity_gt0_xch_reserve
-                        (add_liquidity_token_amount_from_params params)
-                    )
-                    (add_liquidity_gt0_token_reserve
-                        (add_liquidity_token_amount_from_params params)
-                    )
+                    ; else liquidity > 0
                     (add_liquidity_gt0_conditions
                         (add_liquidity_token_amount_from_params params)
                         (add_liquidity_liquidity_parent_id_from_params params)
                         (add_liquidity_liquidity_inner_puzzle_hash_from_params params)
                     )
-                    ()
                 )
             )
         )
+    )
+
+    ; main
+    (create_output_conditions
+        (my_coin_id_from_coin_ids coin_ids)
+        (xch_reserve_coin_id_from_coin_ids coin_ids)
+        (token_reserve_coin_id_from_coin_ids coin_ids)
+        (get_ok_condition)
+        (get_new_liquidity)
+        (get_new_xch_reserve)
+        (get_new_token_reserve)
+        (get_extra_output_conditions)
+        (all (= action ACTION_ADD_LIQUIDITY) (= LIQUIDITY 0))
     )
 )

@@ -567,7 +567,6 @@ async def respond_to_deposit_liquidity_offer(
         print(f"Uh... to few XCH coins; need {fee} more")
         sys.exit(1)
 
-
     # 3. spend the token ephemeral coin to create the token reserve coin
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_cat =  construct_cat_puzzle(CAT_MOD, token_tail_hash, p2_singleton_puzzle)
