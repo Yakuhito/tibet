@@ -350,6 +350,8 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
             click.echo("You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
             wallet_client.close()
             await wallet_client.await_closed()
+            full_node_client.close()
+            await full_node_client.await_closed()
             sys.exit(1)
 
         liquidity_token_amount = token_amount
@@ -475,6 +477,8 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
             click.echo("You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
             wallet_client.close()
             await wallet_client.await_closed()
+            full_node_client.close()
+            await full_node_client.await_closed()
             sys.exit(1)
 
         
