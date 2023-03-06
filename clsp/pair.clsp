@@ -298,7 +298,7 @@
     )
         (all
             (> LIQUIDITY 0)
-            (> LIQUIDITY liquidity_tokens_amount)
+            (not (> liquidity_tokens_amount LIQUIDITY)) ; liquidity_tokens_amount <= LIQUIDITY
         )
     )
 
