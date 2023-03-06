@@ -398,23 +398,18 @@
                         new_token_reserve
                     )
                 )
-                (if (> XCH_RESERVE 0)
+                (if (all (= action ACTION_ADD_LIQUIDITY) (= LIQUIDITY 0))
+                    () ; no reserves to spend
+                    ; else spend reserves
                     (list
                         ; spend xch reserve
                         (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
                         (list ASSERT_COIN_ANNOUNCEMENT (sha256 xch_reserve_coin_id '$'))
-                    )
-                    ; else don't bother spending it
-                    ()
-                )
-                (if (> TOKEN_RESERVE 0)
-                    (list
+
                         ; spend token reserve
                         (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
                         (list ASSERT_COIN_ANNOUNCEMENT (sha256 token_reserve_coin_id '$'))
                     )
-                    ; else don't bother spending it
-                    ()
                 )
                 (if (> new_token_reserve 0)
                     (list
