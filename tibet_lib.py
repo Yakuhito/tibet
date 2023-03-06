@@ -1020,6 +1020,8 @@ async def respond_to_remove_liquidity_offer(
             [p2_singleton_puzzle_hash, new_token_reserve_amount]
         ]
     ])
+    print(OFFER_MOD) # debug
+    print(eph_token_coin_inner_solution)
     eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
         CAT_MOD,
         [

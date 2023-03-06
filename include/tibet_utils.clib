@@ -29,6 +29,14 @@
     )
     ; end of stolen code from cat_v2.clvm
 
+    ; merges multiple lists
+    (defun merge_lists (first_list . other_lists)
+      (if other_lists
+        (merge_lists (merge_list first_list (f other_lists)) (r other_lists))
+        first_list
+      )
+    )
+
     ; SINGLETON_STRUCT
     (defun-inline singleton_mod_hash_from_struct (singleton_struct) (f singleton_struct))
     (defun-inline singleton_launcher_from_struct (singleton_struct) (f (r singleton_struct)))
