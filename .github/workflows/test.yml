@@ -66,9 +66,7 @@ jobs:
         git clone https://github.com/Chia-Network/chia-dev-tools.git
         cd chia-dev-tools
         pip install .
-        ls -lah
         cd ..
-        ls -lah
 
     - name: Test code with pytest
       run: |
