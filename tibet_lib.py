@@ -251,17 +251,17 @@ async def create_pair_from_coin(
     router_inner_puzzle = get_router_puzzle()
     router_inner_solution = Program.to([
         current_router_coin.name(),
-        bytes.fromhex(tail_hash)
+        tail_hash
     ])
 
-    router_singleton_puzzle = puzzle_for_singleton(bytes.fromhex(router_launcher_id), router_inner_puzzle)
+    router_singleton_puzzle = puzzle_for_singleton(router_launcher_id, router_inner_puzzle)
     router_singleton_solution = solution_for_singleton(lineage_proof, current_router_coin.amount, router_inner_solution)
     router_singleton_spend = CoinSpend(current_router_coin, router_singleton_puzzle, router_singleton_solution)
 
     pair_launcher_coin = Coin(current_router_coin.name(), SINGLETON_LAUNCHER_HASH, 2)
     pair_puzzle = get_pair_puzzle(
         pair_launcher_coin.name(),
-        bytes.fromhex(tail_hash),
+        tail_hash,
         0, 0, 0
     )
 
@@ -306,8 +306,6 @@ async def create_pair_from_coin(
     return pair_launcher_id, sb
 
 async def sync_router(full_node_client, last_router_id):
-    last_router_id = bytes.fromhex(last_router_id)
-
     new_pairs = []
     coin_record = await full_node_client.get_coin_record_by_name(last_router_id)
     if not coin_record.spent:
@@ -354,8 +352,6 @@ async def sync_router(full_node_client, last_router_id):
 
 
 async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
-    last_synced_coin_id = bytes.fromhex(last_synced_coin_id)
-
     state = {
         "liquidity": 0,
         "xch_reserve": 0,
