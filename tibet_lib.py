@@ -1010,17 +1010,18 @@ async def respond_to_remove_liquidity_offer(
     notarized_payments = offer.get_requested_payments()
     token_notarized_payment = notarized_payments[token_tail_hash][0]
 
-    eph_token_coin_inner_solution = Program.to([
-        [
-            token_notarized_payment.nonce,
-            [token_notarized_payment.memos[0], removed_token_amount, token_notarized_payment.memos]
-        ],
-        [
+    eph_token_coin_notarized_payments = []
+    eph_token_coin_notarized_payments.append([
+        token_notarized_payment.nonce,
+        [token_notarized_payment.memos[0], removed_token_amount, token_notarized_payment.memos]
+    ])
+    if new_token_reserve_amount > 0:
+        eph_token_coin_notarized_payments.append([
             current_pair_coin.name(),
             [p2_singleton_puzzle_hash, new_token_reserve_amount]
-        ]
-    ])
+        ])
 
+    eph_token_coin_inner_solution = Program.to(eph_token_coin_notarized_payments)
     eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
         CAT_MOD,
         [
@@ -1067,7 +1068,8 @@ async def respond_to_remove_liquidity_offer(
     )
     xch_notarized_payment = notarized_payments.get(None)[0]
 
-    eph_xch_coin_solution = Program.to([
+    eph_xch_coin_notarized_payments = []
+    eph_xch_coin_notarized_payments.append(
         [
             xch_notarized_payment.nonce,
             [
@@ -1075,12 +1077,15 @@ async def respond_to_remove_liquidity_offer(
                 removed_xch_amount + burned_liquidity_amount,
                 xch_notarized_payment.memos
             ]
-        ],
-        [
+        ]
+    )
+    if new_xch_reserve_amount > 0:
+        eph_xch_coin_notarized_payments.append([
             current_pair_coin.name(),
             [p2_singleton_puzzle_hash, new_xch_reserve_amount]
-        ]
-    ])
+        ])
+
+    eph_xch_coin_solution = Program.to(eph_xch_coin_notarized_payments)
     eph_xch_coin_spend = CoinSpend(eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
 
     sb = SpendBundle(
