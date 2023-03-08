@@ -679,20 +679,6 @@ async def respond_to_deposit_liquidity_offer(
     )
     pair_singleton_spend = CoinSpend(current_pair_coin, pair_singleton_puzzle, pair_singleton_solution)
 
-    # debug
-    pair_singleton_inner_puzzle = get_pair_inner_puzzle(
-        pair_launcher_id,
-        token_tail_hash,
-        pair_liquidity,
-        pair_xch_reserve,
-        pair_token_reserve
-    )
-    open("/tmp/p", "w").write(bytes(pair_singleton_inner_puzzle).hex())
-    open("/tmp/s", "w").write(bytes(pair_singleton_inner_solution).hex())
-    print("DEBUG: RUNNING INNER PUZZLE WITH INNER SOLUTION")
-    os.system("brun -x $(cat /tmp/p) $(cat /tmp/s)")
-    # debug
-
     # 6. Spend liquidity cat mint coin
     liquidity_cat_mint_coin = Coin(
         eph_xch_coin.name(),
