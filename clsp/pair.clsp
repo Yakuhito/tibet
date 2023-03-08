@@ -375,6 +375,14 @@
         (+ TOKEN_RESERVE token_amount)
     )
 
+    ; actual logic stuff
+
+    ;; function codes
+    (defconstant ACTION_ADD_LIQUIDITY 0)
+    (defconstant ACTION_REMOVE_LIQUIDITY 1)
+    (defconstant ACTION_XCH_TO_TOKEN 2)
+    (defconstant ACTION_TOKEN_TO_XCH 3)
+
     (defun-inline create_output_conditions (
             my_coin_id
             xch_reserve_coin_id
@@ -439,12 +447,6 @@
             (x)
         )
     )
-
-    ; function codes
-    (defconstant ACTION_ADD_LIQUIDITY 0)
-    (defconstant ACTION_REMOVE_LIQUIDITY 1)
-    (defconstant ACTION_XCH_TO_TOKEN 2)
-    (defconstant ACTION_TOKEN_TO_XCH 3)
 
     (defun-inline get_ok_condition ()
         (if (> action ACTION_REMOVE_LIQUIDITY)

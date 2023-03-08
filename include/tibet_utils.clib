@@ -30,11 +30,15 @@
     ; end of stolen code from cat_v2.clvm
 
     ; merges multiple lists
-    (defun merge_lists (first_list . other_lists)
+    (defun merge_lists_internal (first_list other_lists)
       (if other_lists
-        (merge_lists (merge_list first_list (f other_lists)) (r other_lists))
+        (merge_lists_internal (merge_list first_list (f other_lists)) (r other_lists))
         first_list
       )
+    )
+
+    (defun merge_lists (first_list . other_lists)
+      (merge_lists_internal first_list other_lists)
     )
 
     ; SINGLETON_STRUCT
