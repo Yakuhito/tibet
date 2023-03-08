@@ -72,4 +72,4 @@ jobs:
       run: chia init
 
     - name: Test code with pytest
-      run: pytest -s -v --durations 0
+      run: pytest tests/ -s -v --durations 0
