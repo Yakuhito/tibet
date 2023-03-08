@@ -61,11 +61,16 @@ jobs:
       with:
         directories: ${{ steps.create-venv.outputs.activate-venv-directories }}
 
-    - name: Test code with pytest
+    - name: Setup chia-dev-tools
       run: |
         git clone https://github.com/Chia-Network/chia-dev-tools.git
         cd chia-dev-tools
         pip install .
+        ls -lah
         cd ..
+        ls -lah
+
+    - name: Test code with pytest
+      run: |
         chia init
         pytest -s -v --durations 0
