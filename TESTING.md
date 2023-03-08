@@ -28,7 +28,7 @@ python3 tibet.py launch-test-token # take note of asset_id
 python3 tibet.py launch-test-token --push-tx
 
 python3 tibet.py create-pair --asset-id [asset_id]
-python3 tibet.py create-pair --asset-id [asset_id] --push-tx
+python3 tibet.py create-pair --push-tx --asset-id [asset_id]
 
 python3 tibet.py sync-pairs
 
@@ -41,17 +41,20 @@ python3 tibet.py sync-pairs
 # chia wallet get_offers
 # chia wallet cancel_offer -id [id]
 python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id]
-python3 tibet.py deposit-liquidity --offer offer.txt --asset-id [asset_id] --push-tx
+python3 tibet.py deposit-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
 
-python3 tibet.py deposit-liquidity --asset-id [asset_id] --token-amount 4000
-python3 tibet.py deposit-liquidity --asset-id [asset_id] --offer offer.txt --push-tx
+python3 tibet.py deposit-liquidity --token-amount 4000 --asset-id [asset_id] 
+python3 tibet.py deposit-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
 
-python3 tibet.py remove-liquidity --asset-id [asset_id] --liquidity-token-amount 800
-python3 tibet.py remove-liquidity --asset-id [asset_id] --offer offer.txt --push-tx
+python3 tibet.py remove-liquidity --liquidity-token-amount 800 --asset-id [asset_id]
+python3 tibet.py remove-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
 
-python3 tibet.py xch-to-token --asset-id [asset_id] --xch-amount 100000000
-python3 tibet.py xch-to-token --asset-id [asset_id] --offer offer.txt --push-tx
+python3 tibet.py xch-to-token --xch-amount 100000000 --asset-id [asset_id]
+python3 tibet.py xch-to-token --offer offer.txt --push-tx --asset-id [asset_id]
 
-python3 tibet.py token-to-xch --asset-id [asset_id] --token-amount 1000
-python3 tibet.py token-to-xch --asset-id [asset_id] --offer offer.txt --push-tx
+python3 tibet.py token-to-xch --token-amount 1000 --asset-id [asset_id]
+python3 tibet.py token-to-xch --offer offer.txt --push-tx --asset-id [asset_id]
+
+python3 tibet.py remove-liquidity --liquidity-token-amount 4200 --asset-id [asset_id]
+python3 tibet.py remove-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
 ```

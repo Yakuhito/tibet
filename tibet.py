@@ -791,7 +791,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx):
         click.echo(f"Pushing tx...")
         resp = await full_node_client.push_tx(sb)
         click.echo(resp)
-        click.echo("Enjoy your shiny new tokens!")
+        click.echo("Enjoy your shiny new mojos!")
     else:
         open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")

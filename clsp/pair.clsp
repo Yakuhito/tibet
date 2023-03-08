@@ -298,7 +298,7 @@
     )
         (all
             (> LIQUIDITY 0)
-            (> LIQUIDITY liquidity_tokens_amount)
+            (not (> liquidity_tokens_amount LIQUIDITY)) ; liquidity_tokens_amount <= LIQUIDITY
         )
     )
 
@@ -375,6 +375,14 @@
         (+ TOKEN_RESERVE token_amount)
     )
 
+    ; actual logic stuff
+
+    ;; function codes
+    (defconstant ACTION_ADD_LIQUIDITY 0)
+    (defconstant ACTION_REMOVE_LIQUIDITY 1)
+    (defconstant ACTION_XCH_TO_TOKEN 2)
+    (defconstant ACTION_TOKEN_TO_XCH 3)
+
     (defun-inline create_output_conditions (
             my_coin_id
             xch_reserve_coin_id
@@ -384,25 +392,12 @@
             new_xch_reserve
             new_token_reserve
             extra_output_conditions
-            is_initial_liquidity_deposit
         )
         (if ok_condition
-            (merge_list
+            (merge_lists
                 (list
                     ; assert my id
                     (list ASSERT_MY_COIN_ID my_coin_id)
-
-                    ; create new XCH reserve
-                    (assert_xch_reserve_condition
-                        my_coin_id
-                        new_xch_reserve
-                    )
-
-                    ; create new token reserve
-                    (assert_token_reserve_condition
-                        my_coin_id
-                        new_token_reserve
-                    )
 
                     ; recreate self
                     (recreate_self_condition
@@ -411,9 +406,10 @@
                         new_token_reserve
                     )
                 )
-                (if is_initial_liquidity_deposit
-                    extra_output_conditions
-                    (merge_list extra_output_conditions (list
+                (if (all (= action ACTION_ADD_LIQUIDITY) (= LIQUIDITY 0))
+                    () ; no reserves to spend
+                    ; else spend reserves
+                    (list
                         ; spend xch reserve
                         (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
                         (list ASSERT_COIN_ANNOUNCEMENT (sha256 xch_reserve_coin_id '$'))
@@ -421,19 +417,36 @@
                         ; spend token reserve
                         (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
                         (list ASSERT_COIN_ANNOUNCEMENT (sha256 token_reserve_coin_id '$'))
-                    ))   
+                    )
                 )
+                (if (> new_token_reserve 0)
+                    (list
+                        ; create new token reserve
+                        (assert_token_reserve_condition
+                            my_coin_id
+                            new_token_reserve
+                        )
+                    )
+                    ; else no need to create new token reserve
+                    ()
+                )
+                (if (> new_xch_reserve 0)
+                    (list
+                        ; create new XCH reserve
+                        (assert_xch_reserve_condition
+                            my_coin_id
+                            new_xch_reserve
+                        )
+                    )
+                    ; else no need to create new XCH reserve
+                    ()
+                )
+                extra_output_conditions
             )
             ; else
             (x)
         )
     )
-
-    ; function codes
-    (defconstant ACTION_ADD_LIQUIDITY 0)
-    (defconstant ACTION_REMOVE_LIQUIDITY 1)
-    (defconstant ACTION_XCH_TO_TOKEN 2)
-    (defconstant ACTION_TOKEN_TO_XCH 3)
 
     (defun-inline get_ok_condition ()
         (if (> action ACTION_REMOVE_LIQUIDITY)
@@ -591,6 +604,5 @@
         (get_new_xch_reserve)
         (get_new_token_reserve)
         (get_extra_output_conditions)
-        (all (= action ACTION_ADD_LIQUIDITY) (= LIQUIDITY 0))
     )
 )
