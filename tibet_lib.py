@@ -54,12 +54,12 @@ from chia.util.hash import std_hash
 
 def load_clvm_hex(
     filename
-) -> SerializedProgram:
+) -> Program:
     clvm_hex = open(filename, "r").read().strip()
     assert len(clvm_hex) != 0
     
     clvm_blob = bytes.fromhex(clvm_hex)
-    return SerializedProgram.from_bytes(clvm_blob)
+    return SerializedProgram.from_bytes(clvm_blob).to_program()
 
 ROUTER_MOD: Program = load_clvm_hex("clvm/router.clvm.hex")
 PAIR_MOD: Program = load_clvm_hex("clvm/pair.clvm.hex")
