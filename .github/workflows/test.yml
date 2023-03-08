@@ -68,7 +68,8 @@ jobs:
         pip install .
         cd ..
 
+    - name: Initialize chia
+      run: chia init
+
     - name: Test code with pytest
-      run: |
-        chia init
-        pytest -s -v --durations 0
+      run: pytest -s -v --durations 0
