@@ -1,0 +1,71 @@
+name: Run Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+    tags:
+        - '**'
+  pull_request:
+    branches:
+      - '**'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Test - ${{ matrix.os.name }} ${{ matrix.python.major-dot-minor }} ${{ matrix.arch.name }}
+    runs-on: ${{ matrix.os.runs-on[matrix.arch.matrix] }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: Ubuntu
+            matrix: ubuntu
+            runs-on:
+              arm: [Linux, ARM64]
+              intel: [ubuntu-latest]
+        python:
+          - major-dot-minor: '3.10'
+            matrix: '3.10'
+        arch:
+          - name: Intel
+            matrix: intel
+
+    steps:
+    - name: Clean workspace
+      uses: Chia-Network/actions/clean-workspace@main
+
+    - name: Checkout Code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: Chia-Network/actions/setup-python@main
+      with:
+        python-version: ${{ matrix.python.major-dot-minor }}
+
+    - name: Copy pre-generated plots
+      run: |
+        mkdir -p ~/.chia/simulator/plots
+        cp -r ./.github/test-plots/* ~/.chia/simulator/plots
+
+    - uses: Chia-Network/actions/create-venv@main
+      id: create-venv
+
+    - uses: Chia-Network/actions/activate-venv@main
+      with:
+        directories: ${{ steps.create-venv.outputs.activate-venv-directories }}
+
+    - name: Test code with pytest
+      run: |
+        git clone https://github.com/Chia-Network/chia-dev-tools.git
+        cd chia-dev-tools
+        pip install .
+        cd ..
+        chia init
+        pytest -s -v --durations 0
