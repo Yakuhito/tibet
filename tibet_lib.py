@@ -310,7 +310,7 @@ async def sync_router(full_node_client, last_router_id):
     coin_record = await full_node_client.get_coin_record_by_name(last_router_id)
     if not coin_record.spent:
         # hack
-        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info.hex())
+        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info)
         return current_router_coin, creation_spend, []
     
     router_puzzle_hash = get_router_puzzle().get_tree_hash()
@@ -372,7 +372,7 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
 
     if not coin_record.spent:
         # hack
-        current_pair_coin, creation_spend, state = await sync_pair(full_node_client, coin_record.coin.parent_coin_info.hex(), tail_hash)
+        current_pair_coin, creation_spend, state = await sync_pair(full_node_client, coin_record.coin.parent_coin_info, tail_hash)
         return current_pair_coin, creation_spend, state
 
     creation_spend = None

@@ -451,7 +451,9 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin, creation_spend, pair_state = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+    )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
@@ -577,7 +579,9 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx):
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin, creation_spend, pair_state = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+    )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
@@ -706,7 +710,9 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx):
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin, creation_spend, pair_state = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+    )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
