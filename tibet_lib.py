@@ -84,7 +84,6 @@ def get_router_puzzle():
         ROUTER_MOD_HASH
     )
 
-
 def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
     return PAIR_MOD.curry(
         PAIR_MOD_HASH,
