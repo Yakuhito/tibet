@@ -231,3 +231,29 @@ class TestTibetSwap:
             assert cr.spent
         finally:
             await network.close()
+
+    @pytest.mark.asyncio
+    async def test_pair_liquidity_deposit(self, setup):
+        network, alice, bob = setup
+        try:
+            launcher_id, current_router_coin, router_creation_spend  = await self.launch_router(network, alice)
+
+            tail_hash = await self.create_test_cat(network, alice)
+            pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
+                network, alice, launcher_id, tail_hash, current_router_coin, router_creation_spend
+            )
+            assert current_pair_coin is not None
+            assert pair_creation_spend is not None
+            assert current_router_coin is not None
+            assert router_creation_spend is not None
+
+            cr = await network.get_coin_record_by_name(pair_launcher_id)
+            assert cr is not None
+            assert cr.spent
+
+            liquidity_tail = pair_liquidity_tail_puzzle(pair_launcher_id)
+            liquidity_tail_hash = liquidity_tail.get_tree_hash()
+
+            # todo: sign offer here?
+        finally:
+            await network.close()
