@@ -20,10 +20,6 @@ jobs:
     name: Test - Ubuntu (Python 3.10, Intel)
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      os: Ubuntu
-      arch: Intel
     steps:
     - name: Clean workspace
       uses: Chia-Network/actions/clean-workspace@main
