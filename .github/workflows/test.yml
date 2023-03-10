@@ -17,7 +17,7 @@ defaults:
 
 jobs:
   build:
-    name: Test - Ubuntu (Python 3.10, Intel)
+    name: Test - Ubuntu, Python 3.10
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -47,11 +47,21 @@ jobs:
         pip install .
         cd ..
 
-    - name: Test cdv command
-      run: cdv
+    - name: Initialize chia
+      run: chia init
 
-    # - name: Initialize chia
-    #   run: chia init
+    - name: Add test keys
+      run: |
+        echo "payment town peanut wave laptop original this car wide thumb develop prosper canal conduct saddle ill lyrics object silent barely cliff text liar world" > /tmp/mnemonic
+        chia keys add -f /tmp/mnemonic -l "Prefarm"
+        echo "measure weapon fun decade glue hole toe virtual add talk muffin melt bubble wire casino adult leave guide seed ridge enough badge will section" > /tmp/mnemonic
+        chia keys add -f /tmp/mnemonic -l "Alice"
+        echo "check disease raw gate drip also time puzzle subway margin scout trade all cotton shadow patch dawn shell imitate vacuum exist pact deal surprise" > /tmp/mnemonic
+        chia keys add -f /tmp/mnemonic -l "Bob"
+        echo "test banner actor ginger latin mean other window solid orchard ordinary park tobacco maple shadow love hood boat pilot pact wing heart cupboard daring" > /tmp/mnemonic
+        chia keys add -f /tmp/mnemonic -l "Charlie"
+        rm /tmp/mnemonic
+        chia keys show
 
     # - name: Test code with pytest
     #   run: pytest tests/ -s -v --durations 0
