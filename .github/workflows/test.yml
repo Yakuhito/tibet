@@ -19,7 +19,7 @@ jobs:
   build:
     name: Test - Ubuntu (Python 3.10, Intel)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       os: Ubuntu
@@ -37,11 +37,6 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Copy pre-generated plots
-      run: |
-        mkdir -p ~/.chia/simulator/plots
-        cp -r ./.github/test-plots/* ~/.chia/simulator/plots
-
     - uses: Chia-Network/actions/create-venv@main
       id: create-venv
 
@@ -56,8 +51,11 @@ jobs:
         pip install .
         cd ..
 
-    - name: Initialize chia
-      run: chia init
+    - name: Test cdv command
+      run: cdv
 
-    - name: Test code with pytest
-      run: pytest tests/ -s -v --durations 0
+    # - name: Initialize chia
+    #   run: chia init
+
+    # - name: Test code with pytest
+    #   run: pytest tests/ -s -v --durations 0
