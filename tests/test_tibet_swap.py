@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("ignore")
-
 import pytest
 import pytest_asyncio
 
@@ -67,193 +64,245 @@ from chia.wallet.util.puzzle_compression import (
 )
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.util.hash import std_hash
+from chia.simulator.simulator_full_node_rpc_client import SimulatorFullNodeRpcClient
 
 class TestTibetSwap:
     @pytest_asyncio.fixture(scope="function")
     async def setup(self):
-        network, alice, bob = await setup_test()
-        await network.farm_block()
-        await network.farm_block(farmer=alice)
-        await network.farm_block(farmer=bob)
-        yield network, alice, bob
+        alice_fingerprint = os.environ.get("ALICE_FINGERPRINT")
+        bob_fingerprint = os.environ.get("BOB_FINGERPRINT")
+        charlie_fingerprint = os.environ.get("CHARLIE_FINGERPRINT")
 
-    def get_created_coins_from_coin_spend(self, cs):
-        coins = []
-
-        _, conditions_dict, __ = conditions_dict_for_solution(
-            cs.puzzle_reveal,
-            cs.solution,
-            INFINITE_COST
-        )
-
-        for cwa in conditions_dict[ConditionOpcode.CREATE_COIN]:
-            coins.append(Coin(
-                cs.coin.name(),
-                cwa.vars[0], # puzzle hash of created coin
-                SExp.to(cwa.vars[1]).as_int()
-            ))
-
-        return coins
-
-    async def launch_router(self, network, alice):
-        coin = await alice.choose_coin(2)
-        coin = coin.coin # we want a Coin, not a CoinWrapper
-
-        alice_sk = alice.pk_to_sk(alice.pk())
-        synth_sk = calculate_synthetic_secret_key(alice_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
-
-        coin_puzzle = puzzle_for_pk(alice.pk())
-
-        launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle)
-
-        signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
-        await network.push_tx(signed_sb)
-
-        router_launch_coin_spend = None
-        router_current_coin = None
-        for cs in signed_sb.coin_spends:
-            if cs.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
-                router_launch_coin_spend = cs
-                router_current_coin = self.get_created_coins_from_coin_spend(cs)[0]
-
-        return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
-
-
-    async def create_test_cat(self, network, alice, token_amount=1000000000): # token_amount = 1000 * 1000000 = 1,000,000 tokens
-        coin = await alice.choose_coin(token_amount)
-        coin = coin.coin # we want a Coin, not a CoinWrapper
-
-        alice_sk = alice.pk_to_sk(alice.pk())
-        synth_sk = calculate_synthetic_secret_key(alice_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
-
-        coin_puzzle = puzzle_for_pk(alice.pk())
-
-        tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
+        chia_root = os.path.expanduser("~/.chia/simulator/main")
         
-        signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
-        await network.push_tx(signed_sb)
+        # Get full node client and reset simulator if there are any tx blocks
+        full_node_client = await get_sim_full_node_client(chia_root)
+        blockchain_state = await full_node_client.get_blockchain_state()
+        peak = blockchain_state["peak"]
+        if peak.height > 1:
+            await full_node_client.revert_blocks(delete_all_blocks=True)
 
-        return bytes.fromhex(tail_hash)
+        # Get wallet client and give 2 XCH to each address
+        wallet_client = await get_wallet_client(chia_root)
 
-    async def create_pair(
-        self,
-        network,
-        alice,
-        router_launcher_id,
-        tail_hash,
-        current_router_coin,
-        current_router_coin_creation_spend
-    ):
-        coin = await alice.choose_coin(2)
-        coin = coin.coin # we want a Coin, not a CoinWrapper
+        async def switch_to_fingerprint(fingerprint):
+            await wallet_client.log_in(fingerprint)
 
-        alice_sk = alice.pk_to_sk(alice.pk())
-        synth_sk = calculate_synthetic_secret_key(alice_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
+        async def switch_to_alice():
+            await switch_to_fingerprint(alice_fingerprint)
 
-        coin_puzzle = puzzle_for_pk(alice.pk())
+        async def switch_to_bob():
+            await switch_to_fingerprint(bob_fingerprint)
 
-        pair_launcher_id, sb = await create_pair_from_coin(
-            coin,
-            coin_puzzle,
-            tail_hash,
-            router_launcher_id,
-            current_router_coin,
-            current_router_coin_creation_spend
-        )
+        async def switch_to_charlie():
+            await switch_to_fingerprint(charlie_fingerprint)
 
-        signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
-        await network.push_tx(signed_sb)
+        await switch_to_charlie()
+        address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
+        await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
 
-        pair_coin = None
-        pair_coin_creation_spend = None
-        router_new_coin = None
-        router_new_coin_creation_spend = None
+        await switch_to_bob()
+        address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
+        await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
 
-        for cs in sb.coin_spends:
-            if cs.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
-                pair_coin_creation_spend = cs
-                pair_coin = self.get_created_coins_from_coin_spend(cs)[0]
-            elif cs.coin.amount == 1:
-                possible_coins = self.get_created_coins_from_coin_spend(cs)
-                if len(possible_coins) == 2 and possible_coins[0].amount + possible_coins[1].amount == 3:
-                    router_new_coin_creation_spend = cs
-                    for pc in possible_coins:
-                        if pc.amount == 1:
-                            router_new_coin = pc
+        await switch_to_alice()
+        address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
+        await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
 
-        return bytes.fromhex(pair_launcher_id), pair_coin, pair_coin_creation_spend, router_new_coin, router_new_coin_creation_spend
+        yield full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie
 
     @pytest.mark.asyncio
-    async def test_router_launch(self, setup):
-        network, alice, bob = setup
+    async def test_healthz(self, setup):
+        full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
         try:
-            launcher_id, current_router_coin, router_launch_coin_spend = await self.launch_router(network, alice)
+            full_node_resp = await full_node_client.healthz()
+            assert full_node_resp['success']
 
-            cr = await network.get_coin_record_by_name(launcher_id)
-
-            assert cr is not None
-            assert cr.confirmed_block_index is not None
-            assert cr.spent_block_index is not None
+            wallet_resp = await wallet_client.healthz()
+            assert wallet_resp['success']
         finally:
-            await network.close()
+            full_node_client.close()
+            wallet_client.close()
+            await full_node_client.await_closed()
+            await wallet_client.await_closed()
 
-    @pytest.mark.asyncio
-    async def test_pair_creation(self, setup):
-        network, alice, bob = setup
-        try:
-            launcher_id, current_router_coin, router_creation_spend  = await self.launch_router(network, alice)
+    # def get_created_coins_from_coin_spend(self, cs):
+    #     coins = []
 
-            tail_hash = await self.create_test_cat(network, alice)
-            pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
-                network, alice, launcher_id, tail_hash, current_router_coin, router_creation_spend
-            )
-            assert current_pair_coin is not None
-            assert pair_creation_spend is not None
-            assert current_router_coin is not None
-            assert router_creation_spend is not None
+    #     _, conditions_dict, __ = conditions_dict_for_solution(
+    #         cs.puzzle_reveal,
+    #         cs.solution,
+    #         INFINITE_COST
+    #     )
 
-            cr = await network.get_coin_record_by_name(pair_launcher_id)
-            assert cr is not None
-            assert cr.spent
+    #     for cwa in conditions_dict[ConditionOpcode.CREATE_COIN]:
+    #         coins.append(Coin(
+    #             cs.coin.name(),
+    #             cwa.vars[0], # puzzle hash of created coin
+    #             SExp.to(cwa.vars[1]).as_int()
+    #         ))
 
-            # Create another pair, just to be sure...
-            tail_hash = await self.create_test_cat(network, alice)
-            pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
-                network, alice, launcher_id, tail_hash, current_router_coin, router_creation_spend
-            )
-            assert current_pair_coin is not None
-            assert pair_creation_spend is not None
-            assert current_router_coin is not None
-            assert router_creation_spend is not None
+    #     return coins
 
-            cr = await network.get_coin_record_by_name(pair_launcher_id)
-            assert cr is not None
-            assert cr.spent
-        finally:
-            await network.close()
+    # async def launch_router(self, network, alice):
+    #     coin = await alice.choose_coin(2)
+    #     coin = coin.coin # we want a Coin, not a CoinWrapper
 
-    @pytest.mark.asyncio
-    async def test_pair_liquidity_deposit(self, setup):
-        network, alice, bob = setup
-        try:
-            launcher_id, current_router_coin, router_creation_spend  = await self.launch_router(network, alice)
+    #     alice_sk = alice.pk_to_sk(alice.pk())
+    #     synth_sk = calculate_synthetic_secret_key(alice_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
 
-            tail_hash = await self.create_test_cat(network, alice)
-            pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
-                network, alice, launcher_id, tail_hash, current_router_coin, router_creation_spend
-            )
-            assert current_pair_coin is not None
-            assert pair_creation_spend is not None
-            assert current_router_coin is not None
-            assert router_creation_spend is not None
+    #     coin_puzzle = puzzle_for_pk(alice.pk())
 
-            cr = await network.get_coin_record_by_name(pair_launcher_id)
-            assert cr is not None
-            assert cr.spent
+    #     launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle)
 
-            liquidity_tail = pair_liquidity_tail_puzzle(pair_launcher_id)
-            liquidity_tail_hash = liquidity_tail.get_tree_hash()
+    #     signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
+    #     await network.push_tx(signed_sb)
 
-            # todo: sign offer here?
-        finally:
-            await network.close()
+    #     router_launch_coin_spend = None
+    #     router_current_coin = None
+    #     for cs in signed_sb.coin_spends:
+    #         if cs.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
+    #             router_launch_coin_spend = cs
+    #             router_current_coin = self.get_created_coins_from_coin_spend(cs)[0]
+
+    #     return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
+
+
+    # async def create_test_cat(self, network, alice, token_amount=1000000000): # token_amount = 1000 * 1000000 = 1,000,000 tokens
+    #     coin = await alice.choose_coin(token_amount)
+    #     coin = coin.coin # we want a Coin, not a CoinWrapper
+
+    #     alice_sk = alice.pk_to_sk(alice.pk())
+    #     synth_sk = calculate_synthetic_secret_key(alice_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
+
+    #     coin_puzzle = puzzle_for_pk(alice.pk())
+
+    #     tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
+        
+    #     signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
+    #     await network.push_tx(signed_sb)
+
+    #     return bytes.fromhex(tail_hash)
+
+    # async def create_pair(
+    #     self,
+    #     network,
+    #     alice,
+    #     router_launcher_id,
+    #     tail_hash,
+    #     current_router_coin,
+    #     current_router_coin_creation_spend
+    # ):
+    #     coin = await alice.choose_coin(2)
+    #     coin = coin.coin # we want a Coin, not a CoinWrapper
+
+    #     alice_sk = alice.pk_to_sk(alice.pk())
+    #     synth_sk = calculate_synthetic_secret_key(alice_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
+
+    #     coin_puzzle = puzzle_for_pk(alice.pk())
+
+    #     pair_launcher_id, sb = await create_pair_from_coin(
+    #         coin,
+    #         coin_puzzle,
+    #         tail_hash,
+    #         router_launcher_id,
+    #         current_router_coin,
+    #         current_router_coin_creation_spend
+    #     )
+
+    #     signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
+    #     await network.push_tx(signed_sb)
+
+    #     pair_coin = None
+    #     pair_coin_creation_spend = None
+    #     router_new_coin = None
+    #     router_new_coin_creation_spend = None
+
+    #     for cs in sb.coin_spends:
+    #         if cs.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
+    #             pair_coin_creation_spend = cs
+    #             pair_coin = self.get_created_coins_from_coin_spend(cs)[0]
+    #         elif cs.coin.amount == 1:
+    #             possible_coins = self.get_created_coins_from_coin_spend(cs)
+    #             if len(possible_coins) == 2 and possible_coins[0].amount + possible_coins[1].amount == 3:
+    #                 router_new_coin_creation_spend = cs
+    #                 for pc in possible_coins:
+    #                     if pc.amount == 1:
+    #                         router_new_coin = pc
+
+    #     return bytes.fromhex(pair_launcher_id), pair_coin, pair_coin_creation_spend, router_new_coin, router_new_coin_creation_spend
+
+    # @pytest.mark.asyncio
+    # async def test_router_launch(self, setup):
+    #     network, alice, bob = setup
+    #     try:
+    #         launcher_id, current_router_coin, router_launch_coin_spend = await self.launch_router(network, alice)
+
+    #         cr = await network.get_coin_record_by_name(launcher_id)
+
+    #         assert cr is not None
+    #         assert cr.confirmed_block_index is not None
+    #         assert cr.spent_block_index is not None
+    #     finally:
+    #         await network.close()
+
+    # @pytest.mark.asyncio
+    # async def test_pair_creation(self, setup):
+    #     network, alice, bob = setup
+    #     try:
+    #         launcher_id, current_router_coin, router_creation_spend  = await self.launch_router(network, alice)
+
+    #         tail_hash = await self.create_test_cat(network, alice)
+    #         pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
+    #             network, alice, launcher_id, tail_hash, current_router_coin, router_creation_spend
+    #         )
+    #         assert current_pair_coin is not None
+    #         assert pair_creation_spend is not None
+    #         assert current_router_coin is not None
+    #         assert router_creation_spend is not None
+
+    #         cr = await network.get_coin_record_by_name(pair_launcher_id)
+    #         assert cr is not None
+    #         assert cr.spent
+
+    #         # Create another pair, just to be sure...
+    #         tail_hash = await self.create_test_cat(network, alice)
+    #         pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
+    #             network, alice, launcher_id, tail_hash, current_router_coin, router_creation_spend
+    #         )
+    #         assert current_pair_coin is not None
+    #         assert pair_creation_spend is not None
+    #         assert current_router_coin is not None
+    #         assert router_creation_spend is not None
+
+    #         cr = await network.get_coin_record_by_name(pair_launcher_id)
+    #         assert cr is not None
+    #         assert cr.spent
+    #     finally:
+    #         await network.close()
+
+    # @pytest.mark.asyncio
+    # async def test_pair_liquidity_deposit(self, setup):
+    #     network, alice, bob = setup
+    #     try:
+    #         launcher_id, current_router_coin, router_creation_spend  = await self.launch_router(network, alice)
+
+    #         tail_hash = await self.create_test_cat(network, alice)
+    #         pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
+    #             network, alice, launcher_id, tail_hash, current_router_coin, router_creation_spend
+    #         )
+    #         assert current_pair_coin is not None
+    #         assert pair_creation_spend is not None
+    #         assert current_router_coin is not None
+    #         assert router_creation_spend is not None
+
+    #         cr = await network.get_coin_record_by_name(pair_launcher_id)
+    #         assert cr is not None
+    #         assert cr.spent
+
+    #         liquidity_tail = pair_liquidity_tail_puzzle(pair_launcher_id)
+    #         liquidity_tail_hash = liquidity_tail.get_tree_hash()
+
+    #         # todo: sign offer here?
+    #     finally:
+    #         await network.close()

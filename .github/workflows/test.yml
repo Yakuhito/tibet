@@ -50,6 +50,9 @@ jobs:
     - name: Chia - initialize
       run: chia init
 
+    - name: Chia - start wallet
+      run: chia start wallet
+
     - name: Chia - add test keys
       run: |
         echo "payment town peanut wave laptop original this car wide thumb develop prosper canal conduct saddle ill lyrics object silent barely cliff text liar world" > /tmp/mnemonic
@@ -65,10 +68,13 @@ jobs:
     - name: cdv - create simulator
       run: cdv sim create -f 2036195148 -a false
     
-    # - name: Test code with pytest
-    #   run: |
-    #     export PREFARM_FINGERPINT=2036195148
-    #     export ALICE_FINGERPINT=381910353
-    #     export BOB_FINGERPRINT=3852922401
-    #     export CHARLIE_FINGERPRINT=1514229218
-    #     pytest tests/ -s -v --durations 0
+    - name: Test code with pytest
+      run: |
+        export PREFARM_FINGERPINT=2036195148
+        export ALICE_FINGERPINT=381910353
+        export BOB_FINGERPRINT=3852922401
+        export CHARLIE_FINGERPRINT=1514229218
+        pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
+    
+    - name: cdv - simulator status at end of last test
+      run: cdv sim status

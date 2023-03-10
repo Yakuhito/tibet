@@ -51,6 +51,7 @@ from chia.wallet.util.puzzle_compression import (
 )
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.util.hash import std_hash
+from chia.simulator.simulator_full_node_rpc_client import SimulatorFullNodeRpcClient
 
 def load_clvm_hex(
     filename
@@ -135,6 +136,21 @@ async def get_full_node_client(
     self_hostname = config["self_hostname"]
     rpc_port = config["full_node"]["rpc_port"]
     node_client: FullNodeRpcClient = await FullNodeRpcClient.create(
+        self_hostname, uint16(rpc_port), root_path, config
+    )
+    await node_client.healthz()
+
+    return node_client
+
+async def get_sim_full_node_client(
+    chia_root: str
+) -> SimulatorFullNodeRpcClient:
+    root_path = Path(chia_root)
+
+    config = load_config(root_path, "config.yaml")
+    self_hostname = config["self_hostname"]
+    rpc_port = config["full_node"]["rpc_port"]
+    node_client: SimulatorFullNodeRpcClient = await SimulatorFullNodeRpcClient.create(
         self_hostname, uint16(rpc_port), root_path, config
     )
     await node_client.healthz()
