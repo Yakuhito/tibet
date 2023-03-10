@@ -97,15 +97,24 @@ class TestTibetSwap:
         async def switch_to_charlie():
             await switch_to_fingerprint(charlie_fingerprint)
 
+        async def wait_for_wallet_sync():
+            synced = await wallet_client.get_synced()
+            while not synced:
+                time.sleep(0.5)
+                synced = await wallet_client.get_synced()
+
         await switch_to_charlie()
+        await wait_for_wallet_sync()
         address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
         await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
 
         await switch_to_bob()
+        await wait_for_wallet_sync()
         address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
         await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
 
         await switch_to_alice()
+        await wait_for_wallet_sync()
         address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
         await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
 
