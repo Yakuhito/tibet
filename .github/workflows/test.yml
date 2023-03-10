@@ -54,20 +54,21 @@ jobs:
       run: |
         echo "payment town peanut wave laptop original this car wide thumb develop prosper canal conduct saddle ill lyrics object silent barely cliff text liar world" > /tmp/mnemonic
         chia keys add -f /tmp/mnemonic -l "Prefarm"
-        export PREFARM_FINGERPINT=2036195148
         echo "measure weapon fun decade glue hole toe virtual add talk muffin melt bubble wire casino adult leave guide seed ridge enough badge will section" > /tmp/mnemonic
         chia keys add -f /tmp/mnemonic -l "Alice"
-        export ALICE_FINGERPINT=381910353
         echo "check disease raw gate drip also time puzzle subway margin scout trade all cotton shadow patch dawn shell imitate vacuum exist pact deal surprise" > /tmp/mnemonic
         chia keys add -f /tmp/mnemonic -l "Bob"
-        export BOB_FINGERPRINT=3852922401
         echo "test banner actor ginger latin mean other window solid orchard ordinary park tobacco maple shadow love hood boat pilot pact wing heart cupboard daring" > /tmp/mnemonic
         chia keys add -f /tmp/mnemonic -l "Charlie"
-        export CHARLIE_FINGERPRINT=1514229218
         rm /tmp/mnemonic
 
     - name: cdv - create simulator
-      run: cdv sim create -f $PREFARM_FINGERPINT -a false
+      run: cdv sim create -f 2036195148 -a false
     
     # - name: Test code with pytest
-    #   run: pytest tests/ -s -v --durations 0
+    #   run: |
+    #     export PREFARM_FINGERPINT=2036195148
+    #     export ALICE_FINGERPINT=381910353
+    #     export BOB_FINGERPRINT=3852922401
+    #     export CHARLIE_FINGERPRINT=1514229218
+    #     pytest tests/ -s -v --durations 0
