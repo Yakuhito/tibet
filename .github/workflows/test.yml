@@ -70,6 +70,8 @@ jobs:
         echo "test banner actor ginger latin mean other window solid orchard ordinary park tobacco maple shadow love hood boat pilot pact wing heart cupboard daring" > /tmp/mnemonic
         chia keys add -f /tmp/mnemonic -l "Charlie"
         rm /tmp/mnemonic
+      env:
+        CHIA_ROOT: '/home/runner/.chia/mainnet'
 
     - name: cdv - create simulator
       run: cdv sim create -f $PREFARM_FINGERPINT -a false
