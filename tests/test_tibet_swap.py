@@ -73,11 +73,13 @@ class TestTibetSwap:
             time.sleep(0.25)
             synced = await wallet_client.get_synced()
     
+
     async def wait_for_full_node_sync(self, full_node_client):
         blockchain_state = await full_node_client.get_blockchain_state()
         while not blockchain_state['sync']['synced']:
             time.sleep(0.25)
             blockchain_state = await full_node_client.get_blockchain_state()
+
 
     @pytest_asyncio.fixture(scope="function")
     async def setup(self):
@@ -139,6 +141,7 @@ class TestTibetSwap:
 
         yield full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie
 
+
     @pytest.mark.asyncio
     async def test_healthz(self, setup):
         full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
@@ -155,6 +158,25 @@ class TestTibetSwap:
             await wallet_client.await_closed()
 
 
+    def get_created_coins_from_coin_spend(self, cs):
+        coins = []
+
+        _, conditions_dict, __ = conditions_dict_for_solution(
+            cs.puzzle_reveal,
+            cs.solution,
+            INFINITE_COST
+        )
+
+        for cwa in conditions_dict[ConditionOpcode.CREATE_COIN]:
+            coins.append(Coin(
+                cs.coin.name(),
+                cwa.vars[0], # puzzle hash of created coin
+                SExp.to(cwa.vars[1]).as_int()
+            ))
+
+        return coins
+
+
     async def select_standard_coin_and_puzzle(self, wallet_client, amount):
         spendable_coins = await wallet_client.get_spendable_coins(1, min_coin_amount=amount) # wallet id 1, amount amount
 
@@ -162,21 +184,36 @@ class TestTibetSwap:
         coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
         return coin, coin_puzzle
 
+
+    async def launch_router(self, wallet_client, full_node_client):
+        coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, 2)
+
+        launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle)
+
+        signed_sb = await sign_spend_bundle(wallet_client, sb)
+        resp = await full_node_client.push_tx(signed_sb)
+
+        assert resp["success"]
+        await self.wait_for_full_node_sync(full_node_client)
+
+        router_launch_coin_spend = None
+        router_current_coin = None
+
+        for cs in signed_sb.coin_spends:
+            if cs.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
+                router_launch_coin_spend = cs
+                router_current_coin = self.get_created_coins_from_coin_spend(cs)[0]
+
+        return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
+
+
     @pytest.mark.asyncio
     async def test_router_launch(self, setup):
         full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
         try:
-            coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, 2)
+            launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client)
 
-            launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle)
-           
-            signed_sb = await sign_spend_bundle(wallet_client, sb)
-            resp = await full_node_client.push_tx(signed_sb)
-
-            assert resp["success"]
-            
-            await self.wait_for_full_node_sync(full_node_client)
-            cr = await full_node_client.get_coin_record_by_name(bytes.fromhex(launcher_id))
+            cr = await full_node_client.get_coin_record_by_name(launcher_id)
             assert cr is not None
             assert cr.spent
         finally:
@@ -184,3 +221,14 @@ class TestTibetSwap:
             wallet_client.close()
             await full_node_client.await_closed()
             await wallet_client.await_closed()
+
+
+    # async def create_test_cat(self, wallet_client, full_node_client, amount=1000000):
+    #     coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, amount)
+    #     tail_id, sb = await create_test_cat(amount, coin, coin_puzzle)
+    #     signed_sb = await sign_spend_bundle(wallet_client, sb)
+
+    #     resp = await full_node_client.push_tx(signed_sb)
+    #     assert resp["success"]
+
+    #     return tail_id
