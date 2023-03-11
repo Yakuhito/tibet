@@ -73,7 +73,11 @@ class TestTibetSwap:
         bob_fingerprint = os.environ.get("BOB_FINGERPRINT")
         charlie_fingerprint = os.environ.get("CHARLIE_FINGERPRINT")
 
-        chia_root = os.path.expanduser("~/.chia/simulator/main")
+        chia_root = None
+        if os.environ.get("GITHUB") == "yes":
+            chia_root = "/home/runner/.chia/simulator/main"
+        else:
+            chia_root = os.path.expanduser("~/.chia/simulator/main")
         
         # Get full node client and reset simulator if there are any tx blocks
         full_node_client = await get_sim_full_node_client(chia_root)
