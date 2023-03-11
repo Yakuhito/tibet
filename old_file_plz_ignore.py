@@ -13,7 +13,6 @@ from chia.util.hash import std_hash
 from chia.util.ints import uint64
 from clvm.casts import int_to_bytes
 from cdv.cmds.rpc import get_client
-from chia.wallet.puzzles.load_clvm import load_clvm
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, pay_to_singleton_puzzle, SINGLETON_MOD_HASH, SINGLETON_MOD, P2_SINGLETON_MOD, SINGLETON_LAUNCHER_HASH, SINGLETON_LAUNCHER, lineage_proof_for_coinsol, puzzle_for_singleton, solution_for_singleton, generate_launcher_coin
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import puzzle_for_pk, calculate_synthetic_secret_key, DEFAULT_HIDDEN_PUZZLE_HASH, puzzle_for_synthetic_public_key, solution_for_delegated_puzzle
 from chia.wallet.puzzles.cat_loader import CAT_MOD_HASH, CAT_MOD
@@ -50,9 +49,19 @@ from chia.wallet.util.puzzle_compression import (
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.util.hash import std_hash
 
-ROUTER_MOD: Program = load_clvm("../../../../../../../clvm/router.clvm", recompile=False)
-PAIR_MOD: Program = load_clvm("../../../../../../../clvm/pair.clvm", recompile=False)
-LIQUIDITY_TAIL_MOD: Program = load_clvm("../../../../../../../clvm/liquidity_tail.clvm", recompile=False)
+
+def load_clvm_hex(
+    filename
+) -> SerializedProgram:
+    clvm_hex = open(filename, "r").read().strip()
+    assert len(clvm_hex) != 0
+    
+    clvm_blob = bytes.fromhex(clvm_hex)
+    return SerializedProgram.from_bytes(clvm_blob)
+
+ROUTER_MOD: Program = load_clvm_hex("clvm/router.clvm.hex")
+PAIR_MOD: Program = load_clvm_hex("clvm/pair.clvm.hex")
+LIQUIDITY_TAIL_MOD: Program = load_clvm_hex("clvm/liquidity_tail.clvm.hex")
 
 ROUTER_MOD_HASH = ROUTER_MOD.get_tree_hash()
 PAIR_MOD_HASH = PAIR_MOD.get_tree_hash()

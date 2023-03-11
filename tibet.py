@@ -196,7 +196,9 @@ async def _create_pair(tail_hash, push_tx):
     
     click.echo("But first, we do a little sync")
     full_node_client = await get_full_node_client(get_config_item("chia_root"))
-    current_router_coin, latest_creation_spend, pairs = await sync_router(full_node_client, router_last_processed_id)
+    current_router_coin, latest_creation_spend, pairs = await sync_router(
+        full_node_client, bytes.fromhex(router_last_processed_id)
+    )
     router_last_processed_id_new = current_router_coin.name().hex()
     click.echo(f"Last router id: {router_last_processed_id_new}")
 
@@ -223,8 +225,8 @@ async def _create_pair(tail_hash, push_tx):
     pair_launcher_id, sb = await create_pair_from_coin(
         coin,
         coin_puzzle,
-        tail_hash,
-        router_launcher_id,
+        bytes.fromhex(tail_hash),
+        bytes.fromhex(router_launcher_id),
         current_router_coin,
         latest_creation_spend
     )
@@ -268,7 +270,9 @@ async def _sync_pairs():
     
     full_node_client = await get_full_node_client(get_config_item("chia_root"))
 
-    current_router_coin, latest_creation_spend, pairs = await sync_router(full_node_client, router_last_processed_id)
+    current_router_coin, latest_creation_spend, pairs = await sync_router(
+        full_node_client, bytes.fromhex(router_last_processed_id)
+    )
     router_last_processed_id_new = current_router_coin.name().hex()
     click.echo(f"Last router id: {router_last_processed_id_new}")
 
@@ -318,7 +322,9 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin, creation_spend, pair_state = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+    )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
@@ -445,7 +451,9 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin, creation_spend, pair_state = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+    )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
@@ -571,7 +579,9 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx):
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin, creation_spend, pair_state = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+    )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
@@ -700,7 +710,9 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx):
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(full_node_client, last_synced_pair_id_not_none, bytes.fromhex(token_tail_hash))
+    current_pair_coin, creation_spend, pair_state = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+    )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 

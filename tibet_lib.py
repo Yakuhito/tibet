@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import asyncio
 from clvm import SExp
 from pathlib import Path
@@ -14,7 +15,6 @@ from chia.util.hash import std_hash
 from chia.util.ints import uint64
 from clvm.casts import int_to_bytes
 from cdv.cmds.rpc import get_client
-from chia.wallet.puzzles.load_clvm import load_clvm
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, SINGLETON_MOD_HASH, SINGLETON_MOD, SINGLETON_LAUNCHER_HASH, SINGLETON_LAUNCHER, lineage_proof_for_coinsol, puzzle_for_singleton, solution_for_singleton, generate_launcher_coin
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import puzzle_for_pk, calculate_synthetic_secret_key, DEFAULT_HIDDEN_PUZZLE_HASH, puzzle_for_synthetic_public_key, solution_for_delegated_puzzle
 from chia.wallet.puzzles.cat_loader import CAT_MOD_HASH, CAT_MOD
@@ -33,6 +33,7 @@ from chia.wallet.puzzles.cat_loader import CAT_MOD, CAT_MOD_HASH
 from chia_rs import run_chia_program
 from chia.types.blockchain_format.program import INFINITE_COST, Program
 from chia.util.condition_tools import conditions_dict_for_solution
+from chia.types.blockchain_format.program import SerializedProgram
 from chia.wallet.lineage_proof import LineageProof
 from chia.wallet.cat_wallet.cat_utils import (
     SpendableCAT,
@@ -51,11 +52,21 @@ from chia.wallet.util.puzzle_compression import (
 )
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.util.hash import std_hash
+from chia.simulator.simulator_full_node_rpc_client import SimulatorFullNodeRpcClient
 
-ROUTER_MOD: Program = load_clvm("../../../../../../../clvm/router.clvm", recompile=False)
-PAIR_MOD: Program = load_clvm("../../../../../../../clvm/pair.clvm", recompile=False)
-LIQUIDITY_TAIL_MOD: Program = load_clvm("../../../../../../../clvm/liquidity_tail.clvm", recompile=False)
-P2_SINGLETON_FLASHLOAN_MOD: Program = load_clvm("../../../../../../../clvm/p2_singleton_flashloan.clvm", recompile=False)
+def load_clvm_hex(
+    filename
+) -> Program:
+    clvm_hex = open(filename, "r").read().strip()
+    assert len(clvm_hex) != 0
+    
+    clvm_blob = bytes.fromhex(clvm_hex)
+    return SerializedProgram.from_bytes(clvm_blob).to_program()
+
+ROUTER_MOD: Program = load_clvm_hex("clvm/router.clvm.hex")
+PAIR_MOD: Program = load_clvm_hex("clvm/pair.clvm.hex")
+LIQUIDITY_TAIL_MOD: Program = load_clvm_hex("clvm/liquidity_tail.clvm.hex")
+P2_SINGLETON_FLASHLOAN_MOD: Program = load_clvm_hex("clvm/p2_singleton_flashloan.clvm.hex")
 
 ROUTER_MOD_HASH = ROUTER_MOD.get_tree_hash()
 PAIR_MOD_HASH = PAIR_MOD.get_tree_hash()
@@ -74,7 +85,6 @@ def get_router_puzzle():
         SINGLETON_LAUNCHER_HASH,
         ROUTER_MOD_HASH
     )
-
 
 def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
     return PAIR_MOD.curry(
@@ -127,6 +137,21 @@ async def get_full_node_client(
     self_hostname = config["self_hostname"]
     rpc_port = config["full_node"]["rpc_port"]
     node_client: FullNodeRpcClient = await FullNodeRpcClient.create(
+        self_hostname, uint16(rpc_port), root_path, config
+    )
+    await node_client.healthz()
+
+    return node_client
+
+async def get_sim_full_node_client(
+    chia_root: str
+) -> SimulatorFullNodeRpcClient:
+    root_path = Path(chia_root)
+
+    config = load_config(root_path, "config.yaml")
+    self_hostname = config["self_hostname"]
+    rpc_port = config["full_node"]["rpc_port"]
+    node_client: SimulatorFullNodeRpcClient = await SimulatorFullNodeRpcClient.create(
         self_hostname, uint16(rpc_port), root_path, config
     )
     await node_client.healthz()
@@ -242,17 +267,17 @@ async def create_pair_from_coin(
     router_inner_puzzle = get_router_puzzle()
     router_inner_solution = Program.to([
         current_router_coin.name(),
-        bytes.fromhex(tail_hash)
+        tail_hash
     ])
 
-    router_singleton_puzzle = puzzle_for_singleton(bytes.fromhex(router_launcher_id), router_inner_puzzle)
+    router_singleton_puzzle = puzzle_for_singleton(router_launcher_id, router_inner_puzzle)
     router_singleton_solution = solution_for_singleton(lineage_proof, current_router_coin.amount, router_inner_solution)
     router_singleton_spend = CoinSpend(current_router_coin, router_singleton_puzzle, router_singleton_solution)
 
     pair_launcher_coin = Coin(current_router_coin.name(), SINGLETON_LAUNCHER_HASH, 2)
     pair_puzzle = get_pair_puzzle(
         pair_launcher_coin.name(),
-        bytes.fromhex(tail_hash),
+        tail_hash,
         0, 0, 0
     )
 
@@ -297,13 +322,11 @@ async def create_pair_from_coin(
     return pair_launcher_id, sb
 
 async def sync_router(full_node_client, last_router_id):
-    last_router_id = bytes.fromhex(last_router_id)
-
     new_pairs = []
     coin_record = await full_node_client.get_coin_record_by_name(last_router_id)
     if not coin_record.spent:
         # hack
-        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info.hex())
+        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info)
         return current_router_coin, creation_spend, []
     
     router_puzzle_hash = get_router_puzzle().get_tree_hash()
@@ -345,8 +368,6 @@ async def sync_router(full_node_client, last_router_id):
 
 
 async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
-    last_synced_coin_id = bytes.fromhex(last_synced_coin_id)
-
     state = {
         "liquidity": 0,
         "xch_reserve": 0,
@@ -367,7 +388,7 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
 
     if not coin_record.spent:
         # hack
-        current_pair_coin, creation_spend, state = await sync_pair(full_node_client, coin_record.coin.parent_coin_info.hex(), tail_hash)
+        current_pair_coin, creation_spend, state = await sync_pair(full_node_client, coin_record.coin.parent_coin_info, tail_hash)
         return current_pair_coin, creation_spend, state
 
     creation_spend = None

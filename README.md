@@ -6,7 +6,7 @@ Please see [contributors](CONTRIBUTORS.md) to know who to thank to.
 
 # Explanations
 
-Testers: see [TESTING.md](TESTING.md)
+Testers: see [TESTING.md](TESTING.md), [Security Overview Presentation](https://pitch.com/public/0dded5d1-0151-4e77-b4f8-bcc1706317a6)
 
 ## Singletons
 
