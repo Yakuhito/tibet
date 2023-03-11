@@ -71,7 +71,7 @@ jobs:
 
     - name: cdv - create simulator
       run: cdv sim create -f $PREFARM_FINGERPINT -a false
-      with:
+      env:
         CHIA_ROOT: '/home/runner/.chia/mainnet'
     
     - name: Chia - start wallet
