@@ -54,6 +54,11 @@ jobs:
         pip install .
         cd ..
 
+    - name: Chia - initialize
+      run: chia init
+      env:
+        CHIA_ROOT: '/home/runner/.chia/mainnet'
+
     - name: Chia - add test keys
       run: |
         echo "payment town peanut wave laptop original this car wide thumb develop prosper canal conduct saddle ill lyrics object silent barely cliff text liar world" > /tmp/mnemonic
