@@ -54,9 +54,6 @@ jobs:
         pip install .
         cd ..
 
-    - name: Chia - initialize
-      run: chia init
-
     - name: Chia - add test keys
       run: |
         echo "payment town peanut wave laptop original this car wide thumb develop prosper canal conduct saddle ill lyrics object silent barely cliff text liar world" > /tmp/mnemonic
@@ -71,8 +68,6 @@ jobs:
 
     - name: cdv - create simulator
       run: cdv sim create -f $PREFARM_FINGERPINT -a false
-      env:
-        CHIA_ROOT: '/home/runner/.chia/mainnet'
     
     - name: Chia - start wallet
       run: chia start wallet
