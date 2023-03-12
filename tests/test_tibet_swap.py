@@ -117,8 +117,7 @@ class TestTibetSwap:
                time.sleep(1)
 
         async def switch_to_fingerprint(wallet_client, fingerprint):
-            # await wallet_client.log_in(fingerprint)
-            print(fingerprint, await wallet_client.log_in(fingerprint)) # debug
+            await wallet_client.log_in(fingerprint)
             await self.wait_for_wallet_sync(wallet_client)
 
         async def switch_to_alice(wallet_client):
@@ -186,15 +185,15 @@ class TestTibetSwap:
     async def select_standard_coin_and_puzzle(self, wallet_client, amount):
         spendable_coins = await wallet_client.get_spendable_coins(1, min_coin_amount=amount) # wallet id 1, amount amount
 
-        coin = spendable_coins[0][0].coin
-        print("searching for puzzle. coin:") # debug
-        print(coin) # debug
-        print("wallet:") # debug
-        print(await wallet_client.get_logged_in_fingerprint()) # debug
-        print("all spendable coins:") # debug
-        print([c.coin.amount for c in (await wallet_client.get_spendable_coins(1))[0]]) # debug
-        coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
-        return coin, coin_puzzle
+        coin_puzzle = None
+        index = 0
+        
+        while coin_puzzle is None:
+            coin = spendable_coins[0][index].coin
+            coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
+            index += 1
+       
+       return coin, coin_puzzle
 
 
     async def launch_router(self, wallet_client, full_node_client):
