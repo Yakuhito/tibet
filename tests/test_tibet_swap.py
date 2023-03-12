@@ -186,7 +186,12 @@ class TestTibetSwap:
         spendable_coins = await wallet_client.get_spendable_coins(1, min_coin_amount=amount) # wallet id 1, amount amount
 
         coin = spendable_coins[0][0].coin
+        print("searching for puzzle. coin:")
         print(coin)
+        print("wallet:")
+        print(await wallet_client.get_logged_in_fingerprint())
+        print("all spendable coins:")
+        print(await wallet_client.get_spendable_coins(1))
         coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
         return coin, coin_puzzle
 
