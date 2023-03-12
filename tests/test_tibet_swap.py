@@ -186,6 +186,7 @@ class TestTibetSwap:
         spendable_coins = await wallet_client.get_spendable_coins(1, min_coin_amount=amount) # wallet id 1, amount amount
 
         coin = spendable_coins[0][0].coin
+        print(coin)
         coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
         return coin, coin_puzzle
 
