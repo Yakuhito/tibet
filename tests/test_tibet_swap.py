@@ -100,14 +100,19 @@ class TestTibetSwap:
         if peak.height > 1: # also reset wallet
             os.system("chia stop wallet > /dev/null")
             os.system(f"rm -r {chia_root}/wallet")
+
             await full_node_client.revert_blocks(delete_all_blocks=True)
+
             os.system("chia start wallet -r > /dev/null")
+
+            await self.wait_for_full_node_sync(full_node_client)
             
         # Get wallet client and give 2 XCH to each address
         wallet_client = None
         while wallet_client is None:
             try:
                 wallet_client = await get_wallet_client(chia_root)
+                await self.wait_for_wallet_sync(wallet_client)
             except:
                time.sleep(1)
 
@@ -134,7 +139,7 @@ class TestTibetSwap:
         
         await switch_to_alice(wallet_client)
         address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
-        await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
+        print(await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1))
         
         await self.wait_for_wallet_sync(wallet_client)
         await self.wait_for_full_node_sync(full_node_client)
@@ -207,6 +212,66 @@ class TestTibetSwap:
         return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
 
 
+    async def create_test_cat(self, wallet_client, full_node_client, token_amount=1000000):
+        coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
+        
+        tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
+
+        signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
+        resp = await full_node_client.push_tx(signed_sb)
+
+        assert resp["success"]
+        await self.wait_for_full_node_sync(full_node_client)
+
+        return bytes.fromhex(tail_hash)
+
+
+    async def create_pair(
+        self,
+        wallet_client,
+        full_node_client,
+        router_launcher_id,
+        tail_hash,
+        current_router_coin,
+        current_router_coin_creation_spend
+    ):
+        coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
+
+        pair_launcher_id, sb = await create_pair_from_coin(
+            coin,
+            coin_puzzle,
+            tail_hash,
+            router_launcher_id,
+            current_router_coin,
+            current_router_coin_creation_spend
+        )
+
+        signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
+        resp = await full_node_client.push_tx(signed_sb)
+
+        assert resp["success"]
+        await self.wait_for_full_node_sync(full_node_client)
+
+        pair_coin = None
+        pair_coin_creation_spend = None
+        router_new_coin = None
+        router_new_coin_creation_spend = None
+
+        for cs in sb.coin_spends:
+            if cs.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
+                pair_coin_creation_spend = cs
+                pair_coin = self.get_created_coins_from_coin_spend(cs)[0]
+            elif cs.coin.amount == 1:
+                possible_coins = self.get_created_coins_from_coin_spend(cs)
+                if len(possible_coins) == 2 and possible_coins[0].amount + possible_coins[1].amount == 3:
+                    router_new_coin_creation_spend = cs
+                    for pc in possible_coins:
+                        if pc.amount == 1:
+                            router_new_coin = pc
+
+        return bytes.fromhex(pair_launcher_id), pair_coin, pair_coin_creation_spend, router_new_coin, router_new_coin_creation_spend
+
+
     @pytest.mark.asyncio
     async def test_router_launch(self, setup):
         full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
@@ -221,14 +286,3 @@ class TestTibetSwap:
             wallet_client.close()
             await full_node_client.await_closed()
             await wallet_client.await_closed()
-
-
-    # async def create_test_cat(self, wallet_client, full_node_client, amount=1000000):
-    #     coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, amount)
-    #     tail_id, sb = await create_test_cat(amount, coin, coin_puzzle)
-    #     signed_sb = await sign_spend_bundle(wallet_client, sb)
-
-    #     resp = await full_node_client.push_tx(signed_sb)
-    #     assert resp["success"]
-
-    #     return tail_id
