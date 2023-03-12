@@ -203,11 +203,21 @@ class TestTibetSwap:
         coin_puzzle = None
         index = 0
         
+        retries = 0
         while coin_puzzle is None:
-            coin = spendable_coins[0][index].coin
-            coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
-            index += 1
-       
+            try:
+                coin = spendable_coins[0][index].coin
+                coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
+                index += 1
+            except:
+                index = 0
+                retires += 1
+                if retries > 3:
+                    print("ok, won't find a coin any time soon :(")
+                    spendable_coins[0][31337][":("]
+                else:
+                    time.sleep(5)
+
         return coin, coin_puzzle
 
 
