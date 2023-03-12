@@ -81,7 +81,7 @@ class TestTibetSwap:
             blockchain_state = await full_node_client.get_blockchain_state()
 
 
-    @pytest_asyncio.fixture(scope="function")
+    @pytest_asyncio.fixture(autouse=True)
     async def setup(self):
         alice_fingerprint = os.environ.get("ALICE_FINGERPRINT")
         bob_fingerprint = os.environ.get("BOB_FINGERPRINT")
@@ -117,7 +117,8 @@ class TestTibetSwap:
                time.sleep(1)
 
         async def switch_to_fingerprint(wallet_client, fingerprint):
-            await wallet_client.log_in(fingerprint)
+            # await wallet_client.log_in(fingerprint)
+            print(fingerprint, await wallet_client.log_in(fingerprint)) # debug
             await self.wait_for_wallet_sync(wallet_client)
 
         async def switch_to_alice(wallet_client):
@@ -186,12 +187,12 @@ class TestTibetSwap:
         spendable_coins = await wallet_client.get_spendable_coins(1, min_coin_amount=amount) # wallet id 1, amount amount
 
         coin = spendable_coins[0][0].coin
-        print("searching for puzzle. coin:")
-        print(coin)
-        print("wallet:")
-        print(await wallet_client.get_logged_in_fingerprint())
-        print("all spendable coins:")
-        print(await wallet_client.get_spendable_coins(1))
+        print("searching for puzzle. coin:") # debug
+        print(coin) # debug
+        print("wallet:") # debug
+        print(await wallet_client.get_logged_in_fingerprint()) # debug
+        print("all spendable coins:") # debug
+        print([c.coin.amount for c in (await wallet_client.get_spendable_coins(1))[0]]) # debug
         coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
         return coin, coin_puzzle
 
@@ -282,6 +283,8 @@ class TestTibetSwap:
     async def test_router_launch(self, setup):
         full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
         try:
+            await switch_to_alice(wallet_client)
+
             launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client)
 
             cr = await full_node_client.get_coin_record_by_name(launcher_id)
@@ -298,6 +301,8 @@ class TestTibetSwap:
     async def test_pair_creation(self, setup):
         full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
         try:
+            await switch_to_alice(wallet_client)
+
             router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
                 wallet_client, full_node_client
             )
