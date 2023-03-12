@@ -211,17 +211,22 @@ async def get_wallet_client(
     return wallet_client
 
 
-async def launch_router_from_coin(parent_coin, parent_coin_puzzle):
+async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0):
     comment: List[Tuple[str, str]] = [("tibet", "v1")]
     conds, launcher_coin_spend = launch_conditions_and_coinsol(parent_coin, get_router_puzzle(), comment, 1)
-    if parent_coin.amount > 1:
-        conds.append(Program.to(
+    if parent_coin.amount > fee + 1:
+        conds.append(
             [
                 ConditionOpcode.CREATE_COIN,
                 parent_coin.puzzle_hash,
-                parent_coin.amount - 1,
-            ],
-        ))
+                parent_coin.amount - 1 - fee,
+            ]
+        )
+    if fee > 0:
+        conds.append([
+            ConditionOpcode.RESERVE_FEE,
+            fee
+        ])
 
     p2_coin_spend = CoinSpend(
         parent_coin,
@@ -297,7 +302,8 @@ async def create_pair_from_coin(
     tail_hash,
     router_launcher_id,
     current_router_coin,
-    current_router_coin_creation_spend
+    current_router_coin_creation_spend,
+    fee=0
 ):
     lineage_proof = lineage_proof_for_coinsol(current_router_coin_creation_spend)
     
@@ -341,14 +347,15 @@ async def create_pair_from_coin(
 
     # first condition is CREATE_COIN, which we took care of
     # important to note: router also takes care of assert_launcher_announcement, but we need it to link the fund spend to the bundle
-
+    conds = []
+    conds.append([ConditionOpcode.CREATE_COIN, coin.puzzle_hash, coin.amount - fee - 2])
+    if fee > 0:
+        conds.append([ConditionOpcode.RESERVE_FEE, fee])
+    conds.append(assert_launcher_announcement)
     fund_spend = CoinSpend(
         coin,
         coin_puzzle,
-        solution_for_delegated_puzzle(Program.to((1, [
-            [ConditionOpcode.CREATE_COIN, coin.puzzle_hash, coin.amount - 2],
-            assert_launcher_announcement
-        ])), [])
+        solution_for_delegated_puzzle(Program.to((1, conds)), [])
     )
     
     pair_launcher_id = Coin(current_router_coin.name(), SINGLETON_LAUNCHER_HASH, 2).name().hex()
@@ -657,9 +664,6 @@ async def respond_to_deposit_liquidity_offer(
 
     # send extra tokens to return address
     if eph_token_coin.amount > deposited_token_amount:
-        print("YAS")
-        print(eph_token_coin.amount, deposited_token_amount)
-        print(offer.get_requested_amounts())
         not_payment = Program.to([
             current_pair_coin.name(),
             [decode_puzzle_hash(return_address), eph_token_coin.amount - deposited_token_amount]

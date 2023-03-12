@@ -53,7 +53,6 @@ from chia.wallet.util.puzzle_compression import (
 from chia_rs import run_chia_program
 from clvm.casts import int_to_bytes
 
-
 async def get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client):
     fingerprint = await wallet_client.get_logged_in_fingerprint()
 
@@ -77,7 +76,7 @@ async def get_standard_coin_puzzle(wallet_client, std_coin):
 
     return None
 
-async def sign_spend_bundle(wallet_client, sb, no_max_keys = 1):
+async def sign_spend_bundle(wallet_client, sb, additional_data=DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA, no_max_keys = 1):
     master_sk = await get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client)
 
     puzzle_hashes = [c.coin.puzzle_hash for c in sb.coin_spends]
@@ -98,7 +97,7 @@ async def sign_spend_bundle(wallet_client, sb, no_max_keys = 1):
             sb = await sign_coin_spends(
                 sb.coin_spends,
                 pk_to_sk,
-                DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA,
+                additional_data,
                 DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
             )
 
@@ -111,7 +110,7 @@ async def sign_spend_bundle(wallet_client, sb, no_max_keys = 1):
 
     return sb
 
-async def sign_spend_bundle_with_specific_sk(sb, sk):
+async def sign_spend_bundle_with_specific_sk(sb, sk, additional_data=DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA):
     async def pk_to_sk(pk):
         return sk
 
@@ -119,7 +118,7 @@ async def sign_spend_bundle_with_specific_sk(sb, sk):
     sb = await sign_coin_spends(
         sb.coin_spends,
         pk_to_sk,
-        DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA,
+        additional_data,
         DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
     )
     new_agg_sig = AugSchemeMPL.aggregate([sig_old, sb.aggregated_signature])

@@ -63,6 +63,11 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
     
     chia_root = os.path.expanduser(chia_root)
 
+    root_path = Path(chia_root)
+    config = load_config(root_path, "config.yaml")
+    selected_network = config["selected_network"]
+    agg_sig_me_additional_data = config['full_node']['network_overrides']['constants'][selected_network]['AGG_SIG_ME_ADDITIONAL_DATA']
+    
     config = get_config()
     config["chia_root"] = chia_root
     if fireacademyio_api_key is not None:
@@ -81,6 +86,7 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
         if config.get("leaflet_url", -1) != -1:
             del config["leaflet_url"]
 
+    config["agg_sig_me_additional_data"] = agg_sig_me_additional_data
     save_config(config)
     click.echo("Config updated and saved successfully.")
 
@@ -107,23 +113,24 @@ async def _test_node_config():
 
 @click.command()
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and update launcher is in config.")
-def launch_router(push_tx):
-    asyncio.run(_launch_router(push_tx))
+@click.option('--fee', default=0, help='Fee to use for transaction')
+def launch_router(push_tx, fee):
+    asyncio.run(_launch_router(push_tx, fee))
 
-async def _launch_router(push_tx):
+async def _launch_router(push_tx, fee):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(2, 1, min_coin_amount=2) # wallet id 1, amount 2
+    coins = await wallet_client.select_coins(2 + fee, 1, min_coin_amount=2) # wallet id 1, amount 2
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
 
     click.echo(f"Using coin 0x{coin.name().hex()}...")
 
-    launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle)
+    launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle, fee=fee)
     click.echo(f"Router launcher id: {launcher_id}")
 
-    signed_sb = await sign_spend_bundle(wallet_client, sb)
+    signed_sb = await sign_spend_bundle(wallet_client, sb, additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data")))
 
     if push_tx:
         click.echo(f"Pushing tx...")
@@ -169,7 +176,7 @@ async def _launch_test_token(amount, push_tx):
     tail_id, sb = await create_test_cat(amount, coin, coin_puzzle)
     click.echo(f"Token asset id: {tail_id}")
 
-    signed_sb = await sign_spend_bundle(wallet_client, sb)
+    signed_sb = await sign_spend_bundle(wallet_client, sb, additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data")))
 
     if push_tx:
         click.echo(f"Pushing tx...")
@@ -195,16 +202,17 @@ async def _launch_test_token(amount, push_tx):
 @click.command()
 @click.option('--asset-id', required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
-def create_pair(asset_id, push_tx):
+@click.option('--fee', default=0, help='Fee to use for transaction')
+def create_pair(asset_id, push_tx, fee):
     # very basic check to prevent most mistakes
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
 
-    asyncio.run(_create_pair(asset_id, push_tx))
+    asyncio.run(_create_pair(asset_id, push_tx, fee))
 
 
-async def _create_pair(tail_hash, push_tx):
+async def _create_pair(tail_hash, push_tx, fee):
     click.echo(f"Creating pair for {tail_hash}...")
 
     router_launcher_id = get_config_item("router_launcher_id")
@@ -247,14 +255,15 @@ async def _create_pair(tail_hash, push_tx):
         bytes.fromhex(tail_hash),
         bytes.fromhex(router_launcher_id),
         current_router_coin,
-        latest_creation_spend
+        latest_creation_spend,
+        fee=fee
     )
     click.echo(f"Pair launcher id: {pair_launcher_id}")
 
     pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
     click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
-    signed_sb = await sign_spend_bundle(wallet_client, sb)
+    signed_sb = await sign_spend_bundle(wallet_client, sb, additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data")))
 
     if push_tx:
         click.echo(f"Pushing tx...")
@@ -318,14 +327,15 @@ async def _sync_pairs():
 @click.option("--token-amount", default=0, help="If offer is none, this amount of tokens will be asked for in the offer. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--xch-amount", default=0, help="Only required if pair has no liquidity. If offer is none, this amount of XCH will be asked for in the generated offer. Unit is mojos.")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
-def deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx):
+@click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
+def deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx))
+    asyncio.run(_deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee))
 
 
-async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, push_tx):
+async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, push_tx, fee):
     click.echo("Depositing liquidity...")
     offer_str = ""
 
@@ -388,7 +398,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
         offer_dict[token_wallet_id] = -token_amount
         offer_dict[liquidity_wallet_id] = liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, fee=fee)
         offer = offer_resp[0]
 
         offer_str = offer.to_bech32()
@@ -447,14 +457,15 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 @click.option("--offer", default=None, help='Offer to build liquidity removal tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
 @click.option("--liquidity-token-amount", default=0, help="If offer is none, this amount of liqudity tokens will be included in the offer. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network.")
-def remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx):
+@click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
+def remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx))
+    asyncio.run(_remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee))
 
 
-async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push_tx):
+async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push_tx, fee):
     click.echo("Removing liquidity...")
     offer_str = ""
 
@@ -516,7 +527,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         offer_dict[1] = xch_amount + liquidity_token_amount # also ask for xch from liquidity cat burn
         offer_dict[token_wallet_id] = token_amount
         offer_dict[liquidity_wallet_id] = -liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, fee=fee)
         offer = offer_resp[0]
 
         offer_str = offer.to_bech32()
@@ -575,14 +586,15 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
 @click.option("--offer", default=None, help='Offer to build tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
 @click.option("--xch-amount", default=0, help="If offer is none, this amount of xch will be included in the offer. Unit is mojos.")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the spend bundle to the network.")
-def xch_to_token(asset_id, offer, xch_amount, push_tx):
+@click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
+def xch_to_token(asset_id, offer, xch_amount, push_tx, fee):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_xch_to_token(asset_id, offer, xch_amount, push_tx))
+    asyncio.run(_xch_to_token(asset_id, offer, xch_amount, push_tx, fee))
 
 
-async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx):
+async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
     click.echo("Swapping XCH for token...")
     offer_str = ""
 
@@ -647,7 +659,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx):
         offer_dict = {}
         offer_dict[1] = -xch_amount # offer XCH
         offer_dict[token_wallet_id] = token_amount # ask for token
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, fee=fee)
         offer = offer_resp[0]
 
         offer_str = offer.to_bech32()
@@ -706,14 +718,15 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx):
 @click.option("--offer", default=None, help='Offer to build tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
 @click.option("--token-amount", default=0, help="If offer is none, this amount of tokens will be included in the offer. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the spend bundle to the network.")
-def token_to_xch(asset_id, offer, token_amount, push_tx):
+@click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
+def token_to_xch(asset_id, offer, token_amount, push_tx, fee):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_token_to_xch(asset_id, offer, token_amount, push_tx))
+    asyncio.run(_token_to_xch(asset_id, offer, token_amount, push_tx, fee))
 
 
-async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx):
+async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee):
     click.echo("Swapping token for XCH...")
     offer_str = ""
 
@@ -778,7 +791,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx):
         offer_dict = {}
         offer_dict[1] = xch_amount # ask for XCH
         offer_dict[token_wallet_id] = -token_amount # offer tokens
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, fee=fee)
         offer = offer_resp[0]
 
         offer_str = offer.to_bech32()
