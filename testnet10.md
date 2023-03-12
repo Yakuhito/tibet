@@ -28,9 +28,10 @@ Before configuring `tibet.py`, you'll need an API key from [FireAcademy.io](http
 Configure:
 ```bash
 python3 tibet.py config-node --use-preset testnet10 --fireacademyio-api-key [you-api-key]
+python3 tibet.pu set-router [TO_BE_ANNOUNCED]
 ```
 
-Time to play! See [TESTING.md](TESTING.md) to get an idea of the possible commands.
+Time to play! See [TESTING.md](TESTING.md) to get an idea of the possible commands. Do not forget to use the `--fee` switch along with some mojos (e.g., 1000000000, which translates to 0.001 XCH).
 
 To get back on mainnet:
 ```bash
