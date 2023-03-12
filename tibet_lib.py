@@ -710,7 +710,7 @@ async def respond_to_deposit_liquidity_offer(
             [decode_puzzle_hash(return_address), eph_xch_coin.amount - deposited_xch_amount - new_liquidity_token_amount]
         ])
         eph_xch_coin_settlement_things.append(not_payment)
-        
+
         for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment]):
             announcement_asserts.append(ann_assert)
 
@@ -862,7 +862,8 @@ async def respond_to_remove_liquidity_offer(
     offer_str,
     last_xch_reserve_coin,
     last_token_reserve_coin,
-    last_token_reserve_lineage_proof # coin_parent_coin_info, inner_puzzle_hash, amount
+    last_token_reserve_lineage_proof, # coin_parent_coin_info, inner_puzzle_hash, amount
+    return_address = DEFAULT_RETURN_ADDRESS
 ):
     # 1. detect offered ephemeral coin (ephemeral liquidity coin, created the offer so we can use it)
     offer = Offer.from_bech32(offer_str)
@@ -1086,6 +1087,15 @@ async def respond_to_remove_liquidity_offer(
             current_pair_coin.name(),
             [p2_singleton_puzzle_hash, new_token_reserve_amount]
         ])
+    if eph_token_coin.amount > removed_token_amount:
+        not_payment = [
+            current_pair_coin.name(),
+            [decode_puzzle_hash(return_address), eph_token_coin.amount - removed_token_amount]
+        ]
+        eph_token_coin_notarized_payments.append(not_payment)
+
+        for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
+            announcement_asserts.append(ann_assert)
 
     eph_token_coin_inner_solution = Program.to(eph_token_coin_notarized_payments)
     eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
@@ -1107,6 +1117,16 @@ async def respond_to_remove_liquidity_offer(
     eph_token_coin_spend = eph_token_coin_spend_bundle.coin_spends[0]
 
     # 8. Spend XCH reserve
+    xch_eph_coin_extra_payment = None
+    if eph_xch_coin.amount > removed_xch_amount:
+        xch_eph_coin_extra_payment = [
+            current_pair_coin.name(),
+            [decode_puzzle_hash(return_address), eph_xch_coin.amount - removed_xch_amount]
+        ]
+
+        for ann_assert in get_announcements_asserts_for_notarized_payments([xch_eph_coin_extra_payment]):
+            announcement_asserts.append(ann_assert)
+
     last_xch_reserve_coin_extra_conditions = [
         [
             ConditionOpcode.CREATE_COIN,
@@ -1150,6 +1170,8 @@ async def respond_to_remove_liquidity_offer(
             current_pair_coin.name(),
             [p2_singleton_puzzle_hash, new_xch_reserve_amount]
         ])
+    if xch_eph_coin_extra_payment is not None:
+        eph_xch_coin_notarized_payments.append(xch_eph_coin_extra_payment)
 
     eph_xch_coin_solution = Program.to(eph_xch_coin_notarized_payments)
     eph_xch_coin_spend = CoinSpend(eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
