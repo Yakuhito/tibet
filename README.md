@@ -43,3 +43,7 @@ Unlike Uniswap, the router does not allow users to make trades on pairs. Since w
 ## Flash Loans
 
 Each transaction, token and XCH reserves are burned (destroyed, spent) and then new reserve coins are asserted (via  the settlement payments - just like in offers!). Since everything happens at the same time during a block, you can do whatever you want with all the pair's reserves as long as you 'leave the right amount' at the end of the tx. What's more, I modified the `p2_singleton` puzzle into one that allows anyone to add extra output conditions - this means that you truly have full control over the reserves.
+
+## Imports
+
+Why do imports look like they do? `isort [file].py --split-on-trailing-comma`
