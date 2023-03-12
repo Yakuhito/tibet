@@ -70,14 +70,14 @@ class TestTibetSwap:
     async def wait_for_wallet_sync(self, wallet_client):
         synced = await wallet_client.get_synced()
         while not synced:
-            time.sleep(0.25)
+            time.sleep(0.5)
             synced = await wallet_client.get_synced()
     
 
     async def wait_for_full_node_sync(self, full_node_client):
         blockchain_state = await full_node_client.get_blockchain_state()
         while not blockchain_state['sync']['synced']:
-            time.sleep(0.25)
+            time.sleep(0.5)
             blockchain_state = await full_node_client.get_blockchain_state()
 
 
@@ -139,7 +139,7 @@ class TestTibetSwap:
         
         await switch_to_alice(wallet_client)
         address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
-        print(await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1))
+        await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
         
         await self.wait_for_wallet_sync(wallet_client)
         await self.wait_for_full_node_sync(full_node_client)
