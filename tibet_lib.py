@@ -217,15 +217,15 @@ async def create_test_cat(token_amount, coin, coin_puzzle):
         coin,
         cat_inner_puzzle, # same as this coin's puzzle
         solution_for_delegated_puzzle(Program.to((1, [
-            [ConditionOpcode.CREATE_COIN, cat_puzzle_hash, token_amount * 10000],
-            [ConditionOpcode.CREATE_COIN, coin.puzzle_hash, coin.amount - token_amount * 10000],
+            [ConditionOpcode.CREATE_COIN, cat_puzzle_hash, token_amount * 1000],
+            [ConditionOpcode.CREATE_COIN, coin.puzzle_hash, coin.amount - token_amount * 1000],
         ])), [])
     )
     
     cat_coin = Coin(
         coin.name(), # parent
         cat_puzzle_hash,
-        token_amount * 10000
+        token_amount * 1000
     )
 
     cat_inner_solution = solution_for_delegated_puzzle(
