@@ -78,6 +78,7 @@ from clvm.casts import int_to_bytes
 
 from clvm import SExp
 
+from leaflet_client import LeafletFullNodeRpcClient
 
 def load_clvm_hex(
     filename
@@ -157,16 +158,24 @@ def solution_for_p2_singleton_flashloan(
 
 
 async def get_full_node_client(
-    chia_root: str
+    chia_root,
+    leaflet_url
 ) -> FullNodeRpcClient:
-    root_path = Path(chia_root)
+    node_client = None
 
-    config = load_config(root_path, "config.yaml")
-    self_hostname = config["self_hostname"]
-    rpc_port = config["full_node"]["rpc_port"]
-    node_client: FullNodeRpcClient = await FullNodeRpcClient.create(
-        self_hostname, uint16(rpc_port), root_path, config
-    )
+    if leaflet_url is not None:
+        # use leaflet by default
+        node_client = LeafletFullNodeRpcClient(leaflet_url)
+    else:
+        root_path = Path(chia_root)
+
+        config = load_config(root_path, "config.yaml")
+        self_hostname = config["self_hostname"]
+        rpc_port = config["full_node"]["rpc_port"]
+        node_client: FullNodeRpcClient = await FullNodeRpcClient.create(
+            self_hostname, uint16(rpc_port), root_path, config
+        )
+    
     await node_client.healthz()
 
     return node_client

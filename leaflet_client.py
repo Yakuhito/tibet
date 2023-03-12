@@ -11,7 +11,7 @@ class LeafletFullNodeRpcClient(FullNodeRpcClient):
 
 
     async def fetch(self, path, request_json):
-        async with self.session.post(self.url + path, json=request_json) as response:
+        async with self.session.post(self.leaflet_url + path, json=request_json) as response:
             response.raise_for_status()
             res_json = await response.json()
             if not res_json["success"]:
