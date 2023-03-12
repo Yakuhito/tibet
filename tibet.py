@@ -494,7 +494,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         xch_amount = pair_state['xch_reserve'] * liquidity_token_amount // pair_state['liquidity']
 
         offer_dict = {}
-        offer_dict[1] = xch_amount + liquidity_token_amount # also offer xch from liquidity cat burn
+        offer_dict[1] = xch_amount + liquidity_token_amount # also ask for xch from liquidity cat burn
         offer_dict[token_wallet_id] = token_amount
         offer_dict[liquidity_wallet_id] = -liquidity_token_amount
         offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
