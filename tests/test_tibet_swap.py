@@ -339,3 +339,29 @@ class TestTibetSwap:
             wallet_client.close()
             await full_node_client.await_closed()
             await wallet_client.await_closed()
+
+    @pytest.mark.asyncio
+    async def test_pair_operations(self, setup):
+        full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
+        try:
+            router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
+                wallet_client, full_node_client
+            )
+            
+            tail_hash = await self.create_test_cat(wallet_client, full_node_client)
+
+            pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
+                wallet_client,
+                full_node_client,
+                router_launcher_id,
+                tail_hash,
+                current_router_coin,
+                router_creation_spend
+            )
+            
+            # todo
+        finally:
+            full_node_client.close()
+            wallet_client.close()
+            await full_node_client.await_closed()
+            await wallet_client.await_closed()
