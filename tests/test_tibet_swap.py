@@ -117,7 +117,7 @@ class TestTibetSwap:
                time.sleep(1)
 
         async def switch_to_fingerprint(wallet_client, fingerprint):
-            await wallet_client.log_in(fingerprint)
+            await wallet_client.log_in(int(fingerprint))
             await self.wait_for_wallet_sync(wallet_client)
 
         async def switch_to_alice(wallet_client):
@@ -130,15 +130,19 @@ class TestTibetSwap:
             await switch_to_fingerprint(wallet_client, charlie_fingerprint)
 
         await switch_to_charlie(wallet_client)
-        address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
+        address = await wallet_client.get_next_address(1, True) # wallet id = 1, new address = true
         await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
         
         await switch_to_bob(wallet_client)
-        address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
+        address = await wallet_client.get_next_address(1, True) # wallet id = 1, new address = true
         await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
         
         await switch_to_alice(wallet_client)
-        address = await wallet_client.get_next_address(1, False) # wallet id = 1, new address = false
+        address = await wallet_client.get_next_address(1, True) # wallet id = 1, new address = true
+        await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
+        
+        await switch_to_alice(wallet_client)
+        address = await wallet_client.get_next_address(1, True) # wallet id = 1, new address = true
         await full_node_client.farm_block(decode_puzzle_hash(address), number_of_blocks=1)
         
         await self.wait_for_wallet_sync(wallet_client)
@@ -184,7 +188,7 @@ class TestTibetSwap:
 
     async def select_standard_coin_and_puzzle(self, wallet_client, amount):
         spendable_coins = await wallet_client.get_spendable_coins(1, min_coin_amount=amount) # wallet id 1, amount amount
-
+        
         coin_puzzle = None
         index = 0
         
@@ -282,8 +286,6 @@ class TestTibetSwap:
     async def test_router_launch(self, setup):
         full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
         try:
-            await switch_to_alice(wallet_client)
-
             launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client)
 
             cr = await full_node_client.get_coin_record_by_name(launcher_id)
@@ -300,12 +302,10 @@ class TestTibetSwap:
     async def test_pair_creation(self, setup):
         full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
         try:
-            await switch_to_alice(wallet_client)
-
             router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
                 wallet_client, full_node_client
             )
-
+            
             tail_hash = await self.create_test_cat(wallet_client, full_node_client)
 
             pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
