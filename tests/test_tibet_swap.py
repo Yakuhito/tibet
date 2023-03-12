@@ -193,7 +193,7 @@ class TestTibetSwap:
             coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
             index += 1
        
-       return coin, coin_puzzle
+        return coin, coin_puzzle
 
 
     async def launch_router(self, wallet_client, full_node_client):
