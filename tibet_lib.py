@@ -915,6 +915,10 @@ async def respond_to_remove_liquidity_offer(
     removed_token_amount = pair_token_reserve * burned_liquidity_amount // pair_liquidity
     removed_xch_amount = pair_xch_reserve * burned_liquidity_amount // pair_liquidity
 
+    if removed_token_amount > eph_token_coin.amount or removed_xch_amount > eph_xch_coin.amount:
+        print("Asking for too much liquidity :|")
+        return None
+
     new_token_reserve_amount = last_token_reserve_coin.amount - removed_token_amount
     new_xch_reserve_amount = last_xch_reserve_coin.amount - removed_xch_amount
 
@@ -1202,7 +1206,8 @@ async def respond_to_swap_offer(
     offer_str,
     last_xch_reserve_coin,
     last_token_reserve_coin,
-    last_token_reserve_lineage_proof # coin_parent_coin_info, inner_puzzle_hash, amount
+    last_token_reserve_lineage_proof, # coin_parent_coin_info, inner_puzzle_hash, amount
+    return_address = DEFAULT_RETURN_ADDRESS
 ):
     coin_spends = [] # all spends that will get included in the returned spend bundle
 
@@ -1220,8 +1225,11 @@ async def respond_to_swap_offer(
     eph_token_coin_puzzle = construct_cat_puzzle(CAT_MOD, token_tail_hash, OFFER_MOD)
     eph_token_coin_puzzle_hash = eph_token_coin_puzzle.get_tree_hash()
 
+    asked_for_amount = 0
+
     for coin_spend in offer_coin_spends:
         if coin_spend.coin.parent_coin_info == b"\x00" * 32: # 'hint' for offer requested coin
+            asked_for_amount = coin_spend.coin.amount
             continue
         
         coin_spends.append(coin_spend)
@@ -1308,6 +1316,16 @@ async def respond_to_swap_offer(
             new_token_reserve_amount if eph_coin_is_cat else pair_token_reserve
         ]
     ]
+    total_token_amount = last_token_reserve_coin.amount
+    if eph_coin_is_cat:
+        total_token_amount += eph_coin.amount
+
+    if total_token_amount > new_token_reserve_amount:
+        last_token_reserve_coin_extra_conditions.append([
+            ConditionOpcode.CREATE_COIN,
+            decode_puzzle_hash(return_address),
+            total_token_amount - new_token_reserve_amount
+        ])
 
     last_token_reserve_coin_inner_solution = solution_for_p2_singleton_flashloan(
         last_token_reserve_coin,
@@ -1347,10 +1365,11 @@ async def respond_to_swap_offer(
         coin_spends.append(cs)
 
     # 5. Spend intermediary token reserve coin
+    intermediary_token_reserve_coin_amount = new_token_reserve_amount if eph_coin_is_cat else pair_token_reserve
     intermediary_token_reserve_coin = Coin(
         last_token_reserve_coin.name(),
         construct_cat_puzzle(CAT_MOD, token_tail_hash, OFFER_MOD).get_tree_hash(),
-        new_token_reserve_amount if eph_coin_is_cat else pair_token_reserve
+        intermediary_token_reserve_coin_amount
     )
 
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
@@ -1372,6 +1391,7 @@ async def respond_to_swap_offer(
                 [notarized_payment.memos[0], pair_token_reserve - new_token_reserve_amount, notarized_payment.memos]
             ]
         )
+
     intermediary_token_reserve_coin_inner_solution = Program.to(intermediary_token_reserve_notarized_payments)
 
     intermediary_token_spend_bundle = unsigned_spend_bundle_for_spendable_cats(CAT_MOD, [
@@ -1400,9 +1420,20 @@ async def respond_to_swap_offer(
         [
             ConditionOpcode.CREATE_COIN,
             OFFER_MOD_HASH,
-            pair_xch_reserve
+            new_xch_reserve_amount
         ]
     ] + announcement_asserts
+
+    total_xch_amount = last_xch_reserve_coin.amount
+    if not eph_coin_is_cat:
+        total_xch_amount += eph_coin.amount
+
+    if total_xch_amount > new_xch_reserve_amount:
+        last_token_reserve_coin_extra_conditions.append([
+            ConditionOpcode.CREATE_COIN,
+            decode_puzzle_hash(return_address),
+            total_xch_amount - new_xch_reserve_amount
+        ])
 
     last_xch_reserve_coin_solution = solution_for_p2_singleton_flashloan(
         last_xch_reserve_coin,
