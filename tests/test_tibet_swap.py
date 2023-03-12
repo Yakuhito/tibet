@@ -217,7 +217,7 @@ class TestTibetSwap:
         
         tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
 
-        signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
+        signed_sb = await sign_spend_bundle(wallet_client, sb)
         resp = await full_node_client.push_tx(signed_sb)
 
         assert resp["success"]
@@ -235,7 +235,7 @@ class TestTibetSwap:
         current_router_coin,
         current_router_coin_creation_spend
     ):
-        coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
+        coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, 2)
 
         pair_launcher_id, sb = await create_pair_from_coin(
             coin,
@@ -246,7 +246,7 @@ class TestTibetSwap:
             current_router_coin_creation_spend
         )
 
-        signed_sb = await sign_spend_bundle_with_specific_sk(sb, synth_sk)
+        signed_sb = await sign_spend_bundle(wallet_client, sb)
         resp = await full_node_client.push_tx(signed_sb)
 
         assert resp["success"]
@@ -279,6 +279,49 @@ class TestTibetSwap:
             launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client)
 
             cr = await full_node_client.get_coin_record_by_name(launcher_id)
+            assert cr is not None
+            assert cr.spent
+        finally:
+            full_node_client.close()
+            wallet_client.close()
+            await full_node_client.await_closed()
+            await wallet_client.await_closed()
+    
+
+    @pytest.mark.asyncio
+    async def test_pair_creation(self, setup):
+        full_node_client, wallet_client, switch_to_alice, switch_to_bob, switch_to_charlie = setup
+        try:
+            router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
+                wallet_client, full_node_client
+            )
+
+            tail_hash = await self.create_test_cat(wallet_client, full_node_client)
+
+            pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
+                wallet_client,
+                full_node_client,
+                router_launcher_id,
+                tail_hash,
+                current_router_coin,
+                router_creation_spend
+            )
+            cr = await full_node_client.get_coin_record_by_name(pair_launcher_id)
+            assert cr is not None
+            assert cr.spent
+
+            # another pair, just to be sure
+            tail_hash2 = await self.create_test_cat(wallet_client, full_node_client)
+
+            pair2_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
+                wallet_client,
+                full_node_client,
+                router_launcher_id,
+                tail_hash2,
+                current_router_coin,
+                router_creation_spend
+            )
+            cr = await full_node_client.get_coin_record_by_name(pair2_launcher_id)
             assert cr is not None
             assert cr.spent
         finally:

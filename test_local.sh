@@ -12,4 +12,9 @@ export CHARLIE_FINGERPRINT=1514229218
 
 cdv sim create -f $PREFARM_FINGERPRINT
 chia start wallet
-pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
+
+if [ -z "$1" ]; then
+    pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
+else
+    pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning -k $1
+fi
