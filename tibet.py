@@ -49,7 +49,9 @@ def save_config(config):
 @click.command()
 @click.option('--chia-root', default=None, help='Chia root directory (e.g., ~/.chia/mainnet)')
 @click.option('--use-preset', default='custom', type=click.Choice(['custom', 'simulator', 'testnet10', 'mainnet'], case_sensitive=False))
-def config_node(chia_root, use_preset):
+@click.option('--fireacademyio-api-key', default=None, help='FireAcademy API key (if you want to use FireAcademy.io instead of your local full node.')
+@click.option('--fireacademyio-network', default='testnet10', type=click.Choice(['mainnet', 'testnet10'], case_sensitive=False))
+def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_network):
     if use_preset == 'custom' and (chia_root is None or full_node_rpc_port is None or wallet_rpc_port is None):
         click.echo("Use a preset or fill out all options.")
         sys.exit(1)
@@ -65,6 +67,22 @@ def config_node(chia_root, use_preset):
 
     config = get_config()
     config["chia_root"] = chia_root
+    if fireacademyio_api_key is not None:
+        if len(fireacademyio_api_key) != 36:
+            print("Invalid API key for FireAcademy.io - please get one at https://dashboard.fireacademy.io/")
+            sys.exit(1)
+        
+        leaflet_url = f"https://kraken.fireacademy.io/{fireacademyio_api_key}/"
+        if fireacademyio_network == "mainnet":
+            leaflet_url += "leaflet/"
+        else:
+            leaflet_url += "leaflet-testnet10/"
+
+        config["leaflet_url"] = leaflet_url
+    else:
+        if config.get("leaflet_url", -1) != -1:
+            del config["leaflet_url"]
+
     save_config(config)
     click.echo("Config updated and saved successfully.")
 

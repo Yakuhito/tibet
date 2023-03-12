@@ -2,7 +2,7 @@
 import aiohttp
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
 
-class FullNodeRpcClient(FullNodeRpcClient):
+class LeafletFullNodeRpcClient(FullNodeRpcClient):
     def __init__(self, leaflet_url):
         self.leaflet_url = leaflet_url
         super().__init__()
