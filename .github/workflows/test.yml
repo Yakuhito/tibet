@@ -52,6 +52,7 @@ jobs:
       run: |
         git clone https://github.com/Chia-Network/chia-dev-tools.git
         cd chia-dev-tools
+        git checkout a041e39cd6a3d86691cd25cad676ee6d59cff302
         pip install .
         cd ..
 
