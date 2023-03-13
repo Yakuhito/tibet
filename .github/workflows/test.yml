@@ -81,6 +81,9 @@ jobs:
     - name: Chia - start wallet
       run: chia start wallet
 
+    - name: Install other required libraries
+      run: python3 -m pip install -r requirements.txt
+
     - name: Test code with pytest
       run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
     
