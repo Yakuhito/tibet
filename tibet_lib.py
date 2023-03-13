@@ -420,10 +420,11 @@ async def get_spend_bundle_in_mempool(full_node_client, coin):
             "parent_coin_info": parent_id_hex
         })
 
-        if r["item"] is None:
+        j = r.json()
+        if j["item"] is None:
             return None
 
-        return SpendBundle.from_json_dict(r["item"])
+        return SpendBundle.from_json_dict(j["item"])
     except:
         return await get_spend_bundle_in_mempool_full_node(full_node_client, coin.name())
 
