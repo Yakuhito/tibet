@@ -110,7 +110,7 @@ def get_router_puzzle():
         CAT_MOD_HASH,
         LIQUIDITY_TAIL_MOD_HASH,
         OFFER_MOD_HASH,
-        997,
+        993,
         SINGLETON_LAUNCHER_HASH,
         ROUTER_MOD_HASH
     )
@@ -124,7 +124,7 @@ def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reser
         LIQUIDITY_TAIL_MOD_HASH,
         OFFER_MOD_HASH,
         tail_hash,
-        997,
+        993,
         liquidity,
         xch_reserve,
         token_reserve
