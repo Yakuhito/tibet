@@ -618,7 +618,7 @@ class TestTibetSwap:
             )
 
             xch_amount = 100000000
-            token_amount = pair_state["token_reserve"] * xch_amount * 997 // (1000 * pair_state["xch_reserve"] + 997 * xch_amount)
+            token_amount = pair_state["token_reserve"] * xch_amount * 993 // (1000 * pair_state["xch_reserve"] + 993 * xch_amount)
 
             offer_dict = {}
             offer_dict[1] = -xch_amount # offer XCH
@@ -677,7 +677,7 @@ class TestTibetSwap:
             )
 
             token_amount = 1000
-            xch_amount = pair_state["xch_reserve"] * token_amount * 997 // (1000 * pair_state["token_reserve"] + 997 * token_amount)
+            xch_amount = pair_state["xch_reserve"] * token_amount * 993 // (1000 * pair_state["token_reserve"] + 993 * token_amount)
 
             offer_dict = {}
             offer_dict[1] = xch_amount # ask for XCH

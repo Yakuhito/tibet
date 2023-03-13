@@ -66,8 +66,12 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
     root_path = Path(chia_root)
     config = load_config(root_path, "config.yaml")
     selected_network = config["selected_network"]
-    agg_sig_me_additional_data = config['full_node']['network_overrides']['constants'][selected_network]['AGG_SIG_ME_ADDITIONAL_DATA']
-    
+    agg_sig_me_additional_data = DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA.hex()
+    try:
+        agg_sig_me_additional_data = config['full_node']['network_overrides']['constants'][selected_network]['AGG_SIG_ME_ADDITIONAL_DATA']
+    except:
+        pass
+
     config = get_config()
     config["chia_root"] = chia_root
     if fireacademyio_api_key is not None:
@@ -367,9 +371,9 @@ async def _get_pair_info(token_tail_hash):
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
 
-    click.echo(f"XCH reserve: {pair_state['xch_reserve'] // 10 ** 12} XCH")
-    click.echo(f"Token reserve: {pair_state['xch_reserve'] // 10 ** 3} tokens")
-    click.echo(f"Total liquidity: {pair_state['liquidity'] // 10 ** 3} tokens")
+    click.echo(f"XCH reserve: {pair_state['xch_reserve'] / 10 ** 12} XCH")
+    click.echo(f"Token reserve: {pair_state['token_reserve'] / 1000} tokens")
+    click.echo(f"Total liquidity: {pair_state['liquidity'] / 1000} tokens")
 
     full_node_client.close()
     await full_node_client.await_closed()

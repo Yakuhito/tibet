@@ -410,6 +410,28 @@ async def sync_router(full_node_client, last_router_id):
     
     return coin_record.coin, creation_spend, new_pairs
 
+async def get_spend_bundle_in_mempool(full_node_client, coin_id):
+    items = await full_node_client.get_all_mempool_items()
+
+    for sb_id, d in items.items():
+        sb = SpendBundle.from_json_dict(d["spend_bundle"])
+        for cs in sb.coin_spends:
+            if cs.coin.name() == coin_id:
+                return sb
+
+    return None
+
+
+def get_coin_spend_from_sb(sb, coin_name):
+    if sb is None:
+        return None
+    
+    for cs in sb.coin_spends:
+        if cs.coin.name() == coin_name:
+            return cs
+
+    return None
+
 
 async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
     state = {
@@ -419,6 +441,7 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
     }
     coin_record = await full_node_client.get_coin_record_by_name(last_synced_coin_id)
     last_synced_coin = coin_record.coin
+    creation_spend = None
 
     if coin_record.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
         creation_spend = await full_node_client.get_puzzle_and_solution(last_synced_coin_id, coin_record.spent_block_index)
@@ -428,7 +451,6 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
             INFINITE_COST
         )
         last_synced_coin = Coin(coin_record.coin.name(), conditions_dict[ConditionOpcode.CREATE_COIN][0].vars[0], 1)
-        return last_synced_coin, creation_spend, state
 
     if not coin_record.spent:
         # hack
@@ -454,6 +476,31 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
 
         coin_record = await full_node_client.get_coin_record_by_name(last_synced_coin_id)
     
+    # mempool - watch this aggregation!
+    last_coin_on_chain_id = coin_record.coin.name()
+    sb = await get_spend_bundle_in_mempool(full_node_client, last_coin_on_chain_id)
+    coin_spend = get_coin_spend_from_sb(sb, last_coin_on_chain_id)
+    while coin_spend != None:
+        creation_spend = coin_spend
+        _, conditions_dict, __ = conditions_dict_for_solution(
+            creation_spend.puzzle_reveal,
+            creation_spend.solution,
+            INFINITE_COST
+        )
+        
+        for cwa in conditions_dict.get(ConditionOpcode.CREATE_COIN, []):
+            new_puzzle_hash = cwa.vars[0]
+            new_amount = cwa.vars[1]
+
+            if new_amount == b"\x01": # CREATE_COIN with amount=1 -> pair recreation
+                last_synced_coin = Coin(last_synced_coin_id, new_puzzle_hash, 1)
+                last_synced_coin_id = last_synced_coin.name()
+
+        coin_spend = get_coin_spend_from_sb(sb, last_synced_coin_id)
+
+    if creation_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
+        return last_synced_coin, creation_spend, state
+
     creation_spend_inner_puzzle_args = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[1]
     liquidity = creation_spend_inner_puzzle_args.at("r" * 8 + "f").as_int()
     xch_reserve = creation_spend_inner_puzzle_args.at("r" * 9 + "f").as_int()
@@ -481,11 +528,11 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
         liquidity -= liquidity_tokens_amount
     elif action == 2: # xch to token
         xch_amount = params.at("f").as_int()
-        token_reserve -= (token_reserve * xch_amount * 997) // (1000 * xch_reserve + 997 * xch_amount)
+        token_reserve -= (token_reserve * xch_amount * 993) // (1000 * xch_reserve + 993 * xch_amount)
         xch_reserve += xch_amount
     elif action == 3: # token to xch
         token_amount = params.at("f").as_int()
-        xch_reserve -= (xch_reserve * token_amount * 997) // (1000 * token_reserve + 997 * token_amount)
+        xch_reserve -= (xch_reserve * token_amount * 993) // (1000 * token_reserve + 993 * token_amount)
         token_reserve += token_amount
 
     state = {
@@ -1298,11 +1345,11 @@ async def respond_to_swap_offer(
 
     if eph_coin_is_cat: # token offered, so swap is token -> XCH
         token_amount = eph_coin.amount
-        new_xch_reserve_amount -= 997 * token_amount * pair_xch_reserve // (1000 * pair_token_reserve + 997 * token_amount)
+        new_xch_reserve_amount -= 993 * token_amount * pair_xch_reserve // (1000 * pair_token_reserve + 993 * token_amount)
         new_token_reserve_amount += token_amount
     else:
         xch_amount = eph_coin.amount
-        new_token_reserve_amount -= 997 * xch_amount * pair_token_reserve // (1000 * pair_xch_reserve + 997 * xch_amount)
+        new_token_reserve_amount -= 993 * xch_amount * pair_token_reserve // (1000 * pair_xch_reserve + 993 * xch_amount)
         new_xch_reserve_amount += xch_amount
 
     # 3. spend singleton
