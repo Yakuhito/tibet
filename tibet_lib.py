@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import time
+import requests
 from pathlib import Path
 from typing import List
 
@@ -410,7 +411,24 @@ async def sync_router(full_node_client, last_router_id):
     
     return coin_record.coin, creation_spend, new_pairs
 
-async def get_spend_bundle_in_mempool(full_node_client, coin_id):
+
+async def get_spend_bundle_in_mempool(full_node_client, coin):
+    try:
+        parent_id_hex = "0x" + coin.parent_coin_info.hex()
+        r = requests.post("http://localhost:1337/get_mempool_item_by_parent_coin_info", json={
+            "request_url": full_node_client.leaflet_url + "get_all_mempool_items",
+            "parent_coin_info": parent_id_hex
+        })
+
+        if r["item"] is None:
+            return None
+
+        return SpendBundle.from_json_dict(r["item"])
+    except:
+        return await get_spend_bundle_in_mempool_full_node(full_node_client, coin.name())
+
+
+async def get_spend_bundle_in_mempool_full_node(full_node_client, coin_id):
     items = await full_node_client.fetch("get_all_mempool_items", {})
     
     for sb_id, d in items["mempool_items"].items():
@@ -478,8 +496,9 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
     
     last_synced_pair_id_on_blockchain = last_synced_coin_id
     # mempool - watch this aggregation!
-    last_coin_on_chain_id = coin_record.coin.name()
-    sb = await get_spend_bundle_in_mempool(full_node_client, last_coin_on_chain_id)
+    last_coin_on_chain = coin_record.coin 
+    last_coin_on_chain_id = last_coin_on_chain.name()
+    sb = await get_spend_bundle_in_mempool(full_node_client, last_coin_on_chain)
     sb_to_aggregate = sb
 
     coin_spend = get_coin_spend_from_sb(sb, last_coin_on_chain_id)

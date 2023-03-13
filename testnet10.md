@@ -23,6 +23,8 @@ You can also get some TDBX by accepting offers from [Dexie](https://testnet.dexi
 chia wallet take_offer -m [fee_amount_in_xch] [raw_offer]
 ```
 
+For significantly faster mempool parsing, please build the application in the 'fml' folder and run it. The CLI will be significantly slower when the mempool is full if you don't.
+
 Before configuring `tibet.py`, you'll need an API key from [FireAcademy.io](https://fireacademy.io). Create an account and get one for free [here](https://dashboard.fireacademy.io/).
 
 Configure:
