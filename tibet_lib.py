@@ -367,7 +367,6 @@ async def create_pair_from_coin(
 
 async def sync_router(full_node_client, last_router_id):
     new_pairs = []
-    print(last_router_id.hex())
     coin_record = await full_node_client.get_coin_record_by_name(last_router_id)
     if not coin_record.spent:
         # hack
@@ -412,9 +411,9 @@ async def sync_router(full_node_client, last_router_id):
     return coin_record.coin, creation_spend, new_pairs
 
 async def get_spend_bundle_in_mempool(full_node_client, coin_id):
-    items = await full_node_client.get_all_mempool_items()
-
-    for sb_id, d in items.items():
+    items = await full_node_client.fetch("get_all_mempool_items", {})
+    
+    for sb_id, d in items["mempool_items"].items():
         sb = SpendBundle.from_json_dict(d["spend_bundle"])
         for cs in sb.coin_spends:
             if cs.coin.name() == coin_id:

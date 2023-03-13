@@ -1,6 +1,7 @@
 # special thanks to the Goby team for this!
 import aiohttp
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
+import time
 
 class LeafletFullNodeRpcClient(FullNodeRpcClient):
     def __init__(self, leaflet_url):
@@ -13,6 +14,7 @@ class LeafletFullNodeRpcClient(FullNodeRpcClient):
     async def fetch(self, path, request_json):
         async with self.session.post(self.leaflet_url + path, json=request_json) as response:
             response.raise_for_status()
+
             res_json = await response.json()
             if not res_json["success"]:
                 raise ValueError(res_json)
