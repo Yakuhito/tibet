@@ -216,7 +216,7 @@ class TestTibetSwap:
                     print("ok, won't find a coin any time soon :(")
                     spendable_coins[0][31337][":("]
                 else:
-                    time.sleep(5)
+                    time.sleep(20)
 
         return coin, coin_puzzle
 
