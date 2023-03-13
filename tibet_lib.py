@@ -454,8 +454,8 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
 
     if not coin_record.spent:
         # hack
-        current_pair_coin, creation_spend, state = await sync_pair(full_node_client, coin_record.coin.parent_coin_info, tail_hash)
-        return current_pair_coin, creation_spend, state
+        current_pair_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(full_node_client, coin_record.coin.parent_coin_info, tail_hash)
+        return current_pair_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain
 
     creation_spend = None
     while coin_record.spent:
@@ -476,9 +476,12 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
 
         coin_record = await full_node_client.get_coin_record_by_name(last_synced_coin_id)
     
+    last_synced_pair_id_on_blockchain = last_synced_coin_id
     # mempool - watch this aggregation!
     last_coin_on_chain_id = coin_record.coin.name()
     sb = await get_spend_bundle_in_mempool(full_node_client, last_coin_on_chain_id)
+    sb_to_aggregate = sb
+
     coin_spend = get_coin_spend_from_sb(sb, last_coin_on_chain_id)
     while coin_spend != None:
         creation_spend = coin_spend
@@ -499,7 +502,7 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
         coin_spend = get_coin_spend_from_sb(sb, last_synced_coin_id)
 
     if creation_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
-        return last_synced_coin, creation_spend, state
+        return last_synced_coin, creation_spend, state, None, last_synced_coin.name()
 
     creation_spend_inner_puzzle_args = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[1]
     liquidity = creation_spend_inner_puzzle_args.at("r" * 8 + "f").as_int()
@@ -541,7 +544,7 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
         "token_reserve": token_reserve
     }
 
-    return last_synced_coin, creation_spend, state
+    return last_synced_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain
 
 
 async def get_pair_reserve_info(
@@ -549,7 +552,8 @@ async def get_pair_reserve_info(
     pair_launcher_id,
     pair_coin,
     token_tail_hash,
-    creation_spend
+    creation_spend,
+    cached_sb
 ):
     puzzle_announcements_asserts = []
     _, conditions_dict, __ = conditions_dict_for_solution(
@@ -568,9 +572,14 @@ async def get_pair_reserve_info(
     p2_singleton_cat_puzzle = construct_cat_puzzle(CAT_MOD, token_tail_hash, p2_singleton_puzzle)
     p2_singleton_cat_puzzle_hash = p2_singleton_cat_puzzle.get_tree_hash()
 
-    coin_record = await full_node_client.get_coin_record_by_name(pair_coin.name())
-    block_record = await full_node_client.get_block_record_by_height(coin_record.confirmed_block_index)
-    spends = await full_node_client.get_block_spends(block_record.header_hash)
+    spends = []
+
+    if cached_sb is None:
+        coin_record = await full_node_client.get_coin_record_by_name(pair_coin.name())
+        block_record = await full_node_client.get_block_record_by_height(coin_record.confirmed_block_index)
+        spends = await full_node_client.get_block_spends(block_record.header_hash)
+    else:
+        spends = cached_sb.coin_spends
 
     xch_reserve_coin = None
     token_reserve_coin = None

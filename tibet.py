@@ -365,7 +365,7 @@ async def _get_pair_info(token_tail_hash):
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(
+    current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
         full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
@@ -409,7 +409,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(
+    current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
         full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
@@ -472,14 +472,15 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         bytes.fromhex(token_tail_hash),
-        creation_spend
+        creation_spend,
+        sb_to_aggregate
     )
 
-    if current_pair_coin_id != last_synced_pair_id:
+    if last_synced_pair_id_on_blockchain != last_synced_pair_id:
         click.echo("Pair state updated since last sync; saving it...")
         config = get_config()
         config["pair_sync"] = config.get("pair_sync", {})
-        config["pair_sync"][pair_launcher_id] = current_pair_coin_id
+        config["pair_sync"][pair_launcher_id] = last_synced_pair_id_on_blockchain.hex()
         save_config(config)
 
     sb = await respond_to_deposit_liquidity_offer(
@@ -495,6 +496,9 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         token_reserve_coin,
         token_reserve_lineage_proof
     )
+
+    if sb_to_aggregate is not None:
+        sb = SpendBundle.aggregate([sb, sb_to_aggregate])
 
     if push_tx:
         click.echo(f"Pushing tx...")
@@ -539,7 +543,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(
+    current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
         full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
@@ -601,14 +605,15 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         bytes.fromhex(token_tail_hash),
-        creation_spend
+        creation_spend,
+        sb_to_aggregate
     )
 
-    if current_pair_coin_id != last_synced_pair_id:
+    if last_synced_pair_id_on_blockchain != last_synced_pair_id:
         click.echo("Pair state updated since last sync; saving it...")
         config = get_config()
         config["pair_sync"] = config.get("pair_sync", {})
-        config["pair_sync"][pair_launcher_id] = current_pair_coin_id
+        config["pair_sync"][pair_launcher_id] = last_synced_pair_id_on_blockchain.hex()
         save_config(config)
 
     sb = await respond_to_remove_liquidity_offer(
@@ -624,6 +629,9 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         token_reserve_coin,
         token_reserve_lineage_proof
     )
+
+    if sb_to_aggregate is not None:
+        sb = SpendBundle.aggregate([sb, sb_to_aggregate])
 
     if push_tx:
         click.echo(f"Pushing tx...")
@@ -668,7 +676,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(
+    current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
         full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
@@ -733,14 +741,15 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         bytes.fromhex(token_tail_hash),
-        creation_spend
+        creation_spend,
+        sb_to_aggregate
     )
 
-    if current_pair_coin_id != last_synced_pair_id:
+    if last_synced_pair_id_on_blockchain != last_synced_pair_id:
         click.echo("Pair state updated since last sync; saving it...")
         config = get_config()
         config["pair_sync"] = config.get("pair_sync", {})
-        config["pair_sync"][pair_launcher_id] = current_pair_coin_id
+        config["pair_sync"][pair_launcher_id] = last_synced_pair_id_on_blockchain.hex()
         save_config(config)
 
     sb = await respond_to_swap_offer(
@@ -756,6 +765,9 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
         token_reserve_coin,
         token_reserve_lineage_proof
     )
+
+    if sb_to_aggregate is not None:
+        sb = SpendBundle.aggregate([sb, sb_to_aggregate])
 
     if push_tx:
         click.echo(f"Pushing tx...")
@@ -800,7 +812,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee):
     if last_synced_pair_id_not_none is None:
         last_synced_pair_id_not_none = pair_launcher_id
 
-    current_pair_coin, creation_spend, pair_state = await sync_pair(
+    current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
         full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
@@ -865,14 +877,15 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee):
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         bytes.fromhex(token_tail_hash),
-        creation_spend
+        creation_spend,
+        sb_to_aggregate
     )
 
-    if current_pair_coin_id != last_synced_pair_id:
+    if last_synced_pair_id_on_blockchain != last_synced_pair_id:
         click.echo("Pair state updated since last sync; saving it...")
         config = get_config()
         config["pair_sync"] = config.get("pair_sync", {})
-        config["pair_sync"][pair_launcher_id] = current_pair_coin_id
+        config["pair_sync"][pair_launcher_id] = last_synced_pair_id_on_blockchain.hex()
         save_config(config)
 
     sb = await respond_to_swap_offer(
@@ -888,6 +901,9 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee):
         token_reserve_coin,
         token_reserve_lineage_proof
     )
+
+    if sb_to_aggregate is not None:
+        sb = SpendBundle.aggregate([sb, sb_to_aggregate])
     
     if push_tx:
         click.echo(f"Pushing tx...")

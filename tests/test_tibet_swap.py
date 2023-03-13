@@ -431,7 +431,7 @@ class TestTibetSwap:
             offer_str = offer.to_bech32()
 
             # get pair state, even though it's 0 - we need to test teh func-tion!
-            current_pair_coin, pair_creation_spend, pair_state = await sync_pair(
+            current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate = await sync_pair(
                 full_node_client, current_pair_coin.name(), token_tail_hash
             )
             assert pair_state["liquidity"] == 0

@@ -36,5 +36,5 @@ Time to play! See [TESTING.md](TESTING.md) to get an idea of the possible comman
 To get back on mainnet:
 ```bash
 chia stop all
-chia configure --testnet true
+chia configure --testnet false
 ```
