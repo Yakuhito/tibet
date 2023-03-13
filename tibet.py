@@ -713,7 +713,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
             await full_node_client.await_closed()
             sys.exit(1)
         
-        token_amount = 997 * xch_amount * pair_state['token_reserve'] // (1000 * pair_state['xch_reserve'] + 997 * xch_amount)
+        token_amount = 993 * xch_amount * pair_state['token_reserve'] // (1000 * pair_state['xch_reserve'] + 993 * xch_amount)
 
         click.echo(f"You'll receive {token_amount / 1000} tokens from this trade.")
         if token_amount == 0:
@@ -849,7 +849,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee):
             await full_node_client.await_closed()
             sys.exit(1)
 
-        xch_amount = 997 * token_amount * pair_state['xch_reserve'] // (1000 * pair_state['token_reserve'] + 997 * token_amount)
+        xch_amount = 993 * token_amount * pair_state['xch_reserve'] // (1000 * pair_state['token_reserve'] + 993 * token_amount)
 
         click.echo(f"You'll receive {xch_amount / 1000000000000} XCH from this trade.")
         if token_amount == 0:
