@@ -211,7 +211,7 @@ class TestTibetSwap:
                 index += 1
             except:
                 index = 0
-                retires += 1
+                retries += 1
                 if retries > 3:
                     print("ok, won't find a coin any time soon :(")
                     spendable_coins[0][31337][":("]
@@ -431,7 +431,7 @@ class TestTibetSwap:
             offer_str = offer.to_bech32()
 
             # get pair state, even though it's 0 - we need to test teh func-tion!
-            current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate = await sync_pair(
+            current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
                 full_node_client, current_pair_coin.name(), token_tail_hash
             )
             assert pair_state["liquidity"] == 0
@@ -444,7 +444,8 @@ class TestTibetSwap:
                 pair_launcher_id,
                 current_pair_coin,
                 token_tail_hash,
-                pair_creation_spend
+                pair_creation_spend,
+                sb_to_aggregate
             )
 
             sb = await respond_to_deposit_liquidity_offer(
@@ -492,7 +493,7 @@ class TestTibetSwap:
             offer = offer_resp[0]
             offer_str = offer.to_bech32()
 
-            current_pair_coin, pair_creation_spend, pair_state = await sync_pair(
+            current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
                 full_node_client, current_pair_coin.name(), token_tail_hash
             )
             assert pair_state["liquidity"] == 1000
@@ -504,7 +505,8 @@ class TestTibetSwap:
                 pair_launcher_id,
                 current_pair_coin,
                 token_tail_hash,
-                pair_creation_spend
+                pair_creation_spend,
+                sb_to_aggregate
             )
 
             sb = await respond_to_deposit_liquidity_offer(
@@ -553,7 +555,7 @@ class TestTibetSwap:
             offer = offer_resp[0]
             offer_str = offer.to_bech32()
 
-            current_pair_coin, pair_creation_spend, pair_state = await sync_pair(
+            current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
                 full_node_client, current_pair_coin.name(), token_tail_hash
             )
             assert pair_state["liquidity"] == 5000
@@ -565,7 +567,8 @@ class TestTibetSwap:
                 pair_launcher_id,
                 current_pair_coin,
                 token_tail_hash,
-                pair_creation_spend
+                pair_creation_spend,
+                sb_to_aggregate
             )
 
             sb = await respond_to_remove_liquidity_offer(
@@ -602,7 +605,7 @@ class TestTibetSwap:
             token_balance_before = token_balance_now
             liquidity_balance_before = liquidity_balance_now
 
-            current_pair_coin, pair_creation_spend, pair_state = await sync_pair(
+            current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
                 full_node_client, current_pair_coin.name(), token_tail_hash
             )
             assert pair_state["liquidity"] == 4200
@@ -614,7 +617,8 @@ class TestTibetSwap:
                 pair_launcher_id,
                 current_pair_coin,
                 token_tail_hash,
-                pair_creation_spend
+                pair_creation_spend,
+                sb_to_aggregate
             )
 
             xch_amount = 100000000
@@ -661,7 +665,7 @@ class TestTibetSwap:
             token_balance_before = token_balance_now
             liquidity_balance_before = liquidity_balance_now
 
-            current_pair_coin, pair_creation_spend, pair_state = await sync_pair(
+            current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
                 full_node_client, current_pair_coin.name(), token_tail_hash
             )
             assert pair_state["liquidity"] == 4200
@@ -673,7 +677,8 @@ class TestTibetSwap:
                 pair_launcher_id,
                 current_pair_coin,
                 token_tail_hash,
-                pair_creation_spend
+                pair_creation_spend,
+                sb_to_aggregate
             )
 
             token_amount = 1000
@@ -716,7 +721,7 @@ class TestTibetSwap:
 
             # 6. Remove remaining liquidity and call it a day
             # python3 tibet.py remove-liquidity --liquidity-token-amount 4200 --asset-id [asset_id] --push-tx
-            current_pair_coin, pair_creation_spend, pair_state = await sync_pair(
+            current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
                 full_node_client, current_pair_coin.name(), token_tail_hash
             )
             assert pair_state["liquidity"] == 4200
@@ -738,7 +743,8 @@ class TestTibetSwap:
                 pair_launcher_id,
                 current_pair_coin,
                 token_tail_hash,
-                pair_creation_spend
+                pair_creation_spend,
+                sb_to_aggregate
             )
 
             sb = await respond_to_remove_liquidity_offer(
