@@ -23,8 +23,6 @@ You can also get some TDBX by accepting offers from [Dexie](https://testnet.dexi
 chia wallet take_offer -m [fee_amount_in_xch] [raw_offer]
 ```
 
-For significantly faster mempool parsing, please build the application in the 'fml' folder and run it. The CLI will be significantly slower when the mempool is full if you don't.
-
 Before configuring `tibet.py`, you'll need an API key from [FireAcademy.io](https://fireacademy.io). Create an account and get one for free [here](https://dashboard.fireacademy.io/).
 
 Configure:
@@ -36,7 +34,9 @@ python3 tibet.py set-router --launcher-id 95415cd28341ac7a8c4494ca185d719ad7c259
 python3 tibet.py sync-pairs
 ```
 
-Time to play! See [TESTING.md](TESTING.md) to get an idea of the possible commands. Do not forget to use the `--fee` switch along with some mojos (e.g., 1000000000, which translates to 0.001 XCH).
+Time to play! See [TESTING.md](TESTING.md) to get an idea of the possible commands. Do not forget to use the `--fee` switch since the testnet mempool seems full.
+
+*Note on fees*: If your transaction says 'pending', it means that your previous fee was too low. You need to re-generate the offer (cancel it and re-run the command) with a higher fee and then submit it to the blockchain. Keep in mind that the minimum fee bump is 10 million (10,000,000) mojos.
 
 To get back on mainnet:
 ```bash
