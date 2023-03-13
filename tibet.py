@@ -80,7 +80,7 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
             sys.exit(1)
         
         leaflet_url = f"https://kraken.fireacademy.io/{fireacademyio_api_key}/"
-        if fireacademyio_network == "mainnet":
+        if fireacademyio_network == "mainnet" or use_preset == "mainnet":
             leaflet_url += "leaflet/"
         else:
             leaflet_url += "leaflet-testnet10/"
@@ -124,7 +124,7 @@ def launch_router(push_tx, fee):
 async def _launch_router(push_tx, fee):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(2 + fee, 1, min_coin_amount=2) # wallet id 1, amount 2
+    coins = await wallet_client.select_coins(2 + fee, 1, min_coin_amount=2 + fee) # wallet id 1, amount 2
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)

@@ -6,6 +6,7 @@ Set up [chia-dev-tools](https://github.com/Chia-Network/chia-dev-tools) first.
 . ./venv/bin/activate
 export CHIA_ROOT=~/.chia/simulator/main
 
+
 # remove prev sessions
 chia stop all
 rm -r ~/.chia/simulator
