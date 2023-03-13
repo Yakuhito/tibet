@@ -155,6 +155,22 @@ async def _launch_router(push_tx, fee):
     wallet_client.close()
     await wallet_client.await_closed()
 
+
+@click.command()
+@click.option('--launcher-id', required=True, help='Launcher coin id of the router.')
+def set_router(launcher_id):
+    asyncio.run(_set_router(launcher_id))
+
+async def _set_router(router_launcher_id):
+    click.echo("Saving config...")
+    config = get_config()
+    config["router_launcher_id"] = router_launcher_id
+    config["router_last_processed_id"] = router_launcher_id
+    config["pairs"] = {}
+    save_config(config)
+    click.echo("Done.")
+
+
 @click.command()
 @click.option('--amount', default=1000000, help='Amount, in CATs (1 CAT = 1000 mojos)')
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add cat to wallet.")
@@ -317,6 +333,44 @@ async def _sync_pairs():
         save_config(config)
 
     click.echo("Bye!")
+    full_node_client.close()
+    await full_node_client.await_closed()
+
+@click.command()
+@click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
+def get_pair_info(asset_id):
+    if len(asset_id) != 64:
+        click.echo("Oops! That asset id doesn't look right...")
+        sys.exit(1)
+    asyncio.run(_get_pair_info(asset_id))
+
+
+async def _get_pair_info(token_tail_hash):
+    click.echo("Getting info...")
+    offer_str = ""
+
+    pair_launcher_id = get_config_item("pairs", token_tail_hash)
+    if pair_launcher_id is None:
+        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or launch-pair.")
+        sys.exit(1)
+
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+
+    last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
+    last_synced_pair_id_not_none = last_synced_pair_id
+    if last_synced_pair_id_not_none is None:
+        last_synced_pair_id_not_none = pair_launcher_id
+
+    current_pair_coin, creation_spend, pair_state = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+    )
+    current_pair_coin_id = current_pair_coin.name().hex()
+    click.echo(f"Current pair coin id: {current_pair_coin_id}")
+
+    click.echo(f"XCH reserve: {pair_state['xch_reserve'] // 10 ** 12} XCH")
+    click.echo(f"Token reserve: {pair_state['xch_reserve'] // 10 ** 3} tokens")
+    click.echo(f"Total liquidity: {pair_state['liquidity'] // 10 ** 3} tokens")
+
     full_node_client.close()
     await full_node_client.await_closed()
 
@@ -849,9 +903,11 @@ if __name__ == "__main__":
     cli.add_command(config_node)
     cli.add_command(test_node_config)
     cli.add_command(launch_router)
+    cli.add_command(set_router)
     cli.add_command(launch_test_token)
     cli.add_command(create_pair)
     cli.add_command(sync_pairs)
+    cli.add_command(get_pair_info)
     cli.add_command(deposit_liquidity)
     cli.add_command(remove_liquidity)
     cli.add_command(xch_to_token)

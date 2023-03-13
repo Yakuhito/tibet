@@ -14,7 +14,7 @@ chia configure --testnet true
 chia start wallet
 ```
 
-Add some peers from [https://alltheblocks.net/testnet10/peers](https://alltheblocks.net/testnet10/peers) (copy the `chia peer -a` commands).
+Add some peers from [https://alltheblocks.net/testnet10/peers](https://alltheblocks.net/testnet10/peers) (copy the `chia peer -a` commands, but replace "full_node" with "wallet").
 
 Next, get some TXCH (test XCH, the currency of the testnet) from [here](https://xchdev.com/#!faucet.md) or [here](https://testnet10-faucet.chia.net/).
 
@@ -28,7 +28,7 @@ Before configuring `tibet.py`, you'll need an API key from [FireAcademy.io](http
 Configure:
 ```bash
 python3 tibet.py config-node --use-preset testnet10 --fireacademyio-api-key [you-api-key]
-python3 tibet.pu set-router [TO_BE_ANNOUNCED]
+python3 tibet.py set-router --launcher-id 0d1fd0ec0a97bec22de609b98c9919f8d2ca211a71115273c98353807e146b37
 ```
 
 Time to play! See [TESTING.md](TESTING.md) to get an idea of the possible commands. Do not forget to use the `--fee` switch along with some mojos (e.g., 1000000000, which translates to 0.001 XCH).

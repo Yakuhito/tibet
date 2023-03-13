@@ -43,18 +43,30 @@ python3 tibet.py sync-pairs
 python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id]
 python3 tibet.py deposit-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
 
+python3 tibet.py get-pair-info --asset-id [asset_id]
+
 python3 tibet.py deposit-liquidity --token-amount 4000 --asset-id [asset_id] 
 python3 tibet.py deposit-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
+
+python3 tibet.py get-pair-info --asset-id [asset_id]
 
 python3 tibet.py remove-liquidity --liquidity-token-amount 800 --asset-id [asset_id]
 python3 tibet.py remove-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
 
+python3 tibet.py get-pair-info --asset-id [asset_id]
+
 python3 tibet.py xch-to-token --xch-amount 100000000 --asset-id [asset_id]
 python3 tibet.py xch-to-token --offer offer.txt --push-tx --asset-id [asset_id]
+
+python3 tibet.py get-pair-info --asset-id [asset_id]
 
 python3 tibet.py token-to-xch --token-amount 1000 --asset-id [asset_id]
 python3 tibet.py token-to-xch --offer offer.txt --push-tx --asset-id [asset_id]
 
+python3 tibet.py get-pair-info --asset-id [asset_id]
+
 python3 tibet.py remove-liquidity --liquidity-token-amount 4200 --asset-id [asset_id]
 python3 tibet.py remove-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
+
+python3 tibet.py get-pair-info --asset-id [asset_id]
 ```
