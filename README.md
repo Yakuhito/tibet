@@ -26,7 +26,7 @@ I chose to go with XCH-token pairs instead of token-token (and having 'Wrapped C
 
 ## Zap and Other Things
 
-This is Chia, so you can chaing actions together. For example, you can have a transaction where x XCH get supplied as liquidity without supplying the other token - under the hood, it swaps about 50% of x to the other token and then supplies liquidity to the pair. Or you can have token1-token2 swaps by grouping 2 swaps in the same spend bundle. These things will probably not be offered until there's demand for them, but no-one's preventing any developer fromimplementing them before that.
+This is Chia, so you can chain actions together. For example, you can have a transaction where x XCH get supplied as liquidity without supplying the other token - under the hood, it swaps about 50% of x to the other token and then supplies liquidity to the pair. Or you can have token1-token2 swaps by grouping 2 swaps in the same spend bundle. These things will probably not be offered until there's demand for them, but no-one's preventing any developer fromimplementing them before that.
 
 ## Offers
 
