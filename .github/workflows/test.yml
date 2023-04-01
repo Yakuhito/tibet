@@ -15,9 +15,6 @@ defaults:
   run:
     shell: bash
 
-env:
-  CI: 'yessir'
-
 jobs:
   build:
     name: Test - Ubuntu, Python 3.10
@@ -55,6 +52,8 @@ jobs:
 
     - name: Test code with pytest
       run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
+      env:
+        CI: 'github'
     
     - name: cdv - simulator status at end of last test
       run: cdv sim status
