@@ -68,30 +68,32 @@
 
     ;; liquidity-related converters
     (defun-inline xch_amount_from_token_amount (token_amount)
-        (/ (* token_amount XCH_RESERVE) TOKEN_RESERVE)
+        (f (divmod (* token_amount XCH_RESERVE) TOKEN_RESERVE))
     )
 
     (defun-inline xch_amount_from_liquidity_amount (liquidity_amount)
-        (/ (* liquidity_amount XCH_RESERVE) LIQUIDITY)
+        (f (divmod (* liquidity_amount XCH_RESERVE) LIQUIDITY))
     )
 
     (defun-inline token_amount_from_liquidity_amount (liquidity_amount)
-        (/ (* liquidity_amount TOKEN_RESERVE) LIQUIDITY)
+        (f (divmod (* liquidity_amount TOKEN_RESERVE) LIQUIDITY))
     )
 
     (defun-inline liquidity_minted_from_token_amount (token_amount)
-        (/ (* token_amount LIQUIDITY) TOKEN_RESERVE)
+        (f (divmod (* token_amount LIQUIDITY) TOKEN_RESERVE))
     )
 
     ;; exchange-related
 
     ; https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy#L106
     (defun-inline get_input_price (input_amount input_reserve output_reserve)
-        (/
-            ; numerator
-            (* output_reserve (* input_amount INVERSE_FEE))
-            ; denominator
-            (+ (* input_reserve 1000) (* input_amount INVERSE_FEE))
+        (f
+            (divmod
+                ; numerator
+                (* output_reserve (* input_amount INVERSE_FEE))
+                ; denominator
+                (+ (* input_reserve 1000) (* input_amount INVERSE_FEE))
+            )
         )
     )
 
