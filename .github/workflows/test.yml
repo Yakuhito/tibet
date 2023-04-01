@@ -1,90 +1,60 @@
-# name: Run Tests
+name: Run Tests
 
-# on:
-#   workflow_dispatch:
-#   push:
-#     branches:
-#       - '**'
-#     tags:
-#         - '**'
-#   pull_request:
-#     branches:
-#       - '**'
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+    tags:
+        - '**'
+  pull_request:
+    branches:
+      - '**'
 
-# defaults:
-#   run:
-#     shell: bash
+defaults:
+  run:
+    shell: bash
 
-# env:
-#   PREFARM_FINGERPRINT: '2036195148'
-#   ALICE_FINGERPRINT: '381910353'
-#   BOB_FINGERPRINT: '3852922401'
-#   CHARLIE_FINGERPRINT: '1514229218'
-#   CHIA_ROOT: '/home/runner/.chia/simulator/main'
-#   GITHUB: 'yes'
+env:
+  GITHUB: 'yes'
 
-# jobs:
-#   build:
-#     name: Test - Ubuntu, Python 3.10
-#     runs-on: ubuntu-latest
-#     timeout-minutes: 60
-#     steps:
-#     - name: Clean workspace
-#       uses: Chia-Network/actions/clean-workspace@main
+jobs:
+  build:
+    name: Test - Ubuntu, Python 3.10
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Clean workspace
+      uses: Chia-Network/actions/clean-workspace@main
 
-#     - name: Checkout Code
-#       uses: actions/checkout@v3
-#       with:
-#         fetch-depth: 0
+    - name: Checkout Code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-#     - uses: Chia-Network/actions/setup-python@main
-#       with:
-#         python-version: '3.10'
+    - uses: Chia-Network/actions/setup-python@main
+      with:
+        python-version: '3.10'
 
-#     - uses: Chia-Network/actions/create-venv@main
-#       id: create-venv
+    - uses: Chia-Network/actions/create-venv@main
+      id: create-venv
 
-#     - uses: Chia-Network/actions/activate-venv@main
-#       with:
-#         directories: ${{ steps.create-venv.outputs.activate-venv-directories }}
+    - uses: Chia-Network/actions/activate-venv@main
+      with:
+        directories: ${{ steps.create-venv.outputs.activate-venv-directories }}
 
-#     - name: Setup chia-dev-tools
-#       run: |
-#         git clone https://github.com/Chia-Network/chia-dev-tools.git
-#         cd chia-dev-tools
-#         pip install .
-#         cd ..
+    - name: Setup chia-dev-tools
+      run: |
+        git clone https://github.com/Chia-Network/chia-dev-tools.git
+        cd chia-dev-tools
+        pip install .
+        cd ..
 
-#     - name: Chia - initialize
-#       run: chia init
-#       env:
-#         CHIA_ROOT: '/home/runner/.chia/mainnet'
+    - name: Install other required libraries
+      run: python3 -m pip install -r requirements.txt
 
-#     - name: Chia - add test keys
-#       run: |
-#         echo "payment town peanut wave laptop original this car wide thumb develop prosper canal conduct saddle ill lyrics object silent barely cliff text liar world" > /tmp/mnemonic
-#         chia keys add -f /tmp/mnemonic -l "Prefarm"
-#         echo "measure weapon fun decade glue hole toe virtual add talk muffin melt bubble wire casino adult leave guide seed ridge enough badge will section" > /tmp/mnemonic
-#         chia keys add -f /tmp/mnemonic -l "Alice"
-#         echo "check disease raw gate drip also time puzzle subway margin scout trade all cotton shadow patch dawn shell imitate vacuum exist pact deal surprise" > /tmp/mnemonic
-#         chia keys add -f /tmp/mnemonic -l "Bob"
-#         echo "test banner actor ginger latin mean other window solid orchard ordinary park tobacco maple shadow love hood boat pilot pact wing heart cupboard daring" > /tmp/mnemonic
-#         chia keys add -f /tmp/mnemonic -l "Charlie"
-#         rm /tmp/mnemonic
-#       env:
-#         CHIA_ROOT: '/home/runner/.chia/mainnet'
-
-#     - name: cdv - create simulator
-#       run: cdv sim create -f 2036195148 -a true
+    - name: Test code with pytest
+      run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
     
-#     - name: Chia - start wallet
-#       run: chia start wallet
-
-#     - name: Install other required libraries
-#       run: python3 -m pip install -r requirements.txt
-
-#     - name: Test code with pytest
-#       run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
-    
-#     - name: cdv - simulator status at end of last test
-#       run: cdv sim status
+    - name: cdv - simulator status at end of last test
+      run: cdv sim status
