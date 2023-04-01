@@ -47,3 +47,8 @@ Each transaction, token and XCH reserves are burned (destroyed, spent) and then 
 ## Imports
 
 Why do imports look like they do? `isort [file].py --split-on-trailing-comma`
+
+## Higher SPS (Swaps per Second)
+
+If a greater number of swaps per second is really required, one can come up with a sequencer that takes all offers at 'convenient' prices, aggregates them, and then only spends the pair singleton once (using the aggregated offer). This should significantly reduce the overall transaction cost (compared to spending the singleton for each trade), which means that more trades can fit in one single block!
+
