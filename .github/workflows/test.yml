@@ -16,7 +16,7 @@ defaults:
     shell: bash
 
 env:
-  GITHUB: 'yes'
+  CI: 'yessir'
 
 jobs:
   build:
