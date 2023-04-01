@@ -104,7 +104,7 @@ class TestTibetSwap:
     # thank you trepca for this function!
     @pytest_asyncio.fixture(scope="function")
     async def node_and_wallet(self):
-        sims = setup_simulators_and_wallets(1, 1, {})
+        sims = setup_simulators_and_wallets(1, 3, {})
         async for _ in sims:
             yield _
 
@@ -113,30 +113,37 @@ class TestTibetSwap:
     @pytest_asyncio.fixture(scope="function")
     async def setup(self, node_and_wallet):
         full_nodes, wallets, bt = node_and_wallet
+        assert len(wallets) == 3
     
         full_node_api: FullNodeSimulator = full_nodes[0]
         full_node_server = full_node_api.server
 
-        wallet_node_maker, server_0 = wallets[0]
-        wallet_maker: Wallet = wallet_node_maker.wallet_state_manager.main_wallet
+        wallet_node_makers = []
+        servers = []
+        wallet_makers = []
+        api_makers = []
+        for wallet_node_maker, server in wallets:
+            wallet_node_makers.append(wallet_node_maker)
+            servers.append(server)
 
-        ph_maker = await wallet_maker.get_new_puzzlehash()
-        ph_token = bytes32(token_bytes(32))
+            wallet_maker: Wallet = wallet_node_maker.wallet_state_manager.main_wallet
+            wallet_makers.append(wallet_maker)
+        
+            ph_maker = await wallet_maker.get_new_puzzlehash()
+            
+            wallet_node_maker.config["trusted_peers"] = {
+                full_node_api.full_node.server.node_id.hex(): full_node_api.full_node.server.node_id.hex()
+            }
 
-        wallet_node_maker.config["trusted_peers"] = {
-            full_node_api.full_node.server.node_id.hex(): full_node_api.full_node.server.node_id.hex()
-        }
+            await server.start_client(PeerInfo("127.0.0.1", uint16(full_node_server._port)), None)
 
-        await server_0.start_client(PeerInfo("127.0.0.1", uint16(full_node_server._port)), None)
+            await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_maker))
 
-        await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_maker))
-        await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_token))
+            api_makers.append(WalletRpcApi(wallet_node_maker))
 
-        api_maker = WalletRpcApi(wallet_node_maker)
         config = bt.config
         daemon_port = config["daemon_port"]
         self_hostname = config["self_hostname"]
-
         def stop_node_cb() -> None:
             pass
 
@@ -153,89 +160,63 @@ class TestTibetSwap:
             connect_to_daemon=False,
         )
 
-        rpc_server_maker = await start_rpc_server(
-            api_maker,
-            self_hostname,
-            daemon_port,
-            uint16(0),
-            lambda x: None,  # type: ignore
-            bt.root_path,
-            config,
-            connect_to_daemon=False,
-        )
+        rpc_server_makers = []
+        client_makers = []
+        for api_maker in api_makers:
+            rpc_server_maker = await start_rpc_server(
+                api_maker,
+                self_hostname,
+                daemon_port,
+                uint16(0),
+                lambda x: None,  # type: ignore
+                bt.root_path,
+                config,
+                connect_to_daemon=False,
+            )
+            rpc_server_makers.append(rpc_server_maker)
 
-        client_wallet: WalletRpcClient = await WalletRpcClient.create(
-            self_hostname, rpc_server_maker.listen_port, bt.root_path, config
-        )
+            client_maker: WalletRpcClient = await WalletRpcClient.create(
+                self_hostname, rpc_server_maker.listen_port, bt.root_path, config
+            )
+            client_makers.append(client_maker)
+
         client_node: SimulatorFullNodeRpcClient = await SimulatorFullNodeRpcClient.create(
             self_hostname, rpc_server_node.listen_port, bt.root_path, config
         )
-        
-        # do not judge this part, ok?
-        alice_passphrase = "measure weapon fun decade glue hole toe virtual add talk muffin melt bubble wire casino adult leave guide seed ridge enough badge will section"
-        bob_passphrase = "check disease raw gate drip also time puzzle subway margin scout trade all cotton shadow patch dawn shell imitate vacuum exist pact deal surprise"
-        charlie_passphrase = "test banner actor ginger latin mean other window solid orchard ordinary park tobacco maple shadow love hood boat pilot pact wing heart cupboard daring"
-        
-        alice_resp = await client_wallet.add_key(alice_passphrase.split(" "))
-        assert alice_resp['success']
-        alice_fingerprint = alice_resp['fingerprint']
-        
-        bob_resp = await client_wallet.add_key(bob_passphrase.split(" "))
-        assert bob_resp['success']
-        bob_fingerprint = alice_resp['fingerprint']
 
-        charlie_resp = await client_wallet.add_key(charlie_passphrase.split(" "))
-        assert charlie_resp['success']
-        charlie_fingerprint = alice_resp['fingerprint']
+        for client_maker in client_makers:
+            await self.wait_for_wallet_sync(client_maker)
 
-        async def switch_to_fingerprint(client_wallet, fingerprint):
-            await client_wallet.log_in(int(fingerprint))
-            await self.wait_for_wallet_sync(client_wallet)
+        yield client_node, client_makers[0], client_makers[1], client_makers[2]
 
-        async def switch_to_alice(client_wallet):
-            await switch_to_fingerprint(client_wallet, alice_fingerprint)
-
-        async def switch_to_bob(wallet_client):
-            await client_wallet(client_wallet, bob_fingerprint)
-
-        async def switch_to_charlie(client_wallet):
-            await switch_to_fingerprint(client_wallet, charlie_fingerprint)
-
-        await switch_to_charlie(client_wallet)
-        # address = await client_wallet.get_next_address(1, True) # wallet id = 1, new address = true
-        # await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_token))
-        
-        # await switch_to_bob(client_wallet)
-        # address = await client_wallet.get_next_address(1, True) # wallet id = 1, new address = true
-        # await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_token))
-        
-        # await switch_to_alice(client_wallet)
-        # address = await client_wallet.get_next_address(1, True) # wallet id = 1, new address = true
-        # await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_token))
-        
-        # await self.wait_for_wallet_sync(client_wallet)
-        # await self.wait_for_full_node_sync(client_node)
-
-        yield client_node, client_wallet, switch_to_alice, switch_to_bob, switch_to_charlie
-
-        client_wallet.close()
+        for client_maker in client_makers:
+            client_maker.close()
         client_node.close()
-        rpc_server_maker.close()
+        for rpc_server_maker in rpc_server_makers:
+            rpc_server_maker.close()
         rpc_server_node.close()
-        await client_wallet.await_closed()
+        for client_maker in client_makers:
+            await client_maker.await_closed()
         await client_node.await_closed()
-        await rpc_server_maker.await_closed()
+        for rpc_server_maker in rpc_server_makers:
+            await rpc_server_maker.await_closed()
         await rpc_server_node.await_closed()
 
 
     @pytest.mark.asyncio
     async def test_healthz(self, setup):
-        full_node_client, wallet_client, _, __, ___ = setup
+        full_node_client, allice_wallet_client, bob_wallet_client, charlie_wallet_client = setup
         
         full_node_resp = await full_node_client.healthz()
         assert full_node_resp['success']
 
-        wallet_resp = await wallet_client.healthz()
+        wallet_resp = await allice_wallet_client.healthz()
+        assert wallet_resp['success']
+
+        wallet_resp = await bob_wallet_client.healthz()
+        assert wallet_resp['success']
+
+        wallet_resp = await charlie_wallet_client.healthz()
         assert wallet_resp['success']
 
 

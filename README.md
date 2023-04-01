@@ -64,6 +64,6 @@ Please note that their mention here does not represent their endorsement or thei
 |----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | [dimitry](https://twitter.com/cityu_dimitry) | Shared his team's AMM design and code w/ me; A lot of support                                                                      |
 | [jde5011](https://twitter.com/jde5011)       | Had a meeting to discuss security posture/opsec best practices for TibetSwap; Recorded the presentation and shared it internally!  |
-| [trepca](https://twitter.com/trepca)         | Answered (a lot of) questions about testing; Took a look at the tests, provided some code that took them to the next level         |
+| [trepca](https://twitter.com/trepca)         | Answered (a lot of) questions about testing; Took a look at the tests, provided some code that took them to the next level; Helped me modify said code on a Friday at 21:02         |
 | [hoffmang](https://twitter.com/hoffmang)     | Described this project as 'a functional AMM' when talking to Bram during a SF Chia Meetup (I was there!) -> motivation             |
 | [quexington](https://github.com/quexington)  | Took a quick look at the chialisp code, sent short message that described how to significantly improve it. Left me speechless.     |
