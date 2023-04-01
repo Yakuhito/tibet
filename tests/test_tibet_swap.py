@@ -338,9 +338,15 @@ class TestTibetSwap:
 
         if wallet_id is None:
             await wallet_client.create_wallet_for_existing_cat(tail_hash) # create wallet
-            time.sleep(10) # I don't have any other solution, ok?!
+
+            while wallet_id is None:
+                time.sleep(0.5) # I don't have any other solution, ok?!
+
+                wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
+                wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(tail_hash.hex())), None)
+
             await self.wait_for_wallet_sync(wallet_client)
-            return await self.get_wallet_id_for_cat(wallet_client, tail_hash)
+            return wallet_id
 
         return int(wallet_id)
             
@@ -404,6 +410,29 @@ class TestTibetSwap:
         assert cr.spent
 
 
+    async def expect_change_in_token(
+        self,
+        wallet_client,
+        token_tail_hash,
+        initial_amount,
+        delta,
+        max_retries = 18,
+        time_to_sleep = 1
+    ):
+        retries = 0
+        balance = await self.get_balance(wallet_client, token_tail_hash)
+        while balance == initial_amount:
+            retries += 1
+            assert retries <= max_retries
+
+            time.sleep(1)
+            balance = await self.get_balance(wallet_client, token_tail_hash)
+
+        assert balance - initial_amount == delta
+
+        return balance
+
+
     @pytest.mark.asyncio
     async def test_pair_operations(self, setup):
         full_node_client, wallet_client, bob_wallet_client = setup
@@ -415,6 +444,7 @@ class TestTibetSwap:
         token_tail_hash = await self.create_test_cat(
             wallet_client, full_node_client, token_amount=token_total_supply // 1000
         )
+        await self.wait_for_wallet_sync(wallet_client)
             
         pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
             wallet_client,
@@ -426,8 +456,8 @@ class TestTibetSwap:
         )
             
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(pair_launcher_id).get_tree_hash()
-            
-        assert (await self.get_balance(wallet_client, token_tail_hash)) == token_total_supply
+        
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, 0, token_total_supply)
         assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash)) == 0
 
         xch_balance_before_all_ops = xch_balance_before = await self.get_balance(wallet_client)
@@ -485,13 +515,12 @@ class TestTibetSwap:
 
         assert resp["success"]
 
+        await self.wait_for_wallet_sync(wallet_client)
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_before - xch_balance_now == xch_amount + liquidity_token_amount
 
-        token_balance_now = await self.get_balance(wallet_client, token_tail_hash)
-        assert token_total_supply - token_balance_now == token_amount
-
-        assert await self.get_balance(wallet_client, pair_liquidity_tail_hash) == liquidity_token_amount
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_total_supply, -token_amount)
+        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, 0, liquidity_token_amount)
 
         # 2. Deposit moar liquidity (worth 4000 tokens, so 4000 token mojos and 100000000 mojos)
         # python3 tibet.py deposit-liquidity --token-amount 4000 --asset-id [asset_id] --push-tx
@@ -542,17 +571,15 @@ class TestTibetSwap:
         )
 
         resp = await full_node_client.push_tx(sb)
+        await self.wait_for_wallet_sync(wallet_client)
 
         assert resp["success"]
 
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_before - xch_balance_now == xch_amount + liquidity_token_amount
 
-        token_balance_now = await self.get_balance(wallet_client, token_tail_hash)
-        assert token_balance_before - token_balance_now == token_amount
-
-        liquidity_balance_now = await self.get_balance(wallet_client, pair_liquidity_tail_hash)
-        assert liquidity_balance_now - liquidity_balance_before == liquidity_token_amount
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, -token_amount)
+        liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, liquidity_balance_before, liquidity_token_amount)
 
         # 3. Withdraw 800 liquidity tokens
         # python3 tibet.py remove-liquidity --liquidity-token-amount 800 --asset-id [asset_id] --push-tx
@@ -603,17 +630,15 @@ class TestTibetSwap:
         )
 
         resp = await full_node_client.push_tx(sb)
+        await self.wait_for_wallet_sync(wallet_client)
 
         assert resp["success"]
 
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_now - xch_balance_before == xch_amount + liquidity_token_amount
 
-        token_balance_now = await self.get_balance(wallet_client, token_tail_hash)
-        assert token_balance_now - token_balance_before == token_amount
-
-        liquidity_balance_now = await self.get_balance(wallet_client, pair_liquidity_tail_hash)
-        assert liquidity_balance_before - liquidity_balance_now == liquidity_token_amount
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_amount)
+        liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, liquidity_balance_before, -liquidity_token_amount)
 
         # 4. Change 100000000 XCH to tokens
         # python3 tibet.py xch-to-token --xch-amount 100000000 --asset-id [asset_id] --push-tx
@@ -662,15 +687,15 @@ class TestTibetSwap:
         )
 
         resp = await full_node_client.push_tx(sb)
+        await self.wait_for_wallet_sync(wallet_client)
 
         assert resp["success"]
 
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_before - xch_balance_now == xch_amount
 
-        token_balance_now = await self.get_balance(wallet_client, token_tail_hash)
-        assert token_balance_now - token_balance_before == token_amount
-
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_amount)
+        
         liquidity_balance_now = await self.get_balance(wallet_client, pair_liquidity_tail_hash)
         assert liquidity_balance_before == liquidity_balance_before
 
@@ -721,20 +746,21 @@ class TestTibetSwap:
         )
 
         resp = await full_node_client.push_tx(sb)
+        await self.wait_for_wallet_sync(wallet_client)
 
         assert resp["success"]
 
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_now - xch_balance_before == xch_amount
 
-        token_balance_now = await self.get_balance(wallet_client, token_tail_hash)
-        assert token_balance_before - token_balance_now == token_amount
-
-        liquidity_balance_now = await self.get_balance(wallet_client, pair_liquidity_tail_hash)
-        assert liquidity_balance_before == liquidity_balance_before
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, -token_amount)
 
         # 6. Remove remaining liquidity and call it a day
         # python3 tibet.py remove-liquidity --liquidity-token-amount 4200 --asset-id [asset_id] --push-tx
+        xch_balance_before = xch_balance_now
+        token_balance_before = token_balance_now
+        liquidity_balance_before = liquidity_balance_now
+        
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
             full_node_client, current_pair_coin.name(), token_tail_hash
         )
@@ -776,14 +802,12 @@ class TestTibetSwap:
         )
 
         resp = await full_node_client.push_tx(sb)
+        await self.wait_for_wallet_sync(wallet_client)
 
         assert resp["success"]
 
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_now == xch_balance_before_all_ops
 
-        token_balance_now = await self.get_balance(wallet_client, token_tail_hash)
-        assert token_balance_now == token_total_supply
-
-        liquidity_balance_now = await self.get_balance(wallet_client, pair_liquidity_tail_hash)
-        assert liquidity_balance_now == 0
+        await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_total_supply - token_balance_before)
+        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, liquidity_balance_before, -liquidity_balance_before)
