@@ -35,8 +35,8 @@ jobs:
 
     - name: Copy pre-generated plots
       run: |
-        mkdir -p ~/.chia/simulator/plots
-        cp -r ./.github/test-plots/* ~/.chia/simulator/plots
+        mkdir -p ~/.chia/test-plots
+        cp -r ./.github/test-plots/* ~/.chia/test-plots
 
     - uses: Chia-Network/actions/create-venv@main
       id: create-venv
