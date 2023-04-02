@@ -40,7 +40,6 @@
     ; libs
     (include curry.clinc)
     (include condition_codes.clvm)
-
     (include tibet_utils.clib)
 
     ; params
@@ -94,121 +93,6 @@
                 ; denominator
                 (+ (* input_reserve 1000) (* input_amount INVERSE_FEE))
             )
-        )
-    )
-
-    ;; deposit/reserve-related
-    (defun-inline p2_singleton_puzzle_hash ()
-        (curry_hashes_inline P2_SINGLETON_FLASHLOAN_MOD_HASH
-            (sha256tree (singleton_mod_hash_from_struct SINGLETON_STRUCT))
-            (sha256tree (singleton_launcher_from_struct SINGLETON_STRUCT))
-            (sha256tree (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT))
-        )
-    )
-
-    (defun-inline settlement_announcement (my_coin_id amount)
-        (sha256tree
-            (list
-                my_coin_id
-                (list (p2_singleton_puzzle_hash) amount)
-            )
-        )
-    )
-
-    (defun-inline assert_xch_reserve_condition (my_coin_id amount)
-        (list
-            ASSERT_PUZZLE_ANNOUNCEMENT
-            (sha256
-                SETTLEMENT_PAYMENTS_MOD_HASH
-                (settlement_announcement my_coin_id amount)
-            )
-        )
-    )
-
-    (defun-inline cat_puzzle_hash (tail_hash inner_puzzle_hash)
-        (curry_hashes_inline CAT_MOD_HASH
-            (sha256tree CAT_MOD_HASH)
-            (sha256tree tail_hash)
-            inner_puzzle_hash
-        )
-    )
-
-    (defun-inline settlement_cat_announcement (my_coin_id amount)
-        (sha256tree
-            (list
-                my_coin_id
-                (list
-                    (p2_singleton_puzzle_hash)
-                    amount
-                )
-            )
-        )
-    )
-
-    (defun-inline assert_token_reserve_condition (my_coin_id amount)
-        (list
-            ASSERT_PUZZLE_ANNOUNCEMENT
-            (sha256
-                (cat_puzzle_hash TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH)
-                (settlement_cat_announcement
-                    my_coin_id
-                    amount
-                )
-            )
-        )
-    )
-
-    ; liquidity TAIL
-    (defun-inline create_liquidity_tokens_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword)
-        (list
-            CREATE_PUZZLE_ANNOUNCEMENT
-            (sha256
-                keyword 
-                (calculate_coin_id
-                    liquidity_parent_id
-                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
-                    liquidity_token_amount
-                )
-                liquidity_token_amount
-            )
-        )
-    )
-    
-    (defun-inline assert_liquidity_tokens_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword)
-        (list
-            ASSERT_COIN_ANNOUNCEMENT
-            (sha256
-                (calculate_coin_id
-                    liquidity_parent_id
-                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
-                    liquidity_token_amount
-                )
-                keyword
-            )
-        )
-    )
-
-    ;; self-propagation
-
-    (defun-inline recreate_self_condition (new_liquidity new_xch_reserve new_token_reserve)
-        (list
-            CREATE_COIN
-            (curry_hashes_inline PAIR_MOD_HASH
-                (sha256tree PAIR_MOD_HASH)
-                (sha256tree SINGLETON_STRUCT)
-                (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
-                (sha256tree CAT_MOD_HASH)
-                (sha256tree LIQUIDITY_TAIL_MOD_HASH)
-                (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
-
-                (sha256tree TAIL_HASH)
-                (sha256tree INVERSE_FEE)
-
-                (sha256tree new_liquidity)
-                (sha256tree new_xch_reserve)
-                (sha256tree new_token_reserve)
-            )
-            1
         )
     )
 
