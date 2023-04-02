@@ -127,16 +127,7 @@
         (+ TOKEN_RESERVE token_amount)
     )
 
-    (defun-inline add_liquidity_gt0_conditions (
-            token_amount
-            liquidity_parent_id
-            liquidity_inner_puzzle_hash
-        )
-        (list
-            (create_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
-            (assert_liquidity_tokens_condition (liquidity_minted_from_token_amount token_amount) liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
-        )
-    )
+    
 
     (defun-inline add_liquidity_0_ok (
         xch_amount
@@ -164,18 +155,6 @@
             token_amount
         )
         token_amount
-    )
-
-    (defun-inline add_liquidity_0_conditions (
-            liquidity_token_amount
-            liquidity_parent_id
-            liquidity_inner_puzzle_hash
-        )
-        (list
-            (create_liquidity_tokens_condition liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
-            (assert_liquidity_tokens_condition liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash MINT_KEYWORD)
-        )
-
     )
 
     ; remove liquidity

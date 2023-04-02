@@ -160,6 +160,10 @@
         current_token_reserve
 
         new_state
+
+        new_liquidity
+        new_xch_reserve
+        new_token_reserve
         )
         (list
             ; assert my id
@@ -193,26 +197,63 @@
             )
 
             ; assert new XCH reserve
-            (if (> (xch_reserve_stom_state new_state) 0)
+            (if (> new_xch_reserve 0)
                 (assert_xch_reserve_condition
                     my_coin_id
-                    (xch_reserve_stom_state new_state)
+                    new_xch_reserve
                 )
                 ; else
                 (list REMARK)
             )
 
             ; assert new token reserve
-            (if (> (token_reserve_stom_state new_state) 0)
+            (if (> new_token_reserve 0)
                 (assert_token_reserve_condition
                     my_coin_id
-                    (token_reserve_stom_state new_state)
+                    new_token_reserve
                 )
                 ; else
                 (list REMARK)
             )
 
-            ; additional conditions
+            ; additional conditions section of old code (liquidity)
+
+            ; burn liquidity - 2 conditions
+            (if (> liquidity new_liquidity)
+                ; inner solution is (liquidity_tokens_amount liquidity_inner_puzzle_hash liquidity_parent_id)
+                (create_liquidity_tokens_condition
+                    (- liquidity new_liquidity) (f (r (r inner_solution))) (f (r inner_solution)) BURN_KEYWORD
+                )
+                ; else
+                (list REMARK)
+            )
+            (if (> liquidity new_liquidity)
+                ; inner solution is (liquidity_tokens_amount liquidity_inner_puzzle_hash liquidity_parent_id)
+                (assert_liquidity_tokens_condition
+                    (- liquidity new_liquidity) (f (r (r inner_solution))) (f (r inner_solution)) BURN_KEYWORD
+                )
+                ; else
+                (list REMARK)
+            )
+
+            ; mint liquidity - also 2 conditions
+            (if (> new_liquidity liquidity)
+                ; inner solution is (token_amount liquidity_inner_puzzle_hash liquidity_parent_id [xch_amount])
+                (create_liquidity_tokens_condition
+                    (- new_liquidity liquidity) (f (r (r inner_solution))) (f (r inner_solution)) MINT_KEYWORD
+                )
+                ; else
+                (list REMARK)
+            )
+
+            (if (> new_liquidity liquidity)
+                ; inner solution is (token_amount liquidity_inner_puzzle_hash liquidity_parent_id [xch_amount])
+                (assert_liquidity_tokens_condition
+                    (- new_liquidity liquidity) (f (r (r inner_solution))) (f (r inner_solution)) MINT_KEYWORD
+                )
+                ; else
+                (list REMARK)
+            )
         )
     )
 
@@ -229,6 +270,10 @@
             (token_reserve_stom_state state)
 
             new_state
+
+            (liquidity_from_state new_state)
+            (xch_reserve_stom_state new_state)
+            (token_reserve_stom_state new_state)
         )
     )
 
