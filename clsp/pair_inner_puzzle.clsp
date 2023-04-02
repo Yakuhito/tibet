@@ -146,6 +146,10 @@
 
     ;; this is actually the main function
     ;; (the thing that creates the output conditions)
+
+    ;; another genius idea (thanks, quexington!): do not merge any lists
+    ;; use REMARKs instead of conditions instead of not including them at all
+    ;; this skips the call(s) to merge_lists, which are expensive since they're recursive functions
     (defun-inline create_output_conditions (
         my_coin_id
         xch_reserve_coin_id
@@ -161,7 +165,54 @@
             ; assert my id
             (list ASSERT_MY_COIN_ID my_coin_id)
 
-            ; todo
+            ; recreate self
+            (recreate_self_condition new_state)
+
+            ; spend XCH reserve, if there is one ('IF I HAD ONE' meme citation required)
+            (if (> current_xch_reserve 0)
+                (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
+                ; else
+                (list REMARK)
+            )
+            (if (> current_xch_reserve 0)
+                (list ASSERT_COIN_ANNOUNCEMENT (sha256 xch_reserve_coin_id '$'))
+                ; else
+                (list REMARK)
+            )
+
+            ; spend token reserve, if there is one ('IF I HAD ONE' meme citation required)
+            (if (> current_token_reserve 0)
+                (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
+                ; else
+                (list REMARK)
+            )
+            (if (> current_token_reserve 0)
+                (list ASSERT_COIN_ANNOUNCEMENT (sha256 token_reserve_coin_id '$'))
+                ; else
+                (list REMARK)
+            )
+
+            ; assert new XCH reserve
+            (if (> (xch_reserve_stom_state new_state) 0)
+                (assert_xch_reserve_condition
+                    my_coin_id
+                    (xch_reserve_stom_state new_state)
+                )
+                ; else
+                (list REMARK)
+            )
+
+            ; assert new token reserve
+            (if (> (token_reserve_stom_state new_state) 0)
+                (assert_token_reserve_condition
+                    my_coin_id
+                    (token_reserve_stom_state new_state)
+                )
+                ; else
+                (list REMARK)
+            )
+
+            ; additional conditions
         )
     )
 
