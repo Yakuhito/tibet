@@ -38,8 +38,8 @@
     )
         (if (all
                 (> current_liquidity 0)
-                (> xch_delta 0)
-                (> token_delta 0)
+                ; verify that one of the deltas is positive and the other is negative
+                (> 0 (* xch_delta token_delta))
             )
             (c
                 ; new state 
