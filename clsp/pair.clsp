@@ -43,21 +43,9 @@
     (include tibet_utils.clib)
 
     ; params
-    ;; -1 - coin ids
-    (defun-inline my_coin_id_from_coin_ids (coin_ids) (f coin_ids))
-    (defun-inline xch_reserve_coin_id_from_coin_ids (coin_ids) (f (r coin_ids)))
-    (defun-inline token_reserve_coin_id_from_coin_ids (coin_ids) (f (r (r coin_ids))))
-
-    ;; 0 - add liquidity
-    (defun-inline add_liquidity_token_amount_from_params (params) (f params))
-    (defun-inline add_liquidity_liquidity_inner_puzzle_hash_from_params (params) (f (r params)))
-    (defun-inline add_liquidity_liquidity_parent_id_from_params (params) (f (r (r params))))
-    (defun-inline add_liquidity_xch_amount_from_params (params) (f (r (r (r params)))))
-
+    
     ;; 1 - remove liquidity
-    (defun-inline remove_liquidity_liquidity_tokens_amount_from_params (params) (f params))
-    (defun-inline remove_liqiudity_liquidity_inner_puzzle_hash_from_params (params) (f (r params)))
-    (defun-inline remove_liqiudity_liquidity_parent_id_from_params (params) (f (r (r params))))
+    
 
     ;; 2 - xch to token
     (defun-inline xch_to_token_xch_amount_from_params (params) (f params))
