@@ -48,8 +48,7 @@
     
 
     ;; 2 - xch to token
-    (defun-inline xch_to_token_xch_amount_from_params (params) (f params))
-
+    
     ;; 3 - token to xch
     (defun-inline token_to_xch_token_amount_from_params (params) (f params))
 

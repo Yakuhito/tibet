@@ -1,6 +1,6 @@
 (mod (
-        CAT_MOD_HASH
-        LIQUIDITY_TAIL_MOD_HASH
+        CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
+        LIQUIDITY_TAIL_MOD_HASH ; sha256 tree of the liquidity TAIL (uncurried)
         current_state
         params
         my_singleton_struct
@@ -9,9 +9,9 @@
     (include tibet_utils.clib)
 
     ; params
-    (defun-inline remove_liquidity_liquidity_tokens_amount_from_params (params) (f params))
-    (defun-inline remove_liqiudity_liquidity_inner_puzzle_hash_from_params (params) (f (r params)))
-    (defun-inline remove_liqiudity_liquidity_parent_id_from_params (params) (f (r (r params))))
+    (defun-inline liquidity_tokens_amount_from_params (params) (f params))
+    (defun-inline liquidity_inner_puzzle_hash_from_params (params) (f (r params)))
+    (defun-inline liquidity_parent_id_from_params (params) (f (r (r params))))
 
     ; main
     (defun-inline remove_liquidity (
@@ -81,8 +81,8 @@
         (xch_reserve_from_state current_state)
         (token_reserve_from_state current_state)
 
-        (remove_liquidity_liquidity_tokens_amount_from_params params)
-        (remove_liqiudity_liquidity_inner_puzzle_hash_from_params params)
-        (remove_liqiudity_liquidity_parent_id_from_params params)
+        (liquidity_tokens_amount_from_params params)
+        (liquidity_inner_puzzle_hash_from_params params)
+        (liquidity_parent_id_from_params params)
     )
 )
