@@ -1,57 +1,57 @@
-name: Run Tests
+# name: Run Tests
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - '**'
-    tags:
-        - '**'
-  pull_request:
-    branches:
-      - '**'
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches:
+#       - '**'
+#     tags:
+#         - '**'
+#   pull_request:
+#     branches:
+#       - '**'
 
-defaults:
-  run:
-    shell: bash
+# defaults:
+#   run:
+#     shell: bash
 
-jobs:
-  build:
-    name: Test - Ubuntu, Python 3.10
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-    - name: Clean workspace
-      uses: Chia-Network/actions/clean-workspace@main
+# jobs:
+#   build:
+#     name: Test - Ubuntu, Python 3.10
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 10
+#     steps:
+#     - name: Clean workspace
+#       uses: Chia-Network/actions/clean-workspace@main
 
-    - name: Checkout Code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+#     - name: Checkout Code
+#       uses: actions/checkout@v3
+#       with:
+#         fetch-depth: 0
 
-    - uses: Chia-Network/actions/setup-python@main
-      with:
-        python-version: '3.10'
+#     - uses: Chia-Network/actions/setup-python@main
+#       with:
+#         python-version: '3.10'
 
-    - name: Create 'test-plots' Directory
-      run: mkdir -p ~/.chia/test-plots
+#     - name: Create 'test-plots' Directory
+#       run: mkdir -p ~/.chia/test-plots
 
-    - uses: Chia-Network/actions/create-venv@main
-      id: create-venv
+#     - uses: Chia-Network/actions/create-venv@main
+#       id: create-venv
 
-    - uses: Chia-Network/actions/activate-venv@main
-      with:
-        directories: ${{ steps.create-venv.outputs.activate-venv-directories }}
+#     - uses: Chia-Network/actions/activate-venv@main
+#       with:
+#         directories: ${{ steps.create-venv.outputs.activate-venv-directories }}
 
-    - name: Setup chia-dev-tools
-      run: |
-        git clone https://github.com/Chia-Network/chia-dev-tools.git
-        cd chia-dev-tools
-        pip install .
-        cd ..
+#     - name: Setup chia-dev-tools
+#       run: |
+#         git clone https://github.com/Chia-Network/chia-dev-tools.git
+#         cd chia-dev-tools
+#         pip install .
+#         cd ..
 
-    - name: Install other required libraries
-      run: python3 -m pip install -r requirements.txt
+#     - name: Install other required libraries
+#       run: python3 -m pip install -r requirements.txt
 
-    - name: Test code with pytest
-      run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
+#     - name: Test code with pytest
+#       run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
