@@ -26,7 +26,7 @@ I chose to go with XCH-token pairs instead of token-token (and having 'Wrapped C
 
 ## Zap and Other Things
 
-This is Chia, so you can chaing actions together. For example, you can have a transaction where x XCH get supplied as liquidity without supplying the other token - under the hood, it swaps about 50% of x to the other token and then supplies liquidity to the pair. Or you can have token1-token2 swaps by grouping 2 swaps in the same spend bundle. These things will probably not be offered until there's demand for them, but no-one's preventing any developer fromimplementing them before that.
+This is Chia, so you can chain actions together. For example, you can have a transaction where x XCH get supplied as liquidity without supplying the other token - under the hood, it swaps about 50% of x to the other token and then supplies liquidity to the pair. Or you can have token1-token2 swaps by grouping 2 swaps in the same spend bundle. These things will probably not be offered until there's demand for them, but no-one's preventing any developer fromimplementing them before that.
 
 ## Offers
 
@@ -60,10 +60,11 @@ Please note that their mention here does not represent their endorsement or thei
 
 
 
-| Username                                     | Most Notable Contribution(s)                                                                                                       |
-|----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| [dimitry](https://twitter.com/cityu_dimitry) | Shared his team's AMM design and code w/ me; A lot of support                                                                      |
-| [jde5011](https://twitter.com/jde5011)       | Had a meeting to discuss security posture/opsec best practices for TibetSwap; Recorded the presentation and shared it internally!  |
-| [trepca](https://twitter.com/trepca)         | Answered (a lot of) questions about testing; Took a look at the tests, provided some code that took them to the next level; Helped me modify said code on a Friday at 21:02         |
-| [hoffmang](https://twitter.com/hoffmang)     | Described this project as 'a functional AMM' when talking to Bram during a SF Chia Meetup (I was there!) -> motivation             |
-| [quexington](https://github.com/quexington)  | Took a quick look at the chialisp code, sent short message that described how to significantly improve it. Left me speechless.     |
+| Username                                         | Most Notable Contribution(s)                                                                                                       |
+|--------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| [dimitry](https://twitter.com/cityu_dimitry)     | Shared his team's AMM design and code w/ me; A lot of support                                                                      |
+| [jde5011](https://twitter.com/jde5011)           | Had a meeting to discuss security posture/opsec best practices for TibetSwap; Recorded the presentation and shared it internally!  |
+| [trepca](https://twitter.com/trepca)             | Answered (a lot of) questions about testing; Took a look at the tests, provided some code that took them to the next level         |
+| [hoffmang](https://twitter.com/hoffmang)         | Described this project as 'a functional AMM' when talking to Bram during a SF Chia Meetup (I was there!) -> motivation             |
+| [quexington](https://github.com/quexington)      | Took a quick look at the chialisp code, sent short message that described how to significantly improve it. Left me speechless.     |
+| [RightSexyOrc](https://twitter.com/RightSexyOrc) | Pull request [#4](https://github.com/Yakuhito/tibet/pull/4) - spotted a typo in README.md.                                         |
