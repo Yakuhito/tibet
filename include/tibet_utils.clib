@@ -1,4 +1,7 @@
 (
+    (include curry.clinc)
+    (include condition_codes.clvm)
+
     ; from curry-and-treehash.clinc (which can't be included in the same file as curry.clinc *-*)
     (defun sha256tree (TREE)
         (if (l TREE)
@@ -34,7 +37,61 @@
     (defun-inline singleton_launcher_from_struct (singleton_struct) (f (r singleton_struct)))
     (defun-inline singleton_launcher_puzzle_hash_from_struct (singleton_struct) (r (r singleton_struct)))
 
+    ; state
+    (defun-inline liquidity_from_state (state) (f state))
+    (defun-inline xch_reserve_from_state (state) (f (r state)))
+    (defun-inline token_reserve_from_state (state) (r (r state)))
+
+    (defun-inline construct_state (liquidity xch_reserve token_reserve) (c liquidity (c xch_reserve token_reserve)))
+
     ; liquidity token
     (defconstant MINT_KEYWORD "mint")
     (defconstant BURN_KEYWORD "burn")
+
+    ; needed for liquidity TAIL
+
+    (defun-inline cat_puzzle_hash (cat_mod_hash tail_hash inner_puzzle_hash)
+        (curry_hashes_inline cat_mod_hash
+            (sha256tree cat_mod_hash)
+            (sha256tree tail_hash)
+            inner_puzzle_hash
+        )
+    )
+
+    ; liquidity TAIL
+    (defun-inline _liquidity_extra_conditions
+        (liquidity_token_amount keyword liquidity_coin_id)
+
+        (list
+            (list
+                CREATE_PUZZLE_ANNOUNCEMENT
+                (sha256 keyword liquidity_coin_id liquidity_token_amount)
+            )
+
+            (list
+                ASSERT_COIN_ANNOUNCEMENT
+                (sha256 liquidity_coin_id keyword)
+            )
+        )
+    )
+
+    (defun-inline liquidity_extra_conditions
+        (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword singleton_struct liquidity_tail_mod_hash cat_mod_hash)
+
+        (_liquidity_extra_conditions
+            liquidity_token_amount
+            keyword
+
+            ; liquidity coin id - this is why we need a stager
+            (calculate_coin_id
+                liquidity_parent_id
+                (cat_puzzle_hash
+                    cat_mod_hash
+                    (curry_hashes_inline liquidity_tail_mod_hash (sha256tree singleton_struct))
+                    liquidity_inner_puzzle_hash
+                )
+                liquidity_token_amount
+            )
+        )
+    )
 )

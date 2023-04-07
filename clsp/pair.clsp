@@ -185,17 +185,6 @@
         (- TOKEN_RESERVE (token_amount_from_liquidity_amount liquidity_tokens_amount))
     )
 
-    (defun-inline remove_liquidity_conditions (
-            liquidity_tokens_amount
-            liquidity_inner_puzzle_hash
-            liquidity_parent_id
-        )
-        (list
-            (create_liquidity_tokens_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD)
-            (assert_liquidity_tokens_condition liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD)
-        )
-    )
-
     ; xch to token
     (defun-inline xch_to_token_ok (
         xch_amount
@@ -243,75 +232,6 @@
     ; actual logic stuff
 
     ;; function codes
-    (defconstant ACTION_ADD_LIQUIDITY 0)
-    (defconstant ACTION_REMOVE_LIQUIDITY 1)
-    (defconstant ACTION_XCH_TO_TOKEN 2)
-    (defconstant ACTION_TOKEN_TO_XCH 3)
-
-    (defun-inline create_output_conditions (
-            my_coin_id
-            xch_reserve_coin_id
-            token_reserve_coin_id
-            ok_condition
-            new_liquidity
-            new_xch_reserve
-            new_token_reserve
-            extra_output_conditions
-        )
-        (if ok_condition
-            (merge_lists
-                (list
-                    ; assert my id
-                    (list ASSERT_MY_COIN_ID my_coin_id)
-
-                    ; recreate self
-                    (recreate_self_condition
-                        new_liquidity
-                        new_xch_reserve
-                        new_token_reserve
-                    )
-                )
-                (if (all (= action ACTION_ADD_LIQUIDITY) (= LIQUIDITY 0))
-                    () ; no reserves to spend
-                    ; else spend reserves
-                    (list
-                        ; spend xch reserve
-                        (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
-                        (list ASSERT_COIN_ANNOUNCEMENT (sha256 xch_reserve_coin_id '$'))
-
-                        ; spend token reserve
-                        (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
-                        (list ASSERT_COIN_ANNOUNCEMENT (sha256 token_reserve_coin_id '$'))
-                    )
-                )
-                (if (> new_token_reserve 0)
-                    (list
-                        ; create new token reserve
-                        (assert_token_reserve_condition
-                            my_coin_id
-                            new_token_reserve
-                        )
-                    )
-                    ; else no need to create new token reserve
-                    ()
-                )
-                (if (> new_xch_reserve 0)
-                    (list
-                        ; create new XCH reserve
-                        (assert_xch_reserve_condition
-                            my_coin_id
-                            new_xch_reserve
-                        )
-                    )
-                    ; else no need to create new XCH reserve
-                    ()
-                )
-                extra_output_conditions
-            )
-            ; else
-            (x)
-        )
-    )
 
     (defun-inline get_ok_condition ()
         (if (> action ACTION_REMOVE_LIQUIDITY)
@@ -331,16 +251,6 @@
                 )
                 ; else action < ACTION_REMOVE_LIQUIDITY -> action = ACTION_ADD_LIQUIDITY
                 ; add_liquidity behaves differently if the liquidity is 0 
-                (if (= LIQUIDITY 0)
-                    (add_liquidity_0_ok
-                        (add_liquidity_xch_amount_from_params params)
-                        (add_liquidity_token_amount_from_params params)
-                    )
-                    ; else liquidity > 0
-                    (add_liquidity_gt0_ok
-                        (add_liquidity_token_amount_from_params params)
-                    )
-                )
             )
         )
     )
@@ -457,17 +367,5 @@
                 )
             )
         )
-    )
-
-    ; main
-    (create_output_conditions
-        (my_coin_id_from_coin_ids coin_ids)
-        (xch_reserve_coin_id_from_coin_ids coin_ids)
-        (token_reserve_coin_id_from_coin_ids coin_ids)
-        (get_ok_condition)
-        (get_new_liquidity)
-        (get_new_xch_reserve)
-        (get_new_token_reserve)
-        (get_extra_output_conditions)
     )
 )

@@ -18,8 +18,9 @@
 
         ; -- still verified, but given at runtime \/
 
-        new_state_puzzle ; this is verified to be included in the merkle tree in p2_merkle_tree
-            ; puzzle returns the new state, CURRIED_ARGS = (liquidity . (xch_reserve token_reserve))
+        inner_puzzle ; this is verified to be included in the merkle tree in p2_merkle_tree
+            ; puzzle returns the new state, CURRIED_ARGS = (liquidity . (xch_reserve token_reserve)), and a list of extra conditions
+            ; (new_state . extra_conditions)
         pair_inner_puzzle_hash
         merkle_root
         state
@@ -30,14 +31,7 @@
             ; format: (coin_ids . new_state_solution) = ((my_coin_id . (xch_reserve_coin_id . token_reserve_coin_id)) . new_state_solution)
     )
     ; libs
-    (include curry.clinc)
-    (include condition_codes.clvm)
     (include tibet_utils.clib)
-
-    ; params
-    (defun-inline liquidity_from_state (state) (f state))
-    (defun-inline xch_reserve_stom_state (state) (f (r state)))
-    (defun-inline token_reserve_stom_state (state) (r (r state)))
 
     ;; deposit/reserve-related
     (defun-inline p2_singleton_puzzle_hash ()
@@ -67,14 +61,6 @@
         )
     )
 
-    (defun-inline cat_puzzle_hash (tail_hash inner_puzzle_hash)
-        (curry_hashes_inline CAT_MOD_HASH
-            (sha256tree CAT_MOD_HASH)
-            (sha256tree tail_hash)
-            inner_puzzle_hash
-        )
-    )
-
     (defun-inline settlement_cat_announcement (my_coin_id amount)
         (sha256tree
             (list
@@ -91,41 +77,11 @@
         (list
             ASSERT_PUZZLE_ANNOUNCEMENT
             (sha256
-                (cat_puzzle_hash TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH)
+                (cat_puzzle_hash CAT_MOD_HASH TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH)
                 (settlement_cat_announcement
                     my_coin_id
                     amount
                 )
-            )
-        )
-    )
-
-    ; liquidity TAIL
-    (defun-inline create_liquidity_tokens_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword)
-        (list
-            CREATE_PUZZLE_ANNOUNCEMENT
-            (sha256
-                keyword 
-                (calculate_coin_id
-                    liquidity_parent_id
-                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
-                    liquidity_token_amount
-                )
-                liquidity_token_amount
-            )
-        )
-    )
-    
-    (defun-inline assert_liquidity_tokens_condition (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword)
-        (list
-            ASSERT_COIN_ANNOUNCEMENT
-            (sha256
-                (calculate_coin_id
-                    liquidity_parent_id
-                    (cat_puzzle_hash (curry_hashes_inline LIQUIDITY_TAIL_MOD_HASH (sha256tree SINGLETON_STRUCT)) liquidity_inner_puzzle_hash)
-                    liquidity_token_amount
-                )
-                keyword
             )
         )
     )
@@ -160,6 +116,7 @@
         current_token_reserve
 
         new_state
+        extra_conditions
 
         new_liquidity
         new_xch_reserve
@@ -216,41 +173,17 @@
                 (list REMARK)
             )
 
-            ; additional conditions section of old code (liquidity)
-
-            ; burn liquidity - 2 conditions
-            (if (> liquidity new_liquidity)
-                ; inner solution is (liquidity_tokens_amount liquidity_inner_puzzle_hash liquidity_parent_id)
-                (create_liquidity_tokens_condition
-                    (- liquidity new_liquidity) (f (r (r inner_solution))) (f (r inner_solution)) BURN_KEYWORD
-                )
-                ; else
-                (list REMARK)
-            )
-            (if (> liquidity new_liquidity)
-                ; inner solution is (liquidity_tokens_amount liquidity_inner_puzzle_hash liquidity_parent_id)
-                (assert_liquidity_tokens_condition
-                    (- liquidity new_liquidity) (f (r (r inner_solution))) (f (r inner_solution)) BURN_KEYWORD
-                )
+            ; additional/extra conditions
+            ; when minting or burning liquidity, there'll be exactly two extra conditions
+            ; knowing this, we can skip using merge_list!
+            (if extra_conditions
+                (f extra_conditions)
                 ; else
                 (list REMARK)
             )
 
-            ; mint liquidity - also 2 conditions
-            (if (> new_liquidity liquidity)
-                ; inner solution is (token_amount liquidity_inner_puzzle_hash liquidity_parent_id [xch_amount])
-                (create_liquidity_tokens_condition
-                    (- new_liquidity liquidity) (f (r (r inner_solution))) (f (r inner_solution)) MINT_KEYWORD
-                )
-                ; else
-                (list REMARK)
-            )
-
-            (if (> new_liquidity liquidity)
-                ; inner solution is (token_amount liquidity_inner_puzzle_hash liquidity_parent_id [xch_amount])
-                (assert_liquidity_tokens_condition
-                    (- new_liquidity liquidity) (f (r (r inner_solution))) (f (r inner_solution)) MINT_KEYWORD
-                )
+            (if extra_conditions
+                (f (r extra_conditions))
                 ; else
                 (list REMARK)
             )
@@ -258,27 +191,36 @@
     )
 
     ;; stagers
-
-    (defun-inline stager (new_state coin_ids)
+    (defun-inline stager_two (new_state extra_conditions coin_ids)
         (create_output_conditions
             (f coin_ids)
             (f (r coin_ids))
             (r (r coin_ids))
 
             (liquidity_from_state state)
-            (xch_reserve_stom_state state)
-            (token_reserve_stom_state state)
+            (xch_reserve_from_state state)
+            (token_reserve_from_state state)
 
             new_state
+            extra_conditions
 
             (liquidity_from_state new_state)
-            (xch_reserve_stom_state new_state)
-            (token_reserve_stom_state new_state)
+            (xch_reserve_from_state new_state)
+            (token_reserve_from_state new_state)
+        )
+    )
+
+    (defun-inline stager (
+        inner_output
+    )
+        (stager_two
+            (f inner_output)
+            (r inner_output)
+            (f inner_solution)
         )
     )
 
     (stager
-        (a new_state_puzzle (list state (r inner_solution)))
-        (f inner_solution)
+        (a inner_puzzle (list state (r inner_solution) SINGLETON_STRUCT))
     )
 )

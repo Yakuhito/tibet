@@ -1,7 +1,7 @@
 ;; credits: https://raw.githubusercontent.com/Chia-Network/internal-custody/main/cic/clsp/include/curry_and_treehash.clib
 ; modified so that the inner puzzle has access to MERKLE_ROOT and its puzzle hash
 
-;; CURRIED_ARGS are (liquidity . (xch_reserve token_reserve))
+;; CURRIED_ARGS are (liquidity . (xch_reserve token_reserve)) (state)
 (mod
   (
     INNER_PUZZLE
