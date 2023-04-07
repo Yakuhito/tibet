@@ -27,27 +27,20 @@
         xch_delta
         token_delta
     )
-        (if (all
-                (> current_liquidity 0)
-                (not (> liquidity_tokens_amount current_liquidity)) ; liquidity_tokens_amount <= current_liquidity
+        (c
+            ; new state 
+            (construct_state
+                ; new liquidity
+                (- current_liquidity liquidity_tokens_amount)
+                ; new xch reserve
+                (- current_xch_reserve xch_delta)
+                ; new token reserve
+                (- current_token_reserve token_delta)
             )
-            (c
-                ; new state 
-                (construct_state
-                    ; new liquidity
-                    (- current_liquidity liquidity_tokens_amount)
-                    ; new xch reserve
-                    (- current_xch_reserve xch_delta)
-                    ; new token reserve
-                    (- current_token_reserve token_delta)
-                )
-                ; extra conditions
-                (liquidity_extra_conditions
-                    liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD my_singleton_struct LIQUIDITY_TAIL_MOD_HASH CAT_MOD_HASH
-                )
+            ; extra conditions
+            (liquidity_extra_conditions
+                liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD my_singleton_struct LIQUIDITY_TAIL_MOD_HASH CAT_MOD_HASH
             )
-            ; else
-            (x)
         )
     )
 
