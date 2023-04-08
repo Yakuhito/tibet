@@ -5,13 +5,13 @@
 
 (mod (
         ; curried args - used for deploying pair
-        PAIR_MOD_HASH
+        PAIR_INNER_PUZZLE_MOD_HASH
         SINGLETON_MOD_HASH ; pay attention here - it's not SINGLETON_STRUCT
+        P2_MERKLE_TREE_MODIFIED_MOD_HASH
         P2_SINGLETON_FLASHLOAN_MOD_HASH
         CAT_MOD_HASH
-        LIQUIDITY_TAIL_MOD_HASH
         SETTLEMENT_PAYMENTS_MOD_HASH
-        INVERSE_FEE
+        MERKLE_ROOT ; calculated off-chain
 
         ; required for the router to work
         LAUNCHER_PUZZLE_HASH
@@ -22,9 +22,7 @@
         new_pair_tail_hash ; hash of TAIL
     )
 
-    (include tibet_utils.clib) ; lol
-    (include condition_codes.clvm)
-    (include curry.clinc)
+    (include tibet_utils.clib)
 
     (defun-inline new_pair_launcher_id ()
         ; launcher amount needs to be 2, since 1 would mean wrapping it in our singleton top layer puzzle
@@ -36,37 +34,36 @@
     )
 
     (defun-inline pair_inner_puzzle_hash (tail_hash)
-        (curry_hashes PAIR_MOD_HASH
-            (sha256tree PAIR_MOD_HASH)
+        (curry_hashes_inline PAIR_INNER_PUZZLE_MOD_HASH
+            (sha256tree P2_MERKLE_TREE_MODIFIED_MOD_HASH)
             (sha256tree (new_pair_singleton_struct)) ; SINGLETON_STRUCT
             (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
             (sha256tree CAT_MOD_HASH)
-            (sha256tree LIQUIDITY_TAIL_MOD_HASH)
             (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
             (sha256tree tail_hash)
-            (sha256tree INVERSE_FEE)
-            (sha256tree (q . 0)) ; initial liquidity
-            (sha256tree (q . 0)) ; initial xch reserve
-            (sha256tree (q . 0)) ; initial toke nreserve
+            (sha256tree (c 0 (c 0 0)))
         )
     )
 
     (defun-inline pair_puzzle_hash (tail_hash)
         (curry_hashes_inline SINGLETON_MOD_HASH
             (sha256tree (new_pair_singleton_struct))
-            (pair_inner_puzzle_hash tail_hash)
+            (curry_hashes P2_MERKLE_TREE_MODIFIED_MOD_HASH
+                (pair_inner_puzzle_hash tail_hash)
+                (sha256 MERKLE_ROOT)
+            )
         )
     )
 
     (defun-inline my_puzzle_hash ()
         (curry_hashes_inline ROUTER_MOD_HASH
-            (sha256tree PAIR_MOD_HASH)
+            (sha256tree PAIR_INNER_PUZZLE_MOD_HASH)
             (sha256tree SINGLETON_MOD_HASH)
+            (sha256tree P2_MERKLE_TREE_MODIFIED_MOD_HASH)
             (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
             (sha256tree CAT_MOD_HASH)
-            (sha256tree LIQUIDITY_TAIL_MOD_HASH)
             (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
-            (sha256tree INVERSE_FEE)
+            (sha256tree MERKLE_ROOT)
             (sha256tree LAUNCHER_PUZZLE_HASH)
             (sha256tree ROUTER_MOD_HASH)
         )
