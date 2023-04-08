@@ -11,7 +11,6 @@
             ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
         P2_SINGLETON_FLASHLOAN_MOD_HASH ; sha256tree of the p2_singleton_flashloan module (uncurried)
         CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
-        LIQUIDITY_TAIL_MOD_HASH ; sha256 tree of the liquidity TAIL (uncurried)
         SETTLEMENT_PAYMENTS_MOD_HASH ; sha256 tree of settlement_payments.clvm (not that it has any curried arguments, but still)
 
         TAIL_HASH ; identifies the token this pair holds
