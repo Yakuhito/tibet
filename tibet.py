@@ -637,7 +637,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         click.echo(f"Pushing tx...")
         resp = await full_node_client.push_tx(sb)
         click.echo(resp)
-        click.echo("Enjoy your lp fees!")
+        click.echo("We're extremely sorry to see your liquidity go :(")
     else:
         open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
