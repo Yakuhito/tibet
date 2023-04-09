@@ -1169,19 +1169,26 @@ async def respond_to_remove_liquidity_offer(
         pair_xch_reserve,
         pair_token_reserve
     )
-    pair_singleton_inner_solution = Program.to([
-        Program.to([
+    inner_inner_sol = Program.to((
+        (
             current_pair_coin.name(),
-            last_xch_reserve_coin.name(),
-            last_token_reserve_coin.name(),
-        ]),
-        1,
-        Program.to([
+            (
+                last_xch_reserve_coin.name(),
+                last_token_reserve_coin.name()
+            )
+        ),
+        [
             burned_liquidity_amount,
             liquidity_burn_coin_inner_puzzle_hash,
             liquidity_burn_coin.parent_coin_info
-        ])
+        ]
+    ))
+    pair_singleton_inner_solution = Program.to([
+        REMOVE_LIQUIDITY_PUZZLE,
+        Program.to(MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH]),
+        inner_inner_sol
     ])
+    
     lineage_proof = lineage_proof_for_coinsol(creation_spend)
     pair_singleton_solution = solution_for_singleton(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
