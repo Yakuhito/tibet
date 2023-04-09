@@ -113,9 +113,6 @@ LIQUIDITY_TAIL_MOD_HASH: Program = LIQUIDITY_TAIL_MOD.get_tree_hash()
 P2_SINGLETON_FLASHLOAN_MOD_HASH: Program = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
 P2_MERKLE_TREE_MODIFIED_MOD_HASH: Program = P2_MERKLE_TREE_MODIFIED_MOD.get_tree_hash()
 PAIR_INNER_PUZZLE_MOD_HASH: Program = PAIR_INNER_PUZZLE_MOD.get_tree_hash()
-ADD_LIQUIDITY_MOD_HASH: Program = ADD_LIQUIDITY_MOD.get_tree_hash()
-REMOVE_LIQUIDITY_MOD_HASH: Program = REMOVE_LIQUIDITY_MOD.get_tree_hash()
-SWAP_MOD_HASH: Program = SWAP_MOD.get_tree_hash()
 
 # can be overriden for in func calls
 DEFAULT_RETURN_ADDRESS = "xch10d09t9eqpr2y34thcayk54sjz34qhyv3tmhrejjp6xxvj598sfds5z0xch"
