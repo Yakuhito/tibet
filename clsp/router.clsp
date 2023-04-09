@@ -9,6 +9,7 @@
         SINGLETON_MOD_HASH ; pay attention here - it's not SINGLETON_STRUCT
         P2_MERKLE_TREE_MODIFIED_MOD_HASH
         P2_SINGLETON_FLASHLOAN_MOD_HASH
+        CAT_MOD_HASH
         SETTLEMENT_PAYMENTS_MOD_HASH
         MERKLE_ROOT ; calculated off-chain
 
@@ -37,6 +38,7 @@
             (sha256tree P2_MERKLE_TREE_MODIFIED_MOD_HASH)
             (sha256tree (new_pair_singleton_struct)) ; SINGLETON_STRUCT
             (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
+            (sha256tree CAT_MOD_HASH)
             (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
             (sha256tree tail_hash)
         )
@@ -59,6 +61,7 @@
             (sha256tree SINGLETON_MOD_HASH)
             (sha256tree P2_MERKLE_TREE_MODIFIED_MOD_HASH)
             (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
+            (sha256tree CAT_MOD_HASH)
             (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
             (sha256tree MERKLE_ROOT)
             (sha256tree LAUNCHER_PUZZLE_HASH)

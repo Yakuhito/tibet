@@ -146,6 +146,7 @@ def get_router_puzzle():
         SINGLETON_MOD_HASH,
         P2_MERKLE_TREE_MODIFIED_MOD_HASH,
         P2_SINGLETON_FLASHLOAN_MOD_HASH,
+        CAT_MOD_HASH,
         OFFER_MOD_HASH,
         MERKLE_ROOT,
         SINGLETON_LAUNCHER_HASH,
@@ -157,6 +158,7 @@ def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
         P2_MERKLE_TREE_MODIFIED_MOD_HASH,
         (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
         P2_SINGLETON_FLASHLOAN_MOD_HASH,
+        CAT_MOD_HASH,
         OFFER_MOD_HASH,
         tail_hash
     )
@@ -890,20 +892,27 @@ async def respond_to_deposit_liquidity_offer(
         pair_xch_reserve,
         pair_token_reserve
     )
-    pair_singleton_inner_solution = Program.to([
-        Program.to([
+    inner_inner_sol = Program.to((
+        (
             current_pair_coin.name(),
-            b"\x00" * 32 if last_xch_reserve_coin is None else last_xch_reserve_coin.name(),
-            b"\x00" * 32 if last_token_reserve_coin is None else last_token_reserve_coin.name(),
-        ]),
-        0,
-        Program.to([
+            (
+                b"\x00" * 32 if last_xch_reserve_coin is None else last_xch_reserve_coin.name(),
+                b"\x00" * 32 if last_token_reserve_coin is None else last_token_reserve_coin.name()
+            )
+        ),
+        [
             deposited_token_amount,
             liquidity_cat_mint_coin_inner_puzzle_hash,
             eph_xch_coin.name(), # parent of liquidity cat mint coin
             deposited_xch_amount
-        ])
+        ]
+    ))
+    pair_singleton_inner_solution = Program.to([
+        ADD_LIQUIDITY_PUZZLE,
+        Program.to(MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH]),
+        inner_inner_sol
     ])
+
     lineage_proof = lineage_proof_for_coinsol(creation_spend)
     pair_singleton_solution = solution_for_singleton(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
