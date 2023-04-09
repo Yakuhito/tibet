@@ -107,7 +107,6 @@ ADD_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/add_liquidity.clvm.hex")
 REMOVE_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/remove_liquidity.clvm.hex")
 SWAP_MOD: Program = load_clvm_hex("clvm/swap.clvm.hex")
 
-# todo: debug remove unused hashes
 ROUTER_MOD_HASH = ROUTER_MOD.get_tree_hash()
 LIQUIDITY_TAIL_MOD_HASH: Program = LIQUIDITY_TAIL_MOD.get_tree_hash()
 P2_SINGLETON_FLASHLOAN_MOD_HASH: Program = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
