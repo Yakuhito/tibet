@@ -53,5 +53,8 @@ jobs:
     - name: Install other required libraries
       run: python3 -m pip install -r requirements.txt
 
+    - name: Install chia-internal-custody
+      run: pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
+
     - name: Test code with pytest
       run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning

@@ -18,7 +18,10 @@ from chia.simulator.simulator_full_node_rpc_client import \
 from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import INFINITE_COST
 from chia.types.blockchain_format.program import Program
-from chia.types.blockchain_format.serialized_program import SerializedProgram
+try:
+    from chia.types.blockchain_format.serialized_program import SerializedProgram
+except:
+    from chia.types.blockchain_format.program import SerializedProgram
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.coin_spend import CoinSpend
 from chia.types.condition_opcodes import ConditionOpcode
@@ -80,6 +83,7 @@ from clvm.casts import int_to_bytes
 from clvm import SExp
 
 from leaflet_client import LeafletFullNodeRpcClient
+from cic.drivers.merkle_utils import build_merkle_tree
 
 def load_clvm_hex(
     filename
@@ -91,44 +95,78 @@ def load_clvm_hex(
     return SerializedProgram.from_bytes(clvm_blob).to_program()
 
 ROUTER_MOD: Program = load_clvm_hex("clvm/router.clvm.hex")
-PAIR_MOD: Program = load_clvm_hex("clvm/pair.clvm.hex")
 LIQUIDITY_TAIL_MOD: Program = load_clvm_hex("clvm/liquidity_tail.clvm.hex")
+
 P2_SINGLETON_FLASHLOAN_MOD: Program = load_clvm_hex("clvm/p2_singleton_flashloan.clvm.hex")
+P2_MERKLE_TREE_MODIFIED_MOD: Program = load_clvm_hex("clvm/p2_merkle_tree_modified.clvm.hex")
 
+PAIR_INNER_PUZZLE_MOD: Program = load_clvm_hex("clvm/pair_inner_puzzle.clvm.hex")
+ADD_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/add_liquidity.clvm.hex")
+REMOVE_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/remove_liquidity.clvm.hex")
+SWAP_MOD: Program = load_clvm_hex("clvm/swap.clvm.hex")
+
+# todo: debug remove unused hashes
 ROUTER_MOD_HASH = ROUTER_MOD.get_tree_hash()
-PAIR_MOD_HASH = PAIR_MOD.get_tree_hash()
-LIQUIDITY_TAIL_MOD_HASH = LIQUIDITY_TAIL_MOD.get_tree_hash()
-P2_SINGLETON_FLASHLOAN_MOD_HASH = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
+LIQUIDITY_TAIL_MOD_HASH: Program = LIQUIDITY_TAIL_MOD.get_tree_hash()
+P2_SINGLETON_FLASHLOAN_MOD_HASH: Program = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
+P2_MERKLE_TREE_MODIFIED_MOD_HASH: Program = P2_MERKLE_TREE_MODIFIED_MOD.get_tree_hash()
+PAIR_INNER_PUZZLE_MOD_HASH: Program = PAIR_INNER_PUZZLE_MOD.get_tree_hash()
+ADD_LIQUIDITY_MOD_HASH: Program = ADD_LIQUIDITY_MOD.get_tree_hash()
+REMOVE_LIQUIDITY_MOD_HASH: Program = REMOVE_LIQUIDITY_MOD.get_tree_hash()
+SWAP_MOD_HASH: Program = SWAP_MOD.get_tree_hash()
 
-# can be overriden for all func calls
+# can be overriden for in func calls
 DEFAULT_RETURN_ADDRESS = "xch10d09t9eqpr2y34thcayk54sjz34qhyv3tmhrejjp6xxvj598sfds5z0xch"
 
-def get_router_puzzle():
-    return ROUTER_MOD.curry(
-        PAIR_MOD_HASH,
-        SINGLETON_MOD_HASH,
-        P2_SINGLETON_FLASHLOAN_MOD_HASH,
-        CAT_MOD_HASH,
-        LIQUIDITY_TAIL_MOD_HASH,
-        OFFER_MOD_HASH,
-        993,
-        SINGLETON_LAUNCHER_HASH,
-        ROUTER_MOD_HASH
-    )
+ADD_LIQUIDITY_PUZZLE = ADD_LIQUIDITY_MOD.curry(
+    CAT_MOD_HASH,
+    LIQUIDITY_TAIL_MOD_HASH
+)
+ADD_LIQUIDITY_PUZZLE_HASH = ADD_LIQUIDITY_PUZZLE.get_tree_hash()
 
-def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
-    return PAIR_MOD.curry(
-        PAIR_MOD_HASH,
+REMOVE_LIQUIDITY_PUZZLE = REMOVE_LIQUIDITY_MOD.curry(
+    CAT_MOD_HASH,
+    LIQUIDITY_TAIL_MOD_HASH
+)
+REMOVE_LIQUIDITY_PUZZLE_HASH = REMOVE_LIQUIDITY_PUZZLE.get_tree_hash()
+
+SWAP_PUZZLE = SWAP_MOD.curry(993)
+SWAP_PUZZLE_HASH = SWAP_PUZZLE.get_tree_hash()
+
+MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
+    ADD_LIQUIDITY_PUZZLE_HASH,
+    REMOVE_LIQUIDITY_PUZZLE_HASH,
+    SWAP_PUZZLE_HASH,
+    DEFAULT_HIDDEN_PUZZLE_HASH
+])
+
+ROUTER_PUZZLE = ROUTER_MOD.curry(
+    PAIR_INNER_PUZZLE_MOD_HASH,
+    SINGLETON_MOD_HASH,
+    P2_MERKLE_TREE_MODIFIED_MOD_HASH,
+    P2_SINGLETON_FLASHLOAN_MOD_HASH
+    CAT_MOD_HASH
+    SETTLEMENT_PAYMENTS_MOD_HASH
+    MERKLE_ROOT,
+    SINGLETON_LAUNCHER_HASH,
+    ROUTER_MOD_HASH
+)
+
+def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
+    return PAIR_INNER_PUZZLE_MOD.curry(
+        P2_MERKLE_TREE_MODIFIED_MOD_HASH,
         (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
         P2_SINGLETON_FLASHLOAN_MOD_HASH,
-        CAT_MOD_HASH,
-        LIQUIDITY_TAIL_MOD_HASH,
         OFFER_MOD_HASH,
         tail_hash,
-        993,
-        liquidity,
-        xch_reserve,
-        token_reserve
+    )
+
+
+def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
+    return P2_MERKLE_TREE_MODIFIED_MOD.curry(
+        get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash),
+        MERKLE_ROOT,
+        (liquidity, (xch_reserve, token_reserve))
     )
 
 
@@ -524,12 +562,21 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
     if creation_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
         return last_synced_coin, creation_spend, state, None, last_synced_coin.name()
 
-    creation_spend_inner_puzzle_args = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[1]
-    liquidity = creation_spend_inner_puzzle_args.at("r" * 8 + "f").as_int()
-    xch_reserve = creation_spend_inner_puzzle_args.at("r" * 9 + "f").as_int()
-    token_reserve = creation_spend_inner_puzzle_args.at("r" * 10 + "f").as_int()
+    creation_spend_curried_args = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[1].at("rrf")
+    liquidity = creation_spend_curried_args.at("f").as_int()
+    xch_reserve = creation_spend_curried_args.at("rf").as_int()
+    token_reserve = creation_spend_curried_args.at("rr").as_int()
 
-    creation_spend_inner_solution = creation_spend.solution.to_program().at("rrf")
+    p2_merkle_solution = creation_spend.solution.to_program().at("rrf")
+    merkle_proof = p2_merkle_solution.at("rf")
+    params = p2_merkle_solution.at("rrf").ar("rf")
+
+    print(merkle_proof)
+    print(MERKLE_PROOFS)
+    print(params)
+    print("TODO: DEBUG")
+    input()
+
     action = creation_spend_inner_solution.at("rf").as_int()
     params = creation_spend_inner_solution.at("rrf")
     

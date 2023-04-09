@@ -16,10 +16,8 @@
         ; (singleton_inner_puzzle_hash)
     )
 
-    (include condition_codes.clvm)
-    (include curry.clinc)
-    (include cat_truths.clib)
     (include tibet_utils.clib)
+    (include cat_truths.clib)
 
     ; tail solution to function args
     (defun-inline singleton_inner_puzzle_hash_from_solution (tail_solution) (f tail_solution))
