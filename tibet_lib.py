@@ -133,11 +133,19 @@ REMOVE_LIQUIDITY_PUZZLE_HASH = REMOVE_LIQUIDITY_PUZZLE.get_tree_hash()
 SWAP_PUZZLE = SWAP_MOD.curry(993)
 SWAP_PUZZLE_HASH = SWAP_PUZZLE.get_tree_hash()
 
+# DEFAULT_HIDDEN_PUZZLE is (=) instead of (x)
+# so yes, I will use this opportunity to put my signature on the blockchain
+# verify this is harmless with:
+# brun -x 01 ff08ffff018879616b756869746f80
+# (should output '(x (q . "yakuhito"))' - a program that always fails with the message 'yakuhito')
+SECRET_PUZZLE = SerializedProgram.from_bytes(bytes.fromhex("ff08ffff018879616b756869746f80")).to_program()
+SECRET_PUZZLE_HASH = SECRET_PUZZLE.get_tree_hash()
+
 MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
     ADD_LIQUIDITY_PUZZLE_HASH,
     REMOVE_LIQUIDITY_PUZZLE_HASH,
     SWAP_PUZZLE_HASH,
-    DEFAULT_HIDDEN_PUZZLE_HASH
+    SECRET_PUZZLE_HASH
 ])
 
 def get_router_puzzle():
