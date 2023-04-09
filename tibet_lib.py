@@ -85,14 +85,16 @@ from clvm import SExp
 from leaflet_client import LeafletFullNodeRpcClient
 from cic.drivers.merkle_utils import build_merkle_tree
 
+def program_from_hex(h: str) -> Program:
+    return SerializedProgram.from_bytes(bytes.fromhex(h)).to_program()
+
 def load_clvm_hex(
     filename
 ) -> Program:
     clvm_hex = open(filename, "r").read().strip()
     assert len(clvm_hex) != 0
     
-    clvm_blob = bytes.fromhex(clvm_hex)
-    return SerializedProgram.from_bytes(clvm_blob).to_program()
+    return program_from_hex(clvm_hex)
 
 ROUTER_MOD: Program = load_clvm_hex("clvm/router.clvm.hex")
 LIQUIDITY_TAIL_MOD: Program = load_clvm_hex("clvm/liquidity_tail.clvm.hex")
@@ -138,7 +140,7 @@ SWAP_PUZZLE_HASH = SWAP_PUZZLE.get_tree_hash()
 # verify this is harmless with:
 # brun -x 01 ff08ffff018879616b756869746f80
 # (should output '(x (q . "yakuhito"))' - a program that always fails with the message 'yakuhito')
-SECRET_PUZZLE = SerializedProgram.from_bytes(bytes.fromhex("ff08ffff018879616b756869746f80")).to_program()
+SECRET_PUZZLE = program_from_hex("ff08ffff018879616b756869746f80")
 SECRET_PUZZLE_HASH = SECRET_PUZZLE.get_tree_hash()
 
 MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
@@ -572,54 +574,28 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
     if creation_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
         return last_synced_coin, creation_spend, state, None, last_synced_coin.name()
 
-    creation_spend_curried_args = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[1].at("rrf")
-    liquidity = creation_spend_curried_args.at("f").as_int()
-    xch_reserve = creation_spend_curried_args.at("rf").as_int()
-    token_reserve = creation_spend_curried_args.at("rr").as_int()
-
+    old_state = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[1].at("rrf")
     p2_merkle_solution = creation_spend.solution.to_program().at("rrf")
-    merkle_proof = p2_merkle_solution.at("rf")
-    params = p2_merkle_solution.at("rrf").ar("rf")
+    new_state_puzzle = p2_merkle_solution.at("f") # p2_merkle_tree_modified -> parameters (which is a puzzle)
+    params = p2_merkle_solution.at("rrf").at("r")
 
-    print(merkle_proof)
-    print(MERKLE_PROOFS)
-    print(params)
-    print("TODO: DEBUG")
-    input()
-    print("don't forget about swap!")
+    # SINGLETON_STRUCT is only used to create extra conditions
+    # in inner inner puzzle
+    dummy_singleton_struct = (b"\x00" * 32, (b"\x00" * 32, b"\x00" * 32))
 
-    action = creation_spend_inner_solution.at("rf").as_int()
-    params = creation_spend_inner_solution.at("rrf")
-    
-    if action == 0: # deposit liquidity
-        token_amount = params.at("f").as_int()
-        if liquidity == 0:
-            xch_amount = params.at("rrrf").as_int()
-            liquidity = token_amount
-            xch_reserve = xch_amount
-            token_reserve = token_amount
-        else:
-            liquidity += token_amount * liquidity // token_reserve
-            xch_reserve += token_amount * xch_reserve // token_reserve
-            token_reserve += token_amount
-    elif action == 1: # remove liquidity
-        liquidity_tokens_amount = params.at("f").as_int()
-        xch_reserve -= liquidity_tokens_amount * xch_reserve // liquidity
-        token_reserve -= liquidity_tokens_amount * token_reserve // liquidity
-        liquidity -= liquidity_tokens_amount
-    elif action == 2: # xch to token
-        xch_amount = params.at("f").as_int()
-        token_reserve -= (token_reserve * xch_amount * 993) // (1000 * xch_reserve + 993 * xch_amount)
-        xch_reserve += xch_amount
-    elif action == 3: # token to xch
-        token_amount = params.at("f").as_int()
-        xch_reserve -= (xch_reserve * token_amount * 993) // (1000 * token_reserve + 993 * token_amount)
-        token_reserve += token_amount
+    new_state_puzzle_sol = Program.to([
+        old_state,
+        params,
+        dummy_singleton_struct
+    ])
+
+    new_state_puzzle_output = new_state_puzzle.run(new_state_puzzle_sol)
+    new_state = new_state_puzzle_output.at("f")
 
     state = {
-        "liquidity": liquidity,
-        "xch_reserve": xch_reserve,
-        "token_reserve": token_reserve
+        "liquidity": new_state.at("f").as_int(),
+        "xch_reserve": new_state.at("rf").as_int(),
+        "token_reserve": new_state.at("rr").as_int()
     }
 
     return last_synced_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain
