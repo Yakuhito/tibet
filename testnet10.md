@@ -4,6 +4,8 @@ First, set up [chia-dev-tools](https://github.com/Chia-Network/chia-dev-tools) f
 
 ```bash
 . ./venv/bin/activate
+pip install -r requirements.txt
+pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
 ```
 
 Next, you'll have to switch to testnet10. There's no point in running a full node (db is comparable in size with that on mainnet), so this guide will use [FireAcademy.io](https://fireacademy.io) instead of a full node.

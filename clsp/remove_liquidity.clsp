@@ -1,0 +1,81 @@
+(mod (
+        CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
+        LIQUIDITY_TAIL_MOD_HASH ; sha256 tree of the liquidity TAIL (uncurried)
+        current_state
+        params
+        my_singleton_struct
+    )
+
+    (include tibet_utils.clib)
+
+    ; params
+    (defun-inline liquidity_tokens_amount_from_params (params) (f params))
+    (defun-inline liquidity_inner_puzzle_hash_from_params (params) (f (r params)))
+    (defun-inline liquidity_parent_id_from_params (params) (f (r (r params))))
+
+    ; main
+    (defun-inline remove_liquidity (
+        current_liquidity
+        current_xch_reserve
+        current_token_reserve
+
+        liquidity_tokens_amount
+        liquidity_inner_puzzle_hash
+        liquidity_parent_id
+
+        ; liquidity_delta is just liquidity_tokens_amount
+        xch_delta
+        token_delta
+    )
+        (c
+            ; new state 
+            (construct_state
+                ; new liquidity
+                (- current_liquidity liquidity_tokens_amount)
+                ; new xch reserve
+                (- current_xch_reserve xch_delta)
+                ; new token reserve
+                (- current_token_reserve token_delta)
+            )
+            ; extra conditions
+            (liquidity_extra_conditions
+                liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD my_singleton_struct LIQUIDITY_TAIL_MOD_HASH CAT_MOD_HASH
+            )
+        )
+    )
+
+    (defun-inline stager ( 
+        current_liquidity
+        current_xch_reserve
+        current_token_reserve
+
+        liquidity_tokens_amount
+        liquidity_inner_puzzle_hash
+        liquidity_parent_id
+    )
+        (remove_liquidity
+            current_liquidity
+            current_xch_reserve
+            current_token_reserve
+
+            liquidity_tokens_amount
+            liquidity_inner_puzzle_hash
+            liquidity_parent_id
+
+            ; xch delta
+            (f (divmod (* liquidity_tokens_amount current_xch_reserve) current_liquidity))
+            ; token delta 
+            (f (divmod (* liquidity_tokens_amount current_token_reserve) current_liquidity))
+        )
+    )
+
+    (stager
+        (liquidity_from_state current_state)
+        (xch_reserve_from_state current_state)
+        (token_reserve_from_state current_state)
+
+        (liquidity_tokens_amount_from_params params)
+        (liquidity_inner_puzzle_hash_from_params params)
+        (liquidity_parent_id_from_params params)
+    )
+)

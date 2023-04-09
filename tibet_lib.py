@@ -18,7 +18,10 @@ from chia.simulator.simulator_full_node_rpc_client import \
 from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import INFINITE_COST
 from chia.types.blockchain_format.program import Program
-from chia.types.blockchain_format.program import SerializedProgram
+try:
+    from chia.types.blockchain_format.serialized_program import SerializedProgram
+except:
+    from chia.types.blockchain_format.program import SerializedProgram
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.coin_spend import CoinSpend
 from chia.types.condition_opcodes import ConditionOpcode
@@ -80,6 +83,10 @@ from clvm.casts import int_to_bytes
 from clvm import SExp
 
 from leaflet_client import LeafletFullNodeRpcClient
+from cic.drivers.merkle_utils import build_merkle_tree
+
+def program_from_hex(h: str) -> Program:
+    return SerializedProgram.from_bytes(bytes.fromhex(h)).to_program()
 
 def load_clvm_hex(
     filename
@@ -87,48 +94,91 @@ def load_clvm_hex(
     clvm_hex = open(filename, "r").read().strip()
     assert len(clvm_hex) != 0
     
-    clvm_blob = bytes.fromhex(clvm_hex)
-    return SerializedProgram.from_bytes(clvm_blob).to_program()
+    return program_from_hex(clvm_hex)
 
 ROUTER_MOD: Program = load_clvm_hex("clvm/router.clvm.hex")
-PAIR_MOD: Program = load_clvm_hex("clvm/pair.clvm.hex")
 LIQUIDITY_TAIL_MOD: Program = load_clvm_hex("clvm/liquidity_tail.clvm.hex")
+
 P2_SINGLETON_FLASHLOAN_MOD: Program = load_clvm_hex("clvm/p2_singleton_flashloan.clvm.hex")
+P2_MERKLE_TREE_MODIFIED_MOD: Program = load_clvm_hex("clvm/p2_merkle_tree_modified.clvm.hex")
 
+PAIR_INNER_PUZZLE_MOD: Program = load_clvm_hex("clvm/pair_inner_puzzle.clvm.hex")
+ADD_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/add_liquidity.clvm.hex")
+REMOVE_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/remove_liquidity.clvm.hex")
+SWAP_MOD: Program = load_clvm_hex("clvm/swap.clvm.hex")
+
+# todo: debug remove unused hashes
 ROUTER_MOD_HASH = ROUTER_MOD.get_tree_hash()
-PAIR_MOD_HASH = PAIR_MOD.get_tree_hash()
-LIQUIDITY_TAIL_MOD_HASH = LIQUIDITY_TAIL_MOD.get_tree_hash()
-P2_SINGLETON_FLASHLOAN_MOD_HASH = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
+LIQUIDITY_TAIL_MOD_HASH: Program = LIQUIDITY_TAIL_MOD.get_tree_hash()
+P2_SINGLETON_FLASHLOAN_MOD_HASH: Program = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
+P2_MERKLE_TREE_MODIFIED_MOD_HASH: Program = P2_MERKLE_TREE_MODIFIED_MOD.get_tree_hash()
+PAIR_INNER_PUZZLE_MOD_HASH: Program = PAIR_INNER_PUZZLE_MOD.get_tree_hash()
+ADD_LIQUIDITY_MOD_HASH: Program = ADD_LIQUIDITY_MOD.get_tree_hash()
+REMOVE_LIQUIDITY_MOD_HASH: Program = REMOVE_LIQUIDITY_MOD.get_tree_hash()
+SWAP_MOD_HASH: Program = SWAP_MOD.get_tree_hash()
 
-# can be overriden for all func calls
+# can be overriden for in func calls
 DEFAULT_RETURN_ADDRESS = "xch10d09t9eqpr2y34thcayk54sjz34qhyv3tmhrejjp6xxvj598sfds5z0xch"
+
+ADD_LIQUIDITY_PUZZLE = ADD_LIQUIDITY_MOD.curry(
+    CAT_MOD_HASH,
+    LIQUIDITY_TAIL_MOD_HASH
+)
+ADD_LIQUIDITY_PUZZLE_HASH = ADD_LIQUIDITY_PUZZLE.get_tree_hash()
+
+REMOVE_LIQUIDITY_PUZZLE = REMOVE_LIQUIDITY_MOD.curry(
+    CAT_MOD_HASH,
+    LIQUIDITY_TAIL_MOD_HASH
+)
+REMOVE_LIQUIDITY_PUZZLE_HASH = REMOVE_LIQUIDITY_PUZZLE.get_tree_hash()
+
+SWAP_PUZZLE = SWAP_MOD.curry(993)
+SWAP_PUZZLE_HASH = SWAP_PUZZLE.get_tree_hash()
+
+# DEFAULT_HIDDEN_PUZZLE is (=) instead of (x)
+# so yes, I will use this opportunity to put my signature on the blockchain
+# verify this is harmless with:
+# brun -x 01 ff08ffff018879616b756869746f80
+# (should output '(x (q . "yakuhito"))' - a program that always fails with the message 'yakuhito')
+SECRET_PUZZLE = program_from_hex("ff08ffff018879616b756869746f80")
+SECRET_PUZZLE_HASH = SECRET_PUZZLE.get_tree_hash()
+
+MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
+    ADD_LIQUIDITY_PUZZLE_HASH,
+    REMOVE_LIQUIDITY_PUZZLE_HASH,
+    SWAP_PUZZLE_HASH,
+    SECRET_PUZZLE_HASH
+])
 
 def get_router_puzzle():
     return ROUTER_MOD.curry(
-        PAIR_MOD_HASH,
+        PAIR_INNER_PUZZLE_MOD_HASH,
         SINGLETON_MOD_HASH,
+        P2_MERKLE_TREE_MODIFIED_MOD_HASH,
         P2_SINGLETON_FLASHLOAN_MOD_HASH,
         CAT_MOD_HASH,
-        LIQUIDITY_TAIL_MOD_HASH,
         OFFER_MOD_HASH,
-        993,
+        MERKLE_ROOT,
         SINGLETON_LAUNCHER_HASH,
         ROUTER_MOD_HASH
     )
 
-def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
-    return PAIR_MOD.curry(
-        PAIR_MOD_HASH,
+def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
+    return PAIR_INNER_PUZZLE_MOD.curry(
+        P2_MERKLE_TREE_MODIFIED_MOD_HASH,
         (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
         P2_SINGLETON_FLASHLOAN_MOD_HASH,
         CAT_MOD_HASH,
-        LIQUIDITY_TAIL_MOD_HASH,
         OFFER_MOD_HASH,
-        tail_hash,
-        993,
-        liquidity,
-        xch_reserve,
-        token_reserve
+        tail_hash
+    )
+
+
+def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
+    return P2_MERKLE_TREE_MODIFIED_MOD.curry(
+        get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash),
+        MERKLE_ROOT,
+        (liquidity, (xch_reserve, token_reserve))
     )
 
 
@@ -524,44 +574,28 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
     if creation_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
         return last_synced_coin, creation_spend, state, None, last_synced_coin.name()
 
-    creation_spend_inner_puzzle_args = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[1]
-    liquidity = creation_spend_inner_puzzle_args.at("r" * 8 + "f").as_int()
-    xch_reserve = creation_spend_inner_puzzle_args.at("r" * 9 + "f").as_int()
-    token_reserve = creation_spend_inner_puzzle_args.at("r" * 10 + "f").as_int()
+    old_state = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[1].at("rrf")
+    p2_merkle_solution = creation_spend.solution.to_program().at("rrf")
+    new_state_puzzle = p2_merkle_solution.at("f") # p2_merkle_tree_modified -> parameters (which is a puzzle)
+    params = p2_merkle_solution.at("rrf").at("r")
 
-    creation_spend_inner_solution = creation_spend.solution.to_program().at("rrf")
-    action = creation_spend_inner_solution.at("rf").as_int()
-    params = creation_spend_inner_solution.at("rrf")
-    
-    if action == 0: # deposit liquidity
-        token_amount = params.at("f").as_int()
-        if liquidity == 0:
-            xch_amount = params.at("rrrf").as_int()
-            liquidity = token_amount
-            xch_reserve = xch_amount
-            token_reserve = token_amount
-        else:
-            liquidity += token_amount * liquidity // token_reserve
-            xch_reserve += token_amount * xch_reserve // token_reserve
-            token_reserve += token_amount
-    elif action == 1: # remove liquidity
-        liquidity_tokens_amount = params.at("f").as_int()
-        xch_reserve -= liquidity_tokens_amount * xch_reserve // liquidity
-        token_reserve -= liquidity_tokens_amount * token_reserve // liquidity
-        liquidity -= liquidity_tokens_amount
-    elif action == 2: # xch to token
-        xch_amount = params.at("f").as_int()
-        token_reserve -= (token_reserve * xch_amount * 993) // (1000 * xch_reserve + 993 * xch_amount)
-        xch_reserve += xch_amount
-    elif action == 3: # token to xch
-        token_amount = params.at("f").as_int()
-        xch_reserve -= (xch_reserve * token_amount * 993) // (1000 * token_reserve + 993 * token_amount)
-        token_reserve += token_amount
+    # SINGLETON_STRUCT is only used to create extra conditions
+    # in inner inner puzzle
+    dummy_singleton_struct = (b"\x00" * 32, (b"\x00" * 32, b"\x00" * 32))
+
+    new_state_puzzle_sol = Program.to([
+        old_state,
+        params,
+        dummy_singleton_struct
+    ])
+
+    new_state_puzzle_output = new_state_puzzle.run(new_state_puzzle_sol)
+    new_state = new_state_puzzle_output.at("f")
 
     state = {
-        "liquidity": liquidity,
-        "xch_reserve": xch_reserve,
-        "token_reserve": token_reserve
+        "liquidity": new_state.at("f").as_int(),
+        "xch_reserve": new_state.at("rf").as_int(),
+        "token_reserve": new_state.at("rr").as_int()
     }
 
     return last_synced_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain
@@ -842,20 +876,27 @@ async def respond_to_deposit_liquidity_offer(
         pair_xch_reserve,
         pair_token_reserve
     )
-    pair_singleton_inner_solution = Program.to([
-        Program.to([
+    inner_inner_sol = Program.to((
+        (
             current_pair_coin.name(),
-            b"\x00" * 32 if last_xch_reserve_coin is None else last_xch_reserve_coin.name(),
-            b"\x00" * 32 if last_token_reserve_coin is None else last_token_reserve_coin.name(),
-        ]),
-        0,
-        Program.to([
+            (
+                b"\x00" * 32 if last_xch_reserve_coin is None else last_xch_reserve_coin.name(),
+                b"\x00" * 32 if last_token_reserve_coin is None else last_token_reserve_coin.name()
+            )
+        ),
+        [
             deposited_token_amount,
             liquidity_cat_mint_coin_inner_puzzle_hash,
             eph_xch_coin.name(), # parent of liquidity cat mint coin
             deposited_xch_amount
-        ])
+        ]
+    ))
+    pair_singleton_inner_solution = Program.to([
+        ADD_LIQUIDITY_PUZZLE,
+        Program.to(MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH]),
+        inner_inner_sol
     ])
+
     lineage_proof = lineage_proof_for_coinsol(creation_spend)
     pair_singleton_solution = solution_for_singleton(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
@@ -1128,19 +1169,26 @@ async def respond_to_remove_liquidity_offer(
         pair_xch_reserve,
         pair_token_reserve
     )
-    pair_singleton_inner_solution = Program.to([
-        Program.to([
+    inner_inner_sol = Program.to((
+        (
             current_pair_coin.name(),
-            last_xch_reserve_coin.name(),
-            last_token_reserve_coin.name(),
-        ]),
-        1,
-        Program.to([
+            (
+                last_xch_reserve_coin.name(),
+                last_token_reserve_coin.name()
+            )
+        ),
+        [
             burned_liquidity_amount,
             liquidity_burn_coin_inner_puzzle_hash,
             liquidity_burn_coin.parent_coin_info
-        ])
+        ]
+    ))
+    pair_singleton_inner_solution = Program.to([
+        REMOVE_LIQUIDITY_PUZZLE,
+        Program.to(MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH]),
+        inner_inner_sol
     ])
+    
     lineage_proof = lineage_proof_for_coinsol(creation_spend)
     pair_singleton_solution = solution_for_singleton(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
@@ -1397,17 +1445,25 @@ async def respond_to_swap_offer(
         pair_token_reserve
     )
 
-    pair_singleton_inner_solution = Program.to([
-        Program.to([
+    inner_inner_sol = Program.to((
+        (
             current_pair_coin.name(),
-            last_xch_reserve_coin.name(),
-            last_token_reserve_coin.name(),
-        ]),
-        3 if eph_coin_is_cat else 2,
-        Program.to([
-            eph_coin.amount
-        ])
+            (
+                last_xch_reserve_coin.name(),
+                last_token_reserve_coin.name()
+            )
+        ),
+        [
+            eph_coin.amount,
+            0 if eph_coin_is_cat else 1,
+        ]
+    ))
+    pair_singleton_inner_solution = Program.to([
+        SWAP_PUZZLE,
+        Program.to(MERKLE_PROOFS[SWAP_PUZZLE_HASH]),
+        inner_inner_sol
     ])
+
     lineage_proof = lineage_proof_for_coinsol(creation_spend)
     pair_singleton_solution = solution_for_singleton(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution

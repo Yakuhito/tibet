@@ -47,3 +47,26 @@ Each transaction, token and XCH reserves are burned (destroyed, spent) and then 
 ## Imports
 
 Why do imports look like they do? `isort [file].py --split-on-trailing-comma`
+
+## Higher SPS (Swaps per Second)
+
+If a greater number of swaps per second is really required, one can come up with a sequencer that takes all offers at 'convenient' prices, aggregates them, and then only spends the pair singleton once (using the aggregated offer). This should significantly reduce the overall transaction cost (compared to spending the singleton for each trade), which means that more trades can fit in one single block!
+
+# Special Thanks
+
+This project benefited from the goodwill of multiple Chia community members. Without them, the project wouldn't be where it is today.
+
+Please note that their mention here does not represent their endorsement or their company's; these people simply helped someone who needed it. And for that, I am forever thankful.
+
+
+
+| Username                                                                                                                            | Most Notable Contribution(s)                                                                                                       |
+|-------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| [dimitry](https://twitter.com/cityu_dimitry)                                                                                        | Shared his team's AMM design and code w/ me; A lot of support                                                                      |
+| [jde5011](https://twitter.com/jde5011)                                                                                              | Had a meeting to discuss security posture/opsec best practices for TibetSwap; Recorded the presentation and shared it internally!  |
+| [trepca](https://twitter.com/trepca)                                                                                                | Answered (a lot of) questions about testing; Took a look at the tests, provided some code that took them to the next level         |
+| [jm](https://twitter.com/XCHcentral_jm) & [kt](https://twitter.com/XCHcentral_kt) from [XCHcentral](https://twitter.com/XCHcentral) | Designed the logo that won the logo competition & is currently used by TibetSwap.                                                  |
+| [hoffmang](https://twitter.com/hoffmang)                                                                                            | Described this project as 'a functional AMM' when talking to Bram during a SF Chia Meetup (I was there!) -> motivation             |
+| [quexington](https://github.com/quexington)                                                                                         | Took a quick look at the chialisp code, sent short message that described how to significantly improve it. Left me speechless.     |
+| [RightSexyOrc](https://twitter.com/RightSexyOrc)                                                                                    | Pull request [#4](https://github.com/Yakuhito/tibet/pull/4) - spotted a typo in README.md.                                         |
+| [NamesDAO](https://twitter.com/https://twitter.com/theNamesdao)                                                                     | Gave us a lot of NAME tokens as a development grant. Thank you!                                                                    |

@@ -1,0 +1,97 @@
+(mod (
+        INVERSE_FEE ; this cleverly-named variable is calculated as 1000 - FEE
+            ;; FEE is, for example, 7 for 0.7% (will get divided by a thousand)
+            ;; meaning INVERSE_FEE is 993 (user swaps 99.3% of their input assets to output - tokens or XCH)
+            ;; 0.7% is kept as lp fee
+        current_state
+        params
+        my_singleton_struct
+    )
+
+    (include tibet_utils.clib)
+
+    ; params
+    (defun-inline amount_from_params (params) (f params))
+    (defun-inline input_is_xch_from_params (params) (f (r params)))
+
+    ; https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy#L106
+    (defun-inline get_input_price (input_amount input_reserve output_reserve)
+        (f
+            (divmod
+                ; numerator
+                (* output_reserve (* input_amount INVERSE_FEE))
+                ; denominator
+                (+ (* input_reserve 1000) (* input_amount INVERSE_FEE))
+            )
+        )
+    )
+
+    ; main
+    (defun-inline swap (
+        current_liquidity
+        current_xch_reserve
+        current_token_reserve
+
+        ; liquidity_delta is 0
+        xch_delta
+        token_delta
+    )
+        (if (all
+                (> current_liquidity 0)
+                ; verify that one of the deltas is positive and the other is negative
+                (> 0 (* xch_delta token_delta))
+            )
+            (c
+                ; new state 
+                (construct_state
+                    ; new liquidity
+                    current_liquidity
+                    ; new xch reserve
+                    (+ current_xch_reserve xch_delta)
+                    ; new token reserve
+                    (+ current_token_reserve token_delta)
+                )
+                ; extra conditions
+                ()
+            )
+            ; else
+            (x)
+        )
+    )
+
+    (defun-inline stager ( 
+        current_liquidity
+        current_xch_reserve
+        current_token_reserve
+
+        amount
+        input_is_xch
+    )
+        (swap
+            current_liquidity
+            current_xch_reserve
+            current_token_reserve
+
+            (if input_is_xch
+                amount
+                ; else - input is token
+                (- 0 (get_input_price amount current_token_reserve current_xch_reserve))
+            )
+
+            (if input_is_xch
+                (- 0 (get_input_price amount current_xch_reserve current_token_reserve))
+                ; else - input is token
+                amount
+            )
+        )
+    )
+
+    (stager
+        (liquidity_from_state current_state)
+        (xch_reserve_from_state current_state)
+        (token_reserve_from_state current_state)
+
+        (amount_from_params params)
+        (input_is_xch_from_params params)
+    )
+)

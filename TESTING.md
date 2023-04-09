@@ -5,6 +5,8 @@ Set up [chia-dev-tools](https://github.com/Chia-Network/chia-dev-tools) first.
 # python3 -m venv venv + install
 . ./venv/bin/activate
 export CHIA_ROOT=~/.chia/simulator/main
+pip install -r requirements.txt
+pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
 
 
 # remove prev sessions
