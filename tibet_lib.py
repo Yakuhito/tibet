@@ -1445,17 +1445,25 @@ async def respond_to_swap_offer(
         pair_token_reserve
     )
 
-    pair_singleton_inner_solution = Program.to([
-        Program.to([
+    inner_inner_sol = Program.to((
+        (
             current_pair_coin.name(),
-            last_xch_reserve_coin.name(),
-            last_token_reserve_coin.name(),
-        ]),
-        3 if eph_coin_is_cat else 2,
-        Program.to([
-            eph_coin.amount
-        ])
+            (
+                last_xch_reserve_coin.name(),
+                last_token_reserve_coin.name()
+            )
+        ),
+        [
+            eph_coin.amount,
+            0 if eph_coin_is_cat else 1,
+        ]
+    ))
+    pair_singleton_inner_solution = Program.to([
+        SWAP_PUZZLE,
+        Program.to(MERKLE_PROOFS[SWAP_PUZZLE_HASH]),
+        inner_inner_sol
     ])
+
     lineage_proof = lineage_proof_for_coinsol(creation_spend)
     pair_singleton_solution = solution_for_singleton(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution

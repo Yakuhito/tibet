@@ -75,11 +75,11 @@
             (if input_is_xch
                 amount
                 ; else - input is token
-                (- 0 (get_input_price amount current_xch_reserve current_token_reserve))
+                (- 0 (get_input_price amount current_token_reserve current_xch_reserve))
             )
 
             (if input_is_xch
-                (- 0 (get_input_price amount current_token_reserve current_xch_reserve))
+                (- 0 (get_input_price amount current_xch_reserve current_token_reserve))
                 ; else - input is token
                 amount
             )
