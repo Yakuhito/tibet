@@ -140,17 +140,17 @@ MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
     DEFAULT_HIDDEN_PUZZLE_HASH
 ])
 
-ROUTER_PUZZLE = ROUTER_MOD.curry(
-    PAIR_INNER_PUZZLE_MOD_HASH,
-    SINGLETON_MOD_HASH,
-    P2_MERKLE_TREE_MODIFIED_MOD_HASH,
-    P2_SINGLETON_FLASHLOAN_MOD_HASH
-    CAT_MOD_HASH
-    SETTLEMENT_PAYMENTS_MOD_HASH
-    MERKLE_ROOT,
-    SINGLETON_LAUNCHER_HASH,
-    ROUTER_MOD_HASH
-)
+def get_router_puzzle():
+    return ROUTER_MOD.curry(
+        PAIR_INNER_PUZZLE_MOD_HASH,
+        SINGLETON_MOD_HASH,
+        P2_MERKLE_TREE_MODIFIED_MOD_HASH,
+        P2_SINGLETON_FLASHLOAN_MOD_HASH,
+        OFFER_MOD_HASH,
+        MERKLE_ROOT,
+        SINGLETON_LAUNCHER_HASH,
+        ROUTER_MOD_HASH
+    )
 
 def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
     return PAIR_INNER_PUZZLE_MOD.curry(
@@ -158,7 +158,7 @@ def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
         (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
         P2_SINGLETON_FLASHLOAN_MOD_HASH,
         OFFER_MOD_HASH,
-        tail_hash,
+        tail_hash
     )
 
 
@@ -576,6 +576,7 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
     print(params)
     print("TODO: DEBUG")
     input()
+    print("don't forget about swap!")
 
     action = creation_spend_inner_solution.at("rf").as_int()
     params = creation_spend_inner_solution.at("rrf")
