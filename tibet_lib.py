@@ -32,6 +32,7 @@ from chia.util.bech32m import convertbits
 from chia.util.bech32m import decode_puzzle_hash
 from chia.util.bech32m import encode_puzzle_hash
 from chia.util.condition_tools import conditions_dict_for_solution
+from chia.util.condition_tools import conditions_for_solution
 from chia.util.config import load_config
 from chia.util.hash import std_hash
 from chia.util.ints import uint16
@@ -84,6 +85,8 @@ from clvm import SExp
 
 from leaflet_client import LeafletFullNodeRpcClient
 from cic.drivers.merkle_utils import build_merkle_tree
+from chia.full_node.bundle_tools import simple_solution_generator
+from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
 
 def program_from_hex(h: str) -> Program:
     return SerializedProgram.from_bytes(bytes.fromhex(h)).to_program()
@@ -341,6 +344,38 @@ async def create_test_cat(token_amount, coin, coin_puzzle):
     )
     
     return tail_hash.hex(), sb
+
+
+# https://github.com/Chia-Network/chia-dev-tools/blob/main/cdv/cmds/chia_inspect.py#L312
+def get_spend_bundle_cost(sb: SpendBundle):
+    agg_sig = sb.aggregated_signature
+    coin_spends = []
+    for cs in sb.coin_spends:
+        if cs.coin.parent_coin_info == b"\x00" * 32: # offer *-*
+            continue
+        coin_spends.append(cs)
+
+    program: BlockGenerator = simple_solution_generator(SpendBundle(coin_spends, agg_sig))
+    npc_result: NPCResult = get_name_puzzle_conditions(
+            # cost_per_byte=0 is meaningless and will be removed in the next chia-blockchain version
+            program,
+            INFINITE_COST,
+            cost_per_byte=0,
+            mempool_mode=True,
+    )
+    print(npc_result) # todo: debug
+    return int(npc_result.cost)
+
+# my_solution = program_from_hex("80") # ()
+# # run '(mod () (include condition_codes.clvm) (list (list CREATE_COIN 0x0000000000000000000000000000000000000000000000000000000000000001 1)))' -i include/ -d
+# my_puzzle = program_from_hex("ff02ffff01ff04ffff04ff02ffff01ffa00000000000000000000000000000000000000000000000000000000000000001ff018080ff8080ffff04ffff0133ff018080")
+# my_coin = Coin(b"\x00" * 32, my_puzzle.get_tree_hash(), 1)
+# my_cs = CoinSpend(my_coin, my_puzzle, my_solution)
+# sb = SpendBundle(
+#     [my_cs],
+#     AugSchemeMPL.aggregate([])
+# )
+# print(get_spend_bundle_cost(sb)) # todo: debug
 
 
 async def create_pair_from_coin(
@@ -1649,3 +1684,25 @@ async def respond_to_swap_offer(
     return SpendBundle(
         coin_spends, offer_spend_bundle.aggregated_signature
     )
+
+from chia.full_node.mempool_manager import MEMPOOL_MIN_FEE_INCREASE
+
+def get_fee_estimate(mempool_sb):
+    cost_of_operation = 300000000 # upper bound
+    # from benchmarks:
+    #   - add/remove liquidity -> ~250,000,000
+    #   - xch to token -> ~150,000,000
+    #   - token to xch -> ~200,000,000
+    if mempool_sb is None:
+        return 5 * cost_of_operation
+
+    cost_of_mempool_sb = get_spend_bundle_cost(mempool_sb)
+    fee_of_mempool_sb = max(mempool_sb.get_fee(), 1)
+    mempool_fee_per_cost: float = fee_of_mempool_sb / cost_of_mempool_sb
+    
+    new_fee_per_cost = mempool_fee_per_cost + 0.0001
+    fee = new_fee_per_cost * (cost_of_operation + cost_of_mempool_sb) - mempool_fee_per_cost
+    if fee < MEMPOOL_MIN_FEE_INCREASE:
+        fee = MEMPOOL_MIN_FEE_INCREASE
+
+    return fee

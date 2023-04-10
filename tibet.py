@@ -501,10 +501,14 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         sb = SpendBundle.aggregate([sb, sb_to_aggregate])
 
     if push_tx:
-        click.echo(f"Pushing tx...")
-        resp = await full_node_client.push_tx(sb)
-        click.echo(resp)
-        click.echo("Enjoy your lp fees!")
+        resp = input("Are ypu sure you want to broadcast this spend? (Yes): ")
+        if resp == "Yes":
+            click.echo(f"Pushing tx...")
+            resp = await full_node_client.push_tx(sb)
+            click.echo(resp)
+            click.echo("Enjoy your lp fees!")
+        else:
+            click.echo("That's not a clear 'Yes'!")
     else:
         open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
@@ -634,10 +638,14 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         sb = SpendBundle.aggregate([sb, sb_to_aggregate])
 
     if push_tx:
-        click.echo(f"Pushing tx...")
-        resp = await full_node_client.push_tx(sb)
-        click.echo(resp)
-        click.echo("We're extremely sorry to see your liquidity go :(")
+        resp = input("Are ypu sure you want to broadcast this spend? (Yes): ")
+        if resp == "Yes":
+            click.echo(f"Pushing tx...")
+            resp = await full_node_client.push_tx(sb)
+            click.echo(resp)
+            click.echo("We're extremely sorry to see your liquidity go :(")
+        else:
+            click.echo("That's not a clear 'Yes'!")
     else:
         open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
@@ -770,10 +778,14 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
         sb = SpendBundle.aggregate([sb, sb_to_aggregate])
 
     if push_tx:
-        click.echo(f"Pushing tx...")
-        resp = await full_node_client.push_tx(sb)
-        click.echo(resp)
-        click.echo("Enjoy your shiny new tokens!")
+        resp = input("Are ypu sure you want to broadcast this spend? (Yes): ")
+        if resp == "Yes":
+            click.echo(f"Pushing tx...")
+            resp = await full_node_client.push_tx(sb)
+            click.echo(resp)
+            click.echo("Enjoy your shiny new tokens!")
+        else:
+            click.echo("That's not a clear 'Yes'!")
     else:
         open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
@@ -906,10 +918,14 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee):
         sb = SpendBundle.aggregate([sb, sb_to_aggregate])
     
     if push_tx:
-        click.echo(f"Pushing tx...")
-        resp = await full_node_client.push_tx(sb)
-        click.echo(resp)
-        click.echo("Enjoy your shiny new mojos!")
+        resp = input("Are ypu sure you want to broadcast this spend? (Yes): ")
+        if resp == "Yes":
+            click.echo(f"Pushing tx...")
+            resp = await full_node_client.push_tx(sb)
+            click.echo(resp)
+            click.echo("Enjoy your shiny new mojos!")
+        else:
+            click.echo("That's not a clear 'Yes'!")
     else:
         open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
