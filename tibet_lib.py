@@ -88,6 +88,8 @@ from cic.drivers.merkle_utils import build_merkle_tree
 from chia.full_node.bundle_tools import simple_solution_generator
 from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
 
+MEMPOOL_MIN_FEE_INCREASE = uint64(10000000)
+
 def program_from_hex(h: str) -> Program:
     return SerializedProgram.from_bytes(bytes.fromhex(h)).to_program()
 
@@ -363,7 +365,6 @@ def get_spend_bundle_cost(sb: SpendBundle):
             cost_per_byte=0,
             mempool_mode=True,
     )
-    print(npc_result) # todo: debug
     return int(npc_result.cost)
 
 # my_solution = program_from_hex("80") # ()
@@ -375,7 +376,7 @@ def get_spend_bundle_cost(sb: SpendBundle):
 #     [my_cs],
 #     AugSchemeMPL.aggregate([])
 # )
-# print(get_spend_bundle_cost(sb)) # todo: debug
+# print(get_spend_bundle_cost(sb))
 
 
 async def create_pair_from_coin(
@@ -1685,24 +1686,20 @@ async def respond_to_swap_offer(
         coin_spends, offer_spend_bundle.aggregated_signature
     )
 
-from chia.full_node.mempool_manager import MEMPOOL_MIN_FEE_INCREASE
-
-def get_fee_estimate(mempool_sb):
+async def get_fee_estimate(mempool_sb, full_node_client):
     cost_of_operation = 300000000 # upper bound
     # from benchmarks:
+    #   - add/remove liquidity -> ~250,000,000
     #   - add/remove liquidity -> ~250,000,000
     #   - xch to token -> ~150,000,000
     #   - token to xch -> ~200,000,000
     if mempool_sb is None:
-        return 5 * cost_of_operation
+        fee_per_cost_resp = await full_node_client.get_fee_estimate(target_times=[0], cost=cost_of_operation)
+        return int(fee_per_cost_resp['current_fee_rate'] * cost_of_operation) + 1
 
     cost_of_mempool_sb = get_spend_bundle_cost(mempool_sb)
-    fee_of_mempool_sb = max(mempool_sb.get_fee(), 1)
+    fee_of_mempool_sb = max(mempool_sb.fees(), 1)
     mempool_fee_per_cost: float = fee_of_mempool_sb / cost_of_mempool_sb
     
-    new_fee_per_cost = mempool_fee_per_cost + 0.0001
-    fee = new_fee_per_cost * (cost_of_operation + cost_of_mempool_sb) - mempool_fee_per_cost
-    if fee < MEMPOOL_MIN_FEE_INCREASE:
-        fee = MEMPOOL_MIN_FEE_INCREASE
-
+    fee = int(mempool_fee_per_cost * (cost_of_operation + cost_of_mempool_sb)) - fee_of_mempool_sb + MEMPOOL_MIN_FEE_INCREASE
     return fee
