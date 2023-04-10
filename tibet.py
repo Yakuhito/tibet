@@ -386,14 +386,15 @@ async def _get_pair_info(token_tail_hash):
 @click.option("--xch-amount", default=0, help="Only required if pair has no liquidity. If offer is none, this amount of XCH will be asked for in the generated offer. Unit is mojos.")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
-def deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee):
+@click.option('--use-fee-estimate', is_flag=True, show_default=True, help='Estimate required fee when generating offer')
+def deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee))
+    asyncio.run(_deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee, use_fee_estimate))
 
 
-async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, push_tx, fee):
+async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, push_tx, fee, use_fee_estimate):
     click.echo("Depositing liquidity...")
     offer_str = ""
 
@@ -451,6 +452,10 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         if pair_state['liquidity'] != 0:
             liquidity_token_amount = pair_state['liquidity'] * token_amount // pair_state['token_reserve']
             xch_amount = liquidity_token_amount * pair_state['xch_reserve'] // pair_state['liquidity']
+
+        if use_fee_estimate:
+            fee = get_fee_estimate(sb_to_aggregate)
+            print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
 
         offer_dict = {}
         offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
@@ -524,14 +529,15 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 @click.option("--liquidity-token-amount", default=0, help="If offer is none, this amount of liqudity tokens will be included in the offer. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
-def remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee):
+@click.option('--use-fee-estimate', is_flag=True, show_default=True, help='Estimate required fee when generating offer')
+def remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee))
+    asyncio.run(_remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee, use_fee_estimate))
 
 
-async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push_tx, fee):
+async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push_tx, fee, use_fee_estimate):
     click.echo("Removing liquidity...")
     offer_str = ""
 
@@ -588,6 +594,10 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         
         token_amount = pair_state['token_reserve'] * liquidity_token_amount // pair_state['liquidity']
         xch_amount = pair_state['xch_reserve'] * liquidity_token_amount // pair_state['liquidity']
+
+        if use_fee_estimate:
+            fee = get_fee_estimate(sb_to_aggregate)
+            print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
 
         offer_dict = {}
         offer_dict[1] = xch_amount + liquidity_token_amount # also ask for xch from liquidity cat burn
@@ -661,14 +671,15 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
 @click.option("--xch-amount", default=0, help="If offer is none, this amount of xch will be included in the offer. Unit is mojos.")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the spend bundle to the network.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
-def xch_to_token(asset_id, offer, xch_amount, push_tx, fee):
+@click.option('--use-fee-estimate', is_flag=True, show_default=True, help='Estimate required fee when generating offer')
+def xch_to_token(asset_id, offer, xch_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_xch_to_token(asset_id, offer, xch_amount, push_tx, fee))
+    asyncio.run(_xch_to_token(asset_id, offer, xch_amount, push_tx, fee, use_fee_estimate))
 
 
-async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
+async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fee_estimate):
     click.echo("Swapping XCH for token...")
     offer_str = ""
 
@@ -729,6 +740,10 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
             await wallet_client.await_closed()
             full_node_client.close()
             await full_node_client.await_closed()
+
+        if use_fee_estimate:
+            fee = get_fee_estimate(sb_to_aggregate)
+            print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
 
         offer_dict = {}
         offer_dict[1] = -xch_amount # offer XCH
@@ -801,14 +816,15 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee):
 @click.option("--token-amount", default=0, help="If offer is none, this amount of tokens will be included in the offer. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the spend bundle to the network.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
-def token_to_xch(asset_id, offer, token_amount, push_tx, fee):
+@click.option('--use-fee-estimate', is_flag=True, show_default=True, help='Estimate required fee when generating offer')
+def token_to_xch(asset_id, offer, token_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_token_to_xch(asset_id, offer, token_amount, push_tx, fee))
+    asyncio.run(_token_to_xch(asset_id, offer, token_amount, push_tx, fee, use_fee_estimate))
 
 
-async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee):
+async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_fee_estimate):
     click.echo("Swapping token for XCH...")
     offer_str = ""
 
@@ -869,6 +885,10 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee):
             await wallet_client.await_closed()
             full_node_client.close()
             await full_node_client.await_closed()
+
+        if use_fee_estimate:
+            fee = get_fee_estimate(sb_to_aggregate)
+            print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
 
         offer_dict = {}
         offer_dict[1] = xch_amount # ask for XCH
