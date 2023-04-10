@@ -36,6 +36,7 @@ full_node_client = None
 # Add these two global variables
 last_check_router_update_call = datetime.now() - timedelta(minutes=1)
 router_instance = None
+last_pair_update = {}
 
 async def get_client():
     global full_node_client
@@ -61,8 +62,10 @@ def get_tokens(db: Session = Depends(get_db)):
     return db.query(models.Token).all()
 
 @app.get("/pairs", response_model=List[schemas.Pair])
-def get_pairs(db: Session = Depends(get_db)):
-    return db.query(models.Pair).all()
+async def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    pairs = await get_all_pairs(db)
+    return pairs[skip : skip + limit]
+
 
 @app.get("/token/{asset_id}", response_model=schemas.Token)
 def get_token(asset_id: str, db: Session = Depends(get_db)):
@@ -72,8 +75,8 @@ def get_token(asset_id: str, db: Session = Depends(get_db)):
     return token
 
 @app.get("/pair/{launcher_id}", response_model=schemas.Pair)
-def get_pair(launcher_id: str, db: Session = Depends(get_db)):
-    pair = db.query(models.Pair).get(launcher_id)
+async def get_pair(launcher_id: str, db: Session = Depends(get_db)):
+    pair = await get_pair(db, launcher_id)
     if pair is None:
         raise HTTPException(status_code=404, detail="Pair not found")
     return pair
@@ -154,7 +157,7 @@ async def get_router():
                     xch_reserve=0,
                     token_reserve=0,
                     liquidity=0,
-                    last_coin_id_on_chain=pair_tail_hash,
+                    last_coin_id_on_chain=pair_launcher_id,
                 )
                 db.add(pair)
                 db.commit()
@@ -185,3 +188,52 @@ async def get_router():
                 db.commit()
 
     return router_instance
+
+async def get_pair(db: Session, pair_id: str) -> models.Pair:
+    global last_pair_update
+    
+    pair = db.query(models.Pair).filter(models.Pair.launcher_id == pair_id).first()
+    now = datetime.now()
+    
+    if pair is not None:
+        last_update = last_pair_update.get(pair_id)
+        if last_update is None or now - last_update >= timedelta(seconds=5):
+            last_pair_update[pair_id] = now
+            pair = await check_pair_update(db, pair)
+    
+    return pair
+
+
+async def get_all_pairs(db: Session) -> List[models.Pair]:
+    pairs = db.query(models.Pair).all()
+
+    for pair in pairs:
+        pair_id = pair.launcher_id
+        last_update = last_pair_update.get(pair_id)
+
+        now = datetime.now()
+        if last_update is None or now - last_update >= timedelta(seconds=5):
+            last_pair_update[pair_id] = now
+            pair = await check_pair_update(db, pair)
+
+    return pairs
+
+
+async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
+    client = await get_client()
+
+    _, _, pair_state, _, last_synced_pair_id_on_blockchain = await sync_pair(
+        client, bytes.fromhex(pair.last_coin_id_on_chain), bytes.fromhex(pair.asset_id)
+    )
+
+    pair.xch_reserve = pair_state['xch_reserve'] 
+    pair.token_reserve = pair_state['token_reserve']
+    pair.liqudity = pair_state['liquidity']
+    pair.last_coin_id_on_chain = last_synced_pair_id_on_blockchain.hex()
+    
+    # Commit the update to the database
+    db.add(pair)
+    db.commit()
+    db.refresh(pair)
+    
+    return pair
