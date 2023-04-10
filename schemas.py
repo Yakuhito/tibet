@@ -25,3 +25,12 @@ class PairBase(BaseModel):
 class Pair(PairBase):
     class Config:
         orm_mode = True
+
+class RouterBase(BaseModel):
+    launcher_id: str
+    current_id: str
+    network: str
+
+class Router(RouterBase):
+    class Config:
+        orm_mode = True
