@@ -7,6 +7,8 @@ from typing import List
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from datetime import datetime, timedelta
+
 import asyncio
 import models, schemas
 import os
@@ -30,6 +32,10 @@ except KeyError as e:
     sys.exit(1)
 
 full_node_client = None
+
+# Add these two global variables
+last_check_router_update_call = datetime.now() - timedelta(minutes=1)
+router_instance = None
 
 async def get_client():
     global full_node_client
@@ -73,11 +79,8 @@ def get_pair(launcher_id: str, db: Session = Depends(get_db)):
     return pair
 
 @app.get("/router", response_model=schemas.Router, summary="Get Router", description="Fetch the current Router object.")
-def get_router(db: Session = Depends(get_db)):
-    router = db.query(models.Router).first()
-    if router is None:
-        raise HTTPException(status_code=404, detail="Router not found")
-    return router
+async def get_router(db: Session = Depends(get_db)):
+    return await get_router()
 
 
 def init_router(db: Session):
@@ -118,65 +121,67 @@ async def check_router_update(db):
         return None
 
 
-async def update_router_and_create_pair_token():
-    while True:
+async def get_router():
+    global last_check_router_update_call
+    global router_instance
+
+    now = datetime.now()
+
+    if router_instance is None:
         with SessionLocal() as db:
-            update = await check_router_update(db) # (new_current_id, pairs_to_add)
+            router_instance = init_router(db)
 
-            if update is not None:
-                # Update the Router object
-                router = db.query(models.Router).first()
-                if router:
-                    router.current_id = update[0]
-                    db.commit()
+    # Check if check_router_update was called in the last minute
+    if now - last_check_router_update_call >= timedelta(minutes=1):
+        last_check_router_update_call = now
+        update = None
+        with SessionLocal() as db:
+            update = await check_router_update(db)
+        if update is not None:
+            router_instance.current_id = update[0]
+            db.commit()
 
-                pairs = update[1]
-                for pair_tail_hash, pair_launcher_id in pairs:
-                    pair = db.query(models.Pair).filter(models.Pair.launcher_id == pair_launcher_id).first()
-                    if pair is not None:
-                        continue
+            pairs = update[1]
+            for pair_tail_hash, pair_launcher_id in pairs:
+                pair = db.query(models.Pair).filter(models.Pair.launcher_id == pair_launcher_id).first()
+                if pair is not None:
+                    continue
 
-                    # Create a new Pair object
-                    pair = models.Pair(
-                        launcher_id=pair_launcher_id,
+                # Create a new Pair object
+                pair = models.Pair(
+                    launcher_id=pair_launcher_id,
+                    asset_id=pair_tail_hash,
+                    xch_reserve=0,
+                    token_reserve=0,
+                    liquidity=0,
+                    last_coin_id_on_chain=pair_tail_hash,
+                )
+                db.add(pair)
+                db.commit()
+
+                # Create a new Token object
+                token = None
+                try:
+                    r = requests.get(taildatabase_tail_info_url + pair_tail_hash)
+                    resp = r.json()
+                    token = models.Token(
                         asset_id=pair_tail_hash,
-                        xch_reserve=0,
-                        token_reserve=0,
-                        liquidity=0,
-                        last_coin_id_on_chain=pair_tail_hash,
+                        pair_id=pair_launcher_id,
+                        name=resp["name"],
+                        short_name=resp["code"],
+                        image_url=resp["nft_uri"],
+                        verified=False,
                     )
-                    db.add(pair)
-                    db.commit()
+                except:
+                    token = models.Token(
+                        asset_id=pair_tail_hash,
+                        pair_id=pair_launcher_id,
+                        name=f"CAT 0x{pair_tail_hash[:16]}",
+                        short_name=f"UNKNWN",
+                        image_url="https://icons.dexie.space/8ebf855de6eb146db5602f0456d2f0cbe750d57f821b6f91a8592ee9f1d4cf31.webp",
+                        verified=False,
+                    )
+                db.add(token)
+                db.commit()
 
-                    # Create a new Token object
-                    token = None
-                    try:
-                        r = requests.get(taildatabase_tail_info_url + pair_tail_hash)
-                        resp = r.json()
-                        token = models.Token(
-                            asset_id=pair_tail_hash,
-                            pair_id=pair_launcher_id,
-                            name=resp["name"],
-                            short_name=resp["code"],
-                            image_url=resp["nft_uri"],
-                            verified=False,
-                        )
-                    except:
-                        token = models.Token(
-                            asset_id=pair_tail_hash,
-                            pair_id=pair_launcher_id,
-                            name=f"CAT 0x{pair_tail_hash[:16]}",
-                            short_name=f"UNKNWN",
-                            image_url="https://icons.dexie.space/8ebf855de6eb146db5602f0456d2f0cbe750d57f821b6f91a8592ee9f1d4cf31.webp",
-                            verified=False,
-                        )
-                    db.add(token)
-                    db.commit()
-
-        await asyncio.sleep(60)
-
-def start_background_tasks():
-    loop = asyncio.get_event_loop()
-    loop.create_task(update_router_and_create_pair_token())
-
-start_background_tasks()
+    return router_instance
