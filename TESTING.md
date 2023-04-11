@@ -1,5 +1,3 @@
-Set up [chia-dev-tools](https://github.com/Chia-Network/chia-dev-tools) first.
-
 ```bash
 # environment stuff
 # python3 -m venv venv + install
