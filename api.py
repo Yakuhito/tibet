@@ -302,3 +302,26 @@ async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amoun
 
     quote = await get_quote(db, pair_id, amount_in, amount_out, xch_is_input, estimate_fee)
     return quote
+
+
+async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.ActionType) -> schemas.OfferResponse:
+    # Fetch the pair with the given launcher_id
+    pair = await get_pair(db, pair_id)
+    if pair is None:
+        raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
+
+    # Implement custom logic based on the action parameter
+    # ... your custom logic here ...
+
+    response = schemas.OfferResponse(
+        success=calculated_success,
+        message=calculated_message
+    )
+
+    return response
+
+@app.post("/offer/{pair_id}", response_model=schemas.OfferResponse)
+async def create_offer_endpoint(pair_id: str, offer: str, action: schemas.ActionType, db: Session = Depends(get_db)):
+    response = await create_offer(db, pair_id, offer, action)
+    return response
+    

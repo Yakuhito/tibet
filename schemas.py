@@ -1,6 +1,7 @@
 # schemas.py
 from pydantic import BaseModel
 from typing import Optional
+from enum import Enum
 
 class TokenBase(BaseModel):
     asset_id: str
@@ -43,3 +44,12 @@ class Quote(BaseModel):
     asset_id: str
     input_reserve: int
     output_reserve: int
+
+class OfferResponse(BaseModel):
+    success: bool
+    message: str
+
+class ActionType(Enum):
+    SWAP = "SWAP"
+    ADD_LIQUIDITY = "ADD_LIQUIDITY"
+    REMOVE_LIQUIDITY = "REMOVE_LIQUIDITY"
