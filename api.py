@@ -2,7 +2,7 @@
 # special thanks to GPT-4
 from fastapi import FastAPI, HTTPException
 from sqlalchemy.orm import Session
-from fastapi import Depends
+from fastapi import Depends, Query
 from typing import List
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -189,7 +189,7 @@ async def get_router():
 
     return router_instance
 
-async def get_pair(db: Session, pair_id: str) -> models.Pair:
+async def get_pair(db: Session, pair_id: str, force_refresh: bool = False) -> models.Pair:
     global last_pair_update
     
     pair = db.query(models.Pair).filter(models.Pair.launcher_id == pair_id).first()
@@ -197,14 +197,14 @@ async def get_pair(db: Session, pair_id: str) -> models.Pair:
     
     if pair is not None:
         last_update = last_pair_update.get(pair_id)
-        if last_update is None or now - last_update >= timedelta(seconds=5):
+        if force_refresh or last_update is None or now - last_update >= timedelta(seconds=5):
             last_pair_update[pair_id] = now
-            pair = await check_pair_update(db, pair)
+            pair, _ = await check_pair_update(db, pair)
     
     return pair
 
 
-async def get_all_pairs(db: Session) -> List[models.Pair]:
+async def get_all_pairs(db: Session, force_refresh: bool = False) -> List[models.Pair]:
     pairs = db.query(models.Pair).all()
 
     for pair in pairs:
@@ -212,9 +212,9 @@ async def get_all_pairs(db: Session) -> List[models.Pair]:
         last_update = last_pair_update.get(pair_id)
 
         now = datetime.now()
-        if last_update is None or now - last_update >= timedelta(seconds=5):
+        if force_refresh or last_update is None or now - last_update >= timedelta(seconds=5):
             last_pair_update[pair_id] = now
-            pair = await check_pair_update(db, pair)
+            pair, _ = await check_pair_update(db, pair)
 
     return pairs
 
@@ -222,7 +222,7 @@ async def get_all_pairs(db: Session) -> List[models.Pair]:
 async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
     client = await get_client()
 
-    _, _, pair_state, _, last_synced_pair_id_on_blockchain = await sync_pair(
+    _, _, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
         client, bytes.fromhex(pair.last_coin_id_on_chain), bytes.fromhex(pair.asset_id)
     )
 
@@ -236,4 +236,62 @@ async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
     db.commit()
     db.refresh(pair)
     
-    return pair
+    return pair, sb_to_aggregate
+
+def get_input_price(input_amount, input_reserve, output_reserve):
+    input_amount_with_fee = input_amount * 993
+    numerator = input_amount_with_fee * output_reserve
+    denominator = (input_reserve * 1000) + input_amount_with_fee
+    return numerator / denominator
+
+def get_output_price(output_amount, input_reserve, output_reserve):
+    numerator: uint256 = input_reserve * output_amount * 1000
+    denominator: uint256 = (output_reserve - output_amount) * 993
+    return numerator / denominator + 1
+
+async def get_quote(db: Session, pair_id: str, amount_in: Optional[int] = None, amount_out: Optional[int] = None, xch_is_input: bool, estimate_fee: bool = False) -> schemas.Quote:
+    # Fetch the pair with the given launcher_id
+    pair = await get_pair(db, pair_id)
+
+    mempool_sb = None
+    if estimate_fee:
+        pair, mempool_sb = await check_pair_update(db, pair)
+
+    xch_reserve = pair.xch_reserve
+    token_reserve = pair.token_reserve
+
+    input_reserve, output_reserve = pair.token_reserve, pair.xch_reserve
+    if xch_is_input:
+        input_reserve, output_reserve = pair.xch_reserve, pair.token_reserve
+
+    if amount_in is None: 
+        # amount_out given
+        amount_in = get_output_price(amount_out, input_reserve, output_reserve)
+    else:
+        # amount_in given
+        amount_out = get_output_price(amount_in, input_reserve, output_reserve)
+
+    # warn price change when traded amount > 0.5% of reserves
+    price_warning = amount_in > input_reserve / 200 or amount_out > output_reserve / 200
+
+    recommended_fee = None
+    if estimate_fee:
+        recommended_fee = get_fee_estimate(mempool_sb, await get_client())
+
+    quote = schemas.Quote(
+        amount_in=amount_in,
+        amount_out=amount_out,
+        price_warning=price_warning,
+        fee=recommended_fee
+    )
+
+    return quote
+
+@app.get("/quote/{pair_id}", response_model=schemas.Quote)
+async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amount_out: Optional[int] = Query(None), xch_is_input: bool, estimate_fee: bool = False, db: Session = Depends(get_db)):
+    # Ensure that either amount_in or amount_out is provided, but not both
+    if (amount_in is not None) == (amount_out is not None):
+        raise HTTPException(status_code=400, detail="Provide either amount_in or amount_out, but not both")
+
+    quote = await get_quote(db, pair_id, amount_in, amount_out, xch_is_input, estimate_fee)
+    return quote

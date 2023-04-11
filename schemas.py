@@ -34,3 +34,9 @@ class RouterBase(BaseModel):
 class Router(RouterBase):
     class Config:
         orm_mode = True
+
+class Quote(BaseModel):
+    amount_in: int
+    amount_out: int
+    price_warning: bool
+    fee: Optional[int]
