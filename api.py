@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
+from typing import Optional
 
 import asyncio
 import models, schemas
@@ -249,9 +250,12 @@ def get_output_price(output_amount, input_reserve, output_reserve):
     denominator: uint256 = (output_reserve - output_amount) * 993
     return numerator / denominator + 1
 
-async def get_quote(db: Session, pair_id: str, amount_in: Optional[int] = None, amount_out: Optional[int] = None, xch_is_input: bool, estimate_fee: bool = False) -> schemas.Quote:
+async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_out: Optional[int], xch_is_input: bool, estimate_fee: bool = False) -> schemas.Quote:
     # Fetch the pair with the given launcher_id
     pair = await get_pair(db, pair_id)
+
+    if pair is None:
+        raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
 
     mempool_sb = None
     if estimate_fee:
@@ -271,24 +275,27 @@ async def get_quote(db: Session, pair_id: str, amount_in: Optional[int] = None, 
         # amount_in given
         amount_out = get_output_price(amount_in, input_reserve, output_reserve)
 
-    # warn price change when traded amount > 0.5% of reserves
-    price_warning = amount_in > input_reserve / 200 or amount_out > output_reserve / 200
+    # warn price change when traded amount > 2% of reserves
+    price_warning = amount_in > input_reserve / 50 or amount_out > output_reserve / 50
 
     recommended_fee = None
     if estimate_fee:
-        recommended_fee = get_fee_estimate(mempool_sb, await get_client())
+        recommended_fee = await get_fee_estimate(mempool_sb, await get_client())
 
     quote = schemas.Quote(
         amount_in=amount_in,
         amount_out=amount_out,
         price_warning=price_warning,
-        fee=recommended_fee
+        fee=recommended_fee,
+        asset_id=pair.asset_id,
+        input_reserve=input_reserve,
+        output_reserve=output_reserve
     )
 
     return quote
 
 @app.get("/quote/{pair_id}", response_model=schemas.Quote)
-async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amount_out: Optional[int] = Query(None), xch_is_input: bool, estimate_fee: bool = False, db: Session = Depends(get_db)):
+async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amount_out: Optional[int] = Query(None), xch_is_input: bool = True, estimate_fee: bool = False, db: Session = Depends(get_db)):
     # Ensure that either amount_in or amount_out is provided, but not both
     if (amount_in is not None) == (amount_out is not None):
         raise HTTPException(status_code=400, detail="Provide either amount_in or amount_out, but not both")

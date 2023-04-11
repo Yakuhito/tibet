@@ -40,3 +40,6 @@ class Quote(BaseModel):
     amount_out: int
     price_warning: bool
     fee: Optional[int]
+    asset_id: str
+    input_reserve: int
+    output_reserve: int
