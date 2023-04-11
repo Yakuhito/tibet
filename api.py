@@ -409,4 +409,6 @@ async def create_offer_endpoint(pair_id: str,
     response = await create_offer(db, pair_id, offer, action, return_address)
     return response
 
-
+@app.get("/")
+async def root():
+    return {"message": "TibetSwap API is running"}

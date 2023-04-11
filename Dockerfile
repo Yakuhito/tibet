@@ -6,7 +6,7 @@ WORKDIR /tibet
 
 # Install Git
 RUN apt-get update && \
-    apt-get install -y git supervisord
+    apt-get install -y git supervisor
 
 # Install Go 1.16
 RUN wget -q https://golang.org/dl/go1.16.10.linux-amd64.tar.gz -O go1.16.tar.gz && \
