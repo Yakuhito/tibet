@@ -1,8 +1,8 @@
 # main.py
 # special thanks to GPT-4
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
-from fastapi import Depends, Query
+from fastapi import Query
 from typing import List
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -15,6 +15,8 @@ import models, schemas
 import os
 import sys
 import time
+import json
+import traceback
 
 from tibet_lib import *
 
@@ -303,12 +305,12 @@ async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amoun
     return quote
 
 
-async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.ActionType) -> schemas.OfferResponse:
+async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.ActionType, return_address: str = DEFAULT_RETURN_ADDRESS) -> schemas.OfferResponse:
+    pair = get_pair(db, pair_id)
+    if pair is None:
+        raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
+    
     try:
-        pait = get_pair(db, pair_id)
-        if pair is None:
-            raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
-
         client = await get_client()
 
         current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
@@ -328,7 +330,20 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
         sb = None
 
         if action == schemas.ActionType.SWAP:
-            # todo
+            sb = await respond_to_deposit_liquidity_offer(
+                bytes.fromhex(pair.launcher_id),
+                current_pair_coin,
+                creation_spend,
+                bytes.fromhex(pair.asset_id),
+                pair_state["liquidity"],
+                pair_state["xch_reserve"],
+                pair_state["token_reserve"],
+                offer,
+                xch_reserve_coin,
+                token_reserve_coin,
+                token_reserve_lineage_proof,
+                return_address=return_address
+            )
         elif action == schemas.ActionType.ADD_LIQUIDITY:
             sb = await respond_to_deposit_liquidity_offer(
                 bytes.fromhex(pair.launcher_id),
@@ -341,21 +356,57 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
                 offer,
                 xch_reserve_coin,
                 token_reserve_coin,
-                token_reserve_lineage_proof
+                token_reserve_lineage_proof,
+                return_address=return_address
             )
         elif action == schemas.ActionType.REMOVE_LIQUIDITY:
-            # todo
+            sb = await respond_to_remove_liquidity_offer(
+                bytes.fromhex(pair.launcher_id),
+                current_pair_coin,
+                creation_spend,
+                bytes.fromhex(pair.asset_id),
+                pair_state["liquidity"],
+                pair_state["xch_reserve"],
+                pair_state["token_reserve"],
+                offer,
+                xch_reserve_coin,
+                token_reserve_coin,
+                token_reserve_lineage_proof,
+                return_address=return_address
+            )
+
+        resp = await client.push_tx(sb)
+        success = resp['status'] == 'SUCCESS'
 
         response = schemas.OfferResponse(
-            success=calculated_success,
-            message=calculated_message
+            success=success,
+            message=json.dumps(resp)
         )
 
         return response
-    except:
-        # todo
+    except Exception as e:
+        traceback_message = traceback.format_exc()
+        response = schemas.OfferResponse(
+            success=False,
+            message=json.dumps({
+                "traceback": traceback_message,
+                "pair_id": pair_id,
+                "action": str(action),
+                "return_address": return_address,
+                "offer": offer
+            })
+        )
+
+        return response
+        
 
 @app.post("/offer/{pair_id}", response_model=schemas.OfferResponse)
-async def create_offer_endpoint(pair_id: str, offer: str, action: schemas.ActionType, db: Session = Depends(get_db)):
-    response = await create_offer(db, pair_id, offer, action)
+async def create_offer_endpoint(pair_id: str,
+                                offer: str = Body(...),
+                                action: schemas.ActionType = Body(...),
+                                return_address: str = Body(DEFAULT_RETURN_ADDRESS),
+                                db: Session = Depends(get_db)):
+    response = await create_offer(db, pair_id, offer, action, return_address)
     return response
+
+
