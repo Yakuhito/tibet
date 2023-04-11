@@ -253,7 +253,6 @@ def get_output_price(output_amount, input_reserve, output_reserve):
 async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_out: Optional[int], xch_is_input: bool, estimate_fee: bool = False) -> schemas.Quote:
     # Fetch the pair with the given launcher_id
     pair = await get_pair(db, pair_id)
-
     if pair is None:
         raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
 
@@ -305,23 +304,58 @@ async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amoun
 
 
 async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.ActionType) -> schemas.OfferResponse:
-    # Fetch the pair with the given launcher_id
-    pair = await get_pair(db, pair_id)
-    if pair is None:
-        raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
+    try:
+        pait = get_pair(db, pair_id)
+        if pair is None:
+            raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
 
-    # Implement custom logic based on the action parameter
-    # ... your custom logic here ...
+        client = await get_client()
 
-    response = schemas.OfferResponse(
-        success=calculated_success,
-        message=calculated_message
-    )
+        current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
+            client, bytes.fromhex(pair.last_coin_id_on_chain), bytes.fromhex(pair.asset_id)
+        )
+        current_pair_coin_id = current_pair_coin.name().hex()
 
-    return response
+        xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+            client,
+            bytes.fromhex(pair.launcher_id),
+            current_pair_coin,
+            bytes.fromhex(pair.asset_id),
+            creation_spend,
+            sb_to_aggregate
+        )
+
+        sb = None
+
+        if action == schemas.ActionType.SWAP:
+            # todo
+        elif action == schemas.ActionType.ADD_LIQUIDITY:
+            sb = await respond_to_deposit_liquidity_offer(
+                bytes.fromhex(pair.launcher_id),
+                current_pair_coin,
+                creation_spend,
+                bytes.fromhex(pair.asset_id),
+                pair_state["liquidity"],
+                pair_state["xch_reserve"],
+                pair_state["token_reserve"],
+                offer,
+                xch_reserve_coin,
+                token_reserve_coin,
+                token_reserve_lineage_proof
+            )
+        elif action == schemas.ActionType.REMOVE_LIQUIDITY:
+            # todo
+
+        response = schemas.OfferResponse(
+            success=calculated_success,
+            message=calculated_message
+        )
+
+        return response
+    except:
+        # todo
 
 @app.post("/offer/{pair_id}", response_model=schemas.OfferResponse)
 async def create_offer_endpoint(pair_id: str, offer: str, action: schemas.ActionType, db: Session = Depends(get_db)):
     response = await create_offer(db, pair_id, offer, action)
     return response
-    
