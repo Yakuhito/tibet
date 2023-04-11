@@ -1,9 +1,14 @@
 package main
 
-import "github.com/gofiber/fiber/v2"
-import "github.com/goccy/go-json"
-import "io/ioutil"
-import "net/http"
+
+import (
+	"github.com/gofiber/fiber/v2"
+	"github.com/goccy/go-json"
+	"io/ioutil"
+	"net/http"
+	"sync"
+	"time"
+)
 
 type Coin struct {
 	Amount uint64 `json:"amount"`
@@ -36,39 +41,82 @@ type GetMempoolItemByParentCoinInfoArgs struct {
 	RequestURL string `json:"request_url"`
 }
 
+type CacheItem struct {
+	Response *AllMempoolItemsResponse
+	Expiry   time.Time
+}
+
+type Cache struct {
+	mu    sync.Mutex
+	items map[string]*CacheItem
+}
+
+
+func (c *Cache) Get(key string) (*AllMempoolItemsResponse, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	item, found := c.items[key]
+	if !found || time.Now().After(item.Expiry) {
+		return nil, false
+	}
+	return item.Response, true
+}
+
+func (c *Cache) Set(key string, value *AllMempoolItemsResponse, duration time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.items[key] = &CacheItem{
+		Response: value,
+		Expiry:   time.Now().Add(duration),
+	}
+}
+
+var cache = &Cache{
+	items: make(map[string]*CacheItem),
+}
+
 func GetMempoolItemByParentCoinInfo(c *fiber.Ctx) error {
 	args := new(GetMempoolItemByParentCoinInfoArgs)
 
 	if err := c.BodyParser(args); err != nil {
-        return err
-    }
-
-	res, err := http.Get(args.RequestURL)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-
-	resBody, err := ioutil.ReadAll(res.Body)
-	if err != nil {
 		return err
 	}
 
-	var resp AllMempoolItemsResponse
-	err = json.Unmarshal(resBody, &resp)
-	if err != nil {
-		return err
+	cachedResponse, found := cache.Get(args.RequestURL)
+	if !found {
+		res, err := http.Get(args.RequestURL)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+
+		resBody, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+
+		var resp AllMempoolItemsResponse
+		err = json.Unmarshal(resBody, &resp)
+		if err != nil {
+			return err
+		}
+
+		cache.Set(args.RequestURL, &resp, 5 * time.Second)
+		cachedResponse = &resp
 	}
-	if !resp.Success {
+
+	if !cachedResponse.Success {
 		return c.JSON(fiber.Map{
 			"item": nil,
 		})
 	}
 
 	var item SpendBundle
-	found := false
+	found = false
 
-	for _, v := range resp.MempoolItems {
+	for _, v := range cachedResponse.MempoolItems {
 		for _, cs := range v.SpendBundle.CoinSpends {
 			if cs.Coin.ParentCoinInfo == args.ParentCoinInfo {
 				found = true
