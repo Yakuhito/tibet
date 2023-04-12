@@ -25,7 +25,7 @@ from tibet_lib import *
 DATABASE_URL = "sqlite:///./database.db"
 
 sentry_sdk.init(
-    dsn="https://2e1bc187d7134a28a61c004021bb1d4a@o4504998689112064.ingest.sentry.io/4504998691799040",
+    dsn=os.environ["SENTRY_DSN"],
 
     # Set traces_sample_rate to 1.0 to capture 100%
     # of transactions for performance monitoring.
