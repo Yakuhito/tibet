@@ -17,6 +17,9 @@ RUN wget -q https://golang.org/dl/go1.16.10.linux-amd64.tar.gz -O go1.16.tar.gz 
 ENV GOPATH /go
 ENV PATH $PATH:/usr/local/go/bin:$GOPATH/bin
 
+# Cache-busting argument
+ARG CACHE_DATE
+
 # Clone the repository
 RUN git clone https://github.com/Yakuhito/tibet.git .
 
