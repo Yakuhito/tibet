@@ -1,5 +1,2 @@
 requests
 chia-blockchain
-fastapi
-sqlalchemy
-uvicorn

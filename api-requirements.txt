@@ -1,0 +1,4 @@
+fastapi
+sqlalchemy
+uvicorn
+sentry-sdk[fastapi]

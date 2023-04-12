@@ -33,6 +33,9 @@ RUN /bin/bash -c "source venv/bin/activate"
 # Install requirements from requirements.txt
 RUN pip install -r requirements.txt
 
+# Install requirements from api-requirements.txt
+RUN pip install -r api-requirements.txt
+
 # Run your additional pip install commands here
 RUN pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
 RUN pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools

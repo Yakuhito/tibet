@@ -10,6 +10,8 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 from typing import Optional
 
+import sentry_sdk
+
 import asyncio
 import models, schemas
 import os
@@ -21,6 +23,16 @@ import traceback
 from tibet_lib import *
 
 DATABASE_URL = "sqlite:///./database.db"
+
+sentry_sdk.init(
+    dsn="https://2e1bc187d7134a28a61c004021bb1d4a@o4504998689112064.ingest.sentry.io/4504998691799040",
+
+    # Set traces_sample_rate to 1.0 to capture 100%
+    # of transactions for performance monitoring.
+    # We recommend adjusting this value in production,
+    traces_sample_rate=1.0,
+)
+
 
 app = FastAPI(title="TibetSwap API", description="A centralized API for a decentralized AMM", version="1.0.0")
 
