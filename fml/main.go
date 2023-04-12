@@ -103,7 +103,7 @@ func GetMempoolItemByParentCoinInfo(c *fiber.Ctx) error {
 			return err
 		}
 
-		cache.Set(args.RequestURL, &resp, 5 * time.Second)
+		cache.Set(args.RequestURL, &resp, 10 * time.Second)
 		cachedResponse = &resp
 	}
 
