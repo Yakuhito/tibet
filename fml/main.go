@@ -1,10 +1,11 @@
 package main
 
-
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/goccy/go-json"
+	"golang.org/x/sync/singleflight"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -47,20 +48,50 @@ type CacheItem struct {
 }
 
 type Cache struct {
-	mu    sync.Mutex
-	items map[string]*CacheItem
+	mu          sync.Mutex
+	items       map[string]*CacheItem
+	fetchGroup  singleflight.Group
 }
 
+var cache = &Cache{
+	items: make(map[string]*CacheItem),
+}
 
-func (c *Cache) Get(key string) (*AllMempoolItemsResponse, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	item, found := c.items[key]
-	if !found || time.Now().After(item.Expiry) {
-		return nil, false
+func GetAllMempoolItemsResponse(request_url string) (AllMempoolItemsResponse, error) {
+	res, err := http.Get(request_url)
+	if err != nil {
+		return AllMempoolItemsResponse{}, err
 	}
-	return item.Response, true
+	defer res.Body.Close()
+
+	resBody, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return AllMempoolItemsResponse{}, err
+	}
+
+	var resp AllMempoolItemsResponse
+	err = json.Unmarshal(resBody, &resp)
+	if err != nil {
+		return AllMempoolItemsResponse{}, err
+	}
+
+	return resp, nil
+}
+
+func (c *Cache) FetchAndUpdateCache(key string) (*AllMempoolItemsResponse, error) {
+	resp, err, _ := c.fetchGroup.Do(key, func() (interface{}, error) {
+		response, err := GetAllMempoolItemsResponse(key)
+		if err != nil {
+			return nil, err
+		}
+		c.Set(key, &response, 5*time.Second)
+		return &response, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*AllMempoolItemsResponse), nil
 }
 
 func (c *Cache) Set(key string, value *AllMempoolItemsResponse, duration time.Duration) {
@@ -73,8 +104,20 @@ func (c *Cache) Set(key string, value *AllMempoolItemsResponse, duration time.Du
 	}
 }
 
-var cache = &Cache{
-	items: make(map[string]*CacheItem),
+func (c *Cache) Get(key string) (*AllMempoolItemsResponse, bool) {
+	c.mu.Lock()
+	item, found := c.items[key]
+	c.mu.Unlock()
+
+	if found && time.Now().After(item.Expiry) {
+		go func() {
+			if _, err := c.FetchAndUpdateCache(key); err != nil {
+				log.Printf("Error updating cache for key '%s': %v", key, err)
+			}
+		}()
+	}
+
+	return item.Response, found
 }
 
 func GetMempoolItemByParentCoinInfo(c *fiber.Ctx) error {
@@ -86,24 +129,14 @@ func GetMempoolItemByParentCoinInfo(c *fiber.Ctx) error {
 
 	cachedResponse, found := cache.Get(args.RequestURL)
 	if !found {
-		res, err := http.Get(args.RequestURL)
+		resp, err := GetAllMempoolItemsResponse(args.RequestURL)
 		if err != nil {
-			return err
-		}
-		defer res.Body.Close()
-
-		resBody, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			return err
+			return c.JSON(fiber.Map{
+				"item": nil,
+			})
 		}
 
-		var resp AllMempoolItemsResponse
-		err = json.Unmarshal(resBody, &resp)
-		if err != nil {
-			return err
-		}
-
-		cache.Set(args.RequestURL, &resp, 10 * time.Second)
+		cache.Set(args.RequestURL, &resp, 5 * time.Second)
 		cachedResponse = &resp
 	}
 

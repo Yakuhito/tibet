@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/goccy/go-json v0.10.1
 	github.com/gofiber/fiber/v2 v2.42.0
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 )
 
 require (
