@@ -1,6 +1,7 @@
 # main.py
 # special thanks to GPT-4
 from fastapi import FastAPI, Depends, HTTPException, Body
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from fastapi import Query
 from typing import List
@@ -35,6 +36,13 @@ sentry_sdk.init(
 
 
 app = FastAPI(title="TibetSwap API", description="A centralized API for a decentralized AMM", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 leaflet_url = None
 taildatabase_tail_info_url = None
