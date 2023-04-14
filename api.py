@@ -202,9 +202,9 @@ async def get_router():
                     token = models.Token(
                         asset_id=pair_tail_hash,
                         pair_id=pair_launcher_id,
-                        name=f"CAT 0x{pair_tail_hash[:16]}",
-                        short_name=f"UNKNWN",
-                        image_url="https://icons.dexie.space/8ebf855de6eb146db5602f0456d2f0cbe750d57f821b6f91a8592ee9f1d4cf31.webp",
+                        name=f"CAT 0x{pair_tail_hash[:8]}",
+                        short_name=f"???",
+                        image_url="https://bafybeigzcazxeu7epmm4vtkuadrvysv74lbzzbl2evphtae6k57yhgynp4.ipfs.dweb.link/9098.gif",
                         verified=False,
                     )
                 db.add(token)
@@ -251,7 +251,7 @@ async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
 
     pair.xch_reserve = pair_state['xch_reserve'] 
     pair.token_reserve = pair_state['token_reserve']
-    pair.liqudity = pair_state['liquidity']
+    pair.liquidity = pair_state['liquidity']
     pair.last_coin_id_on_chain = last_synced_pair_id_on_blockchain.hex()
     
     # Commit the update to the database
