@@ -10,6 +10,7 @@ class Pair(Base):
 
     launcher_id = Column(String(64), primary_key=True)
     asset_id = Column(String(64))
+    liquidity_asset_id = Column(String(64))
     xch_reserve = Column(BigInteger)
     token_reserve = Column(BigInteger)
     liquidity = Column(BigInteger)

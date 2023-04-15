@@ -177,6 +177,7 @@ async def get_router():
                 pair = models.Pair(
                     launcher_id=pair_launcher_id,
                     asset_id=pair_tail_hash,
+                    liquidity_asset_id=pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex(),
                     xch_reserve=0,
                     token_reserve=0,
                     liquidity=0,

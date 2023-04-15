@@ -18,6 +18,7 @@ class Token(TokenBase):
 class PairBase(BaseModel):
     launcher_id: str
     asset_id: str
+    liquidity_asset_id: str
     xch_reserve: int
     token_reserve: int
     liquidity: int
