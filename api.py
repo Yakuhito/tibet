@@ -294,7 +294,7 @@ async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_
         amount_in = get_output_price(amount_out, input_reserve, output_reserve)
     else:
         # amount_in given
-        amount_out = get_output_price(amount_in, input_reserve, output_reserve)
+        amount_out = get_input_price(amount_in, input_reserve, output_reserve)
 
     # warn price change when traded amount > 2% of reserves
     price_warning = amount_in > input_reserve / 50 or amount_out > output_reserve / 50
