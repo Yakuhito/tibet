@@ -781,16 +781,15 @@ async def respond_to_deposit_liquidity_offer(
         new_liquidity_token_amount = v
 
     deposited_token_amount = new_liquidity_token_amount
-    if pair_token_reserve != 0:
-        deposited_token_amount = eph_token_coin.amount * pair_liquidity // pair_token_reserve
+    if pair_liquidity != 0:
+        deposited_token_amount = new_liquidity_token_amount * pair_token_reserve // pair_liquidity + 1
     
     deposited_xch_amount = eph_xch_coin.amount - new_liquidity_token_amount
-    if pair_xch_reserve != 0:
-        deposited_xch_amount = deposited_token_amount * pair_xch_reserve // pair_token_reserve
+    if pair_token_reserve != 0:
+        deposited_xch_amount = pair_xch_reserve * deposited_token_amount // pair_token_reserve
 
     if deposited_xch_amount > eph_xch_coin.amount or deposited_token_amount > eph_token_coin.amount:
-        print(f"Uh... to few XCH/tokens :(")
-        return None
+        raise Exception(f"Your offer is asking for too much liquidity - you need to offer at least {deposited_xch_amount} mojos and {deposited_token_amount} token mojos (/1000 to find out the number of tokens).")
 
     # 3. spend the token ephemeral coin to create the token reserve coin
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
@@ -956,7 +955,7 @@ async def respond_to_deposit_liquidity_offer(
 
     # also assert the XCH ephemeral coin announcement
     # specifically, for the payment made to mint liquidity tokens
-    eph_xch_settlement_announcement = eph_xch_coin_settlement_things[-1].get_tree_hash()
+    eph_xch_settlement_announcement = eph_xch_coin_settlement_things[1].get_tree_hash()
     output_conditions.append([
         ConditionOpcode.ASSERT_PUZZLE_ANNOUNCEMENT,
         std_hash(eph_xch_coin.puzzle_hash + eph_xch_settlement_announcement)
@@ -1701,5 +1700,5 @@ async def get_fee_estimate(mempool_sb, full_node_client):
     fee_of_mempool_sb = max(mempool_sb.fees(), 1)
     mempool_fee_per_cost: float = fee_of_mempool_sb / cost_of_mempool_sb
     
-    fee = int(mempool_fee_per_cost * (cost_of_operation + cost_of_mempool_sb)) - fee_of_mempool_sb + MEMPOOL_MIN_FEE_INCREASE
+    fee = int(max(5, mempool_fee_per_cost) * (cost_of_operation + cost_of_mempool_sb)) - fee_of_mempool_sb + MEMPOOL_MIN_FEE_INCREASE
     return fee

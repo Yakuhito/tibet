@@ -109,12 +109,14 @@ func (c *Cache) Get(key string) (*AllMempoolItemsResponse, bool) {
 	item, found := c.items[key]
 	c.mu.Unlock()
 
-	if found && time.Now().After(item.Expiry) {
+	if !found || time.Now().After(item.Expiry) {
 		go func() {
 			if _, err := c.FetchAndUpdateCache(key); err != nil {
 				log.Printf("Error updating cache for key '%s': %v", key, err)
 			}
 		}()
+
+		return nil, false
 	}
 
 	return item.Response, found
