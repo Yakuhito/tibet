@@ -98,7 +98,7 @@ def get_token(asset_id: str, db: Session = Depends(get_db)):
     return token
 
 @app.get("/pair/{launcher_id}", response_model=schemas.Pair)
-async def get_pair(launcher_id: str, db: Session = Depends(get_db)):
+async def read_pair(launcher_id: str, db: Session = Depends(get_db)):
     pair = await get_pair(db, launcher_id)
     if pair is None:
         raise HTTPException(status_code=404, detail="Pair not found")
@@ -351,7 +351,7 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
         sb = None
 
         if action == schemas.ActionType.SWAP:
-            sb = await respond_to_deposit_liquidity_offer(
+            sb = await respond_to_swap_offer(
                 bytes.fromhex(pair.launcher_id),
                 current_pair_coin,
                 creation_spend,
