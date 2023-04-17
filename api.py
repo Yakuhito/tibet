@@ -327,7 +327,7 @@ async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amoun
 
 
 async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.ActionType, return_address: str = DEFAULT_RETURN_ADDRESS) -> schemas.OfferResponse:
-    pair = get_pair(db, pair_id)
+    pair = await get_pair(db, pair_id)
     if pair is None:
         raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
     
