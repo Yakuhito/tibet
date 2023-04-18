@@ -408,18 +408,22 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
 
         try:
             resp = await client.push_tx(sb)
-        except:
-            import time
+        except Exception as e:
+            import time, json
 
             resp = {}
             resp['status'] = 'FAILED'
-            resp['message'] = "Failed pushing tx :("
+            resp['message'] = json.dumps({
+                "traceback": traceback_message,
+                "pair_id": pair_id,
+                "action": str(action)
+            })
             t = int(time.time())
             open(f"spend_bundle.{t}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
             open(f"offer.{t}.json", "w").write(offer)
             capture_message(f"{t} - Failed to push spend bundle; data written in files spend_bundle.{t}.json and offer.{t}.json")
+        
         success = resp['status'] == 'SUCCESS'
-
         response = schemas.OfferResponse(
             success=success,
             message=json.dumps(resp)
