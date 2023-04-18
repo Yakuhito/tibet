@@ -783,8 +783,6 @@ async def respond_to_deposit_liquidity_offer(
     deposited_token_amount = new_liquidity_token_amount
     if pair_liquidity != 0:
         deposited_token_amount = new_liquidity_token_amount * pair_token_reserve // pair_liquidity
-        if new_liquidity_token_amount % pair_liquidity != 0 and pair_token_reserve % pair_liquidity != 0:
-            deposited_token_amount += 1
     
     deposited_xch_amount = eph_xch_coin.amount - new_liquidity_token_amount
     if pair_token_reserve != 0:
