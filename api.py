@@ -406,7 +406,14 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
                 return_address=return_address
             )
 
-        resp = await client.push_tx(sb)
+        try:
+            resp = await client.push_tx(sb)
+        except:
+            resp = {}
+            resp['status'] = 'FAILED'
+            resp['message'] = "Failed pushing tx :("
+            import time
+            open(f"spend_bundle.{time.time()}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
         success = resp['status'] == 'SUCCESS'
 
         response = schemas.OfferResponse(
