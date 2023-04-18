@@ -408,8 +408,6 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
         try:
             resp = await client.push_tx(sb)
         except Exception as e:
-            import time, json
-
             resp = {}
             resp['status'] = 'FAILED'
             resp['message'] = json.dumps({

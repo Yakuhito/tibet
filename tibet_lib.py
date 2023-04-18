@@ -1461,6 +1461,7 @@ async def respond_to_swap_offer(
         xch_amount = eph_coin.amount
         new_token_reserve_amount -= 993 * xch_amount * pair_token_reserve // (1000 * pair_xch_reserve + 993 * xch_amount)
         new_xch_reserve_amount += xch_amount
+        print(xch_amount) # todo: debug
 
     # 3. spend singleton
     pair_singleton_puzzle = get_pair_puzzle(
@@ -1523,7 +1524,6 @@ async def respond_to_swap_offer(
         total_token_amount -= total_token_amount
 
     if total_token_amount > new_token_reserve_amount:
-        print(total_token_amount, new_token_reserve_amount)
         last_token_reserve_coin_extra_conditions.append([
             ConditionOpcode.CREATE_COIN,
             decode_puzzle_hash(return_address),
@@ -1588,10 +1588,11 @@ async def respond_to_swap_offer(
     ]
     if not eph_coin_is_cat:
         notarized_payment = offer.get_requested_payments()[token_tail_hash][0]
+        print(offer.get_requested_payments()) # todo: debug
         intermediary_token_reserve_notarized_payments.append(
             [
                 notarized_payment.nonce,
-                [notarized_payment.memos[0], pair_token_reserve - new_token_reserve_amount, notarized_payment.memos]
+                [notarized_payment.puzzle_hash, pair_token_reserve - new_token_reserve_amount, notarized_payment.memos]
             ]
         )
 
