@@ -460,8 +460,8 @@ async def create_offer_endpoint(pair_id: str,
         if response.success:
             dexie_url = "https://api.dexie.space/v1/offers"
             if os.environ["TIBETSWAP_NETWORK"] != "mainnet":
-                dexie_url = "https://api-testnet.dexie.space/v1/"
-            requests.post(dexie_url, json={"offer": offer, "drop_only": True, "tibet": True})
+                dexie_url = "https://api-testnet.dexie.space/v1/offers"
+            print(requests.post(dexie_url, json={"offer": offer, "drop_only": True}, headers={"User-Agent": "TibetSwap v1 fren"}))
     except:
         pass
     return response
