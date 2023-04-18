@@ -10,6 +10,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 from typing import Optional
+from cachetools import cached, TTLCache
 
 import sentry_sdk
 
@@ -43,6 +44,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+cache = TTLCache(maxsize=100, ttl=3)
 
 leaflet_url = None
 taildatabase_tail_info_url = None
@@ -80,16 +83,20 @@ def get_db():
     finally:
         db.close()
 
+@cached(cache)
 @app.get("/tokens", response_model=List[schemas.Token])
 def get_tokens(db: Session = Depends(get_db)):
     return db.query(models.Token).all()
 
+
+@cached(cache)
 @app.get("/pairs", response_model=List[schemas.Pair])
 async def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     pairs = await get_all_pairs(db)
     return pairs[skip : skip + limit]
 
 
+@cached(cache)
 @app.get("/token/{asset_id}", response_model=schemas.Token)
 def get_token(asset_id: str, db: Session = Depends(get_db)):
     token = db.query(models.Token).get(asset_id)
@@ -97,6 +104,7 @@ def get_token(asset_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Token not found")
     return token
 
+@cached(cache)
 @app.get("/pair/{launcher_id}", response_model=schemas.Pair)
 async def read_pair(launcher_id: str, db: Session = Depends(get_db)):
     pair = await get_pair(db, launcher_id)
@@ -104,6 +112,7 @@ async def read_pair(launcher_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Pair not found")
     return pair
 
+@cached(cache)
 @app.get("/router", response_model=schemas.Router, summary="Get Router", description="Fetch the current Router object.")
 async def get_router(db: Session = Depends(get_db)):
     return await get_router()
@@ -429,6 +438,7 @@ async def create_offer_endpoint(pair_id: str,
                                 db: Session = Depends(get_db)):
     response = await create_offer(db, pair_id, offer, action, return_address)
     return response
+
 
 @app.get("/")
 async def root():
