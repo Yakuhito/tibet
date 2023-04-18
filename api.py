@@ -435,8 +435,8 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
             success=False,
             message=msg
         )
-        capture_message(offer)
-        capture_message(msg)
+        import time
+        open(f"offer.{time.time()}.txt", "w").write(offer)
         capture_exception(e)
         
         return response
