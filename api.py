@@ -428,6 +428,7 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
             success=False,
             message=msg
         )
+        capture_message(offer)
         capture_message(msg)
         capture_exception(e)
         
