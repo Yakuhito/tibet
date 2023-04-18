@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from cachetools import cached, TTLCache
 
+from sentry_sdk import capture_exception, capture_message
 import sentry_sdk
 
 import asyncio
@@ -416,17 +417,20 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
         return response
     except Exception as e:
         traceback_message = traceback.format_exc()
-        response = schemas.OfferResponse(
-            success=False,
-            message=json.dumps({
+        msg=json.dumps({
                 "traceback": traceback_message,
                 "pair_id": pair_id,
                 "action": str(action),
                 "return_address": return_address,
                 "offer": offer
             })
+        response = schemas.OfferResponse(
+            success=False,
+            message=msg
         )
-
+        capture_message(msg)
+        capture_exception(e)
+        
         return response
         
 
