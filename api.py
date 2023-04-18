@@ -341,6 +341,7 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
     if pair is None:
         raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
     
+    sb = None
     try:
         client = await get_client()
 
@@ -357,8 +358,6 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
             creation_spend,
             sb_to_aggregate
         )
-
-        sb = None
 
         if action == schemas.ActionType.SWAP:
             sb = await respond_to_swap_offer(
@@ -414,7 +413,7 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
             resp = {}
             resp['status'] = 'FAILED'
             resp['message'] = json.dumps({
-                "traceback": traceback_message,
+                "traceback": traceback.format_exc(),
                 "pair_id": pair_id,
                 "action": str(action)
             })
@@ -435,16 +434,16 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
         msg=json.dumps({
                 "traceback": traceback_message,
                 "pair_id": pair_id,
-                "action": str(action),
-                "return_address": return_address,
-                "offer": offer
+                "action": str(action)
             })
         response = schemas.OfferResponse(
             success=False,
             message=msg
         )
-        import time
-        open(f"offer.{time.time()}.txt", "w").write(offer)
+        t = int(time.time())
+        if sb is not None:
+            open(f"spend_bundle.{t}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+        open(f"offer.{t}.json", "w").write(offer)
         capture_exception(e)
         
         return response
