@@ -8,25 +8,15 @@ WORKDIR /tibet
 RUN apt-get update && \
     apt-get install -y git supervisor
 
-# Install Go 1.16
-RUN wget -q https://golang.org/dl/go1.16.10.linux-amd64.tar.gz -O go1.16.tar.gz && \
-    tar -C /usr/local -xzf go1.16.tar.gz && \
-    rm go1.16.tar.gz
-
 # Set up the Go environment
 ENV GOPATH /go
 ENV PATH $PATH:/usr/local/go/bin:$GOPATH/bin
 
 # Cache-busting argument
-ARG CACHE_DATE
+ARG VERSION
 
 # Clone the repository
 RUN git clone https://github.com/Yakuhito/tibet.git .
-
-# Compile and run the Go application
-WORKDIR /tibet/fml
-RUN go build -o fml main.go
-RUN chmod +x fml
 
 # Create and activate a virtual environment
 WORKDIR /tibet
@@ -43,9 +33,6 @@ RUN pip install -r api-requirements.txt
 RUN pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
 RUN pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools
 
-# Run server & fml (supervisord)
-RUN mv supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Start supervisord to manage both the Go application and the Uvicorn server
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Start the Uvicorn server
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
 

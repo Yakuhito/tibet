@@ -3,12 +3,8 @@ package main
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/goccy/go-json"
-	"golang.org/x/sync/singleflight"
 	"io/ioutil"
-	"log"
 	"net/http"
-	"sync"
-	"time"
 )
 
 type Coin struct {
@@ -42,21 +38,6 @@ type GetMempoolItemByParentCoinInfoArgs struct {
 	RequestURL string `json:"request_url"`
 }
 
-type CacheItem struct {
-	Response *AllMempoolItemsResponse
-	Expiry   time.Time
-}
-
-type Cache struct {
-	mu          sync.Mutex
-	items       map[string]*CacheItem
-	fetchGroup  singleflight.Group
-}
-
-var cache = &Cache{
-	items: make(map[string]*CacheItem),
-}
-
 func GetAllMempoolItemsResponse(request_url string) (AllMempoolItemsResponse, error) {
 	res, err := http.Get(request_url)
 	if err != nil {
@@ -78,50 +59,6 @@ func GetAllMempoolItemsResponse(request_url string) (AllMempoolItemsResponse, er
 	return resp, nil
 }
 
-func (c *Cache) FetchAndUpdateCache(key string) (*AllMempoolItemsResponse, error) {
-	resp, err, _ := c.fetchGroup.Do(key, func() (interface{}, error) {
-		response, err := GetAllMempoolItemsResponse(key)
-		if err != nil {
-			return nil, err
-		}
-		c.Set(key, &response, 5*time.Second)
-		return &response, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*AllMempoolItemsResponse), nil
-}
-
-func (c *Cache) Set(key string, value *AllMempoolItemsResponse, duration time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.items[key] = &CacheItem{
-		Response: value,
-		Expiry:   time.Now().Add(duration),
-	}
-}
-
-func (c *Cache) Get(key string) (*AllMempoolItemsResponse, bool) {
-	c.mu.Lock()
-	item, found := c.items[key]
-	c.mu.Unlock()
-
-	if !found || time.Now().After(item.Expiry) {
-		go func() {
-			if _, err := c.FetchAndUpdateCache(key); err != nil {
-				log.Printf("Error updating cache for key '%s': %v", key, err)
-			}
-		}()
-
-		return nil, false
-	}
-
-	return item.Response, found
-}
-
 func GetMempoolItemByParentCoinInfo(c *fiber.Ctx) error {
 	args := new(GetMempoolItemByParentCoinInfoArgs)
 
@@ -129,29 +66,17 @@ func GetMempoolItemByParentCoinInfo(c *fiber.Ctx) error {
 		return err
 	}
 
-	cachedResponse, found := cache.Get(args.RequestURL)
-	if !found {
-		resp, err := GetAllMempoolItemsResponse(args.RequestURL)
-		if err != nil {
-			return c.JSON(fiber.Map{
-				"item": nil,
-			})
-		}
-
-		cache.Set(args.RequestURL, &resp, 5 * time.Second)
-		cachedResponse = &resp
-	}
-
-	if !cachedResponse.Success {
+	response, err := GetAllMempoolItemsResponse(args.RequestURL)
+	if err != nil {
 		return c.JSON(fiber.Map{
 			"item": nil,
 		})
 	}
 
 	var item SpendBundle
-	found = false
+	var found bool = false
 
-	for _, v := range cachedResponse.MempoolItems {
+	for _, v := range response.MempoolItems {
 		for _, cs := range v.SpendBundle.CoinSpends {
 			if cs.Coin.ParentCoinInfo == args.ParentCoinInfo {
 				found = true
