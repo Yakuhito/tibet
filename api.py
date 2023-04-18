@@ -22,6 +22,7 @@ import sys
 import time
 import json
 import traceback
+import requests
 
 from tibet_lib import *
 
@@ -454,6 +455,15 @@ async def create_offer_endpoint(pair_id: str,
                                 return_address: str = Body(DEFAULT_RETURN_ADDRESS),
                                 db: Session = Depends(get_db)):
     response = await create_offer(db, pair_id, offer, action, return_address)
+
+    try:
+        if response.success:
+            dexie_url = "https://api.dexie.space/v1/offers"
+            if os.environ["TIBETSWAP_NETWORK"] != "mainnet":
+                dexie_url = "https://api-testnet.dexie.space/v1/"
+            requests.post(dexie_url, json={"offer": offer, "drop_only": True, "tibet": True})
+    except:
+        pass
     return response
 
 
