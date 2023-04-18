@@ -786,16 +786,13 @@ async def respond_to_deposit_liquidity_offer(
     if pair_liquidity > 0:
         target_liquidity_tokens = deposited_token_amount * pair_liquidity // pair_token_reserve
 
-    if target_liquidity_tokens != new_liquidity_token_amount:
-        raise Exception(f"Your offer is asking for too much liquidity ({new_liquidity_token_amount}; should be {target_liquidity_tokens}) - you need to offer at least {deposited_xch_amount} mojos and {deposited_token_amount} token mojos (/1000 to find out the number of tokens).")
-    
     deposited_xch_amount = eph_xch_coin.amount - new_liquidity_token_amount
     if pair_token_reserve != 0:
         deposited_xch_amount = pair_xch_reserve * deposited_token_amount // pair_token_reserve
 
-    if deposited_xch_amount > eph_xch_coin.amount:
-        raise Exception(f"Your offer is asking for too much liquidity ({new_liquidity_token_amount}) - you need to offer at least {deposited_xch_amount} mojos and {deposited_token_amount} token mojos (/1000 to find out the number of tokens).")
-
+    if target_liquidity_tokens > new_liquidity_token_amount or deposited_xch_amount > eph_xch_coin.amount:
+        raise Exception(f"Your offer is asking for too much liquidity ({new_liquidity_token_amount}; should be {target_liquidity_tokens}) - you need to offer at least {deposited_xch_amount} mojos and {deposited_token_amount} token mojos (/1000 to find out the number of tokens).")
+    
     # 3. spend the token ephemeral coin to create the token reserve coin
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_cat =  construct_cat_puzzle(CAT_MOD, token_tail_hash, p2_singleton_puzzle)
