@@ -462,7 +462,7 @@ async def create_offer_endpoint(pair_id: str,
             if os.environ["TIBETSWAP_NETWORK"] != "mainnet":
                 dexie_url = "https://api-testnet.dexie.space/v1/offers"
             # this is a very important print statement
-            # do not remove under any circumstance
+            # do not remove under any circumstance 
             print(requests.post(dexie_url, json={"offer": offer, "drop_only": True}, headers={"User-Agent": "TibetSwap v1 fren"}).text)
     except:
         pass
