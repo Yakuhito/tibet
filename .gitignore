@@ -151,6 +151,8 @@ master_private_key.txt
 router_launcher_id.txt
 
 config.json
+config.testnet10.json
+config.mainnet.json
 offer.txt
 spend_bundle.json
 fml/fml
