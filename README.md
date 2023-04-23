@@ -3,6 +3,7 @@
 Also referred to as `yakSwap`, `tibet` is an attempt to recreate [`Uniswap V1`](https://github.com/Uniswap/v1-contracts) on the Chia blockchain.
 
 To see how to use on testnet, see [testnet10.md](testnet10.md).
+To see how to use on mainnet, see [mainnet.md](mainner.md).
 
 # Explanations
 

@@ -1,11 +1,13 @@
 # Testing on testnet10
 
-First, set up [chia-dev-tools](https://github.com/Chia-Network/chia-dev-tools) first. Make sure your venv is active while using `tibet.py`:
+To use `tibet.py`, you'll first need to install the required packages:
 
 ```bash
+python3 -m venv venv
 . ./venv/bin/activate
 pip install -r requirements.txt
 pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
+pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools
 ```
 
 Next, you'll have to switch to testnet10. There's no point in running a full node (db is comparable in size with that on mainnet), so this guide will use [FireAcademy.io](https://fireacademy.io) instead of a full node.
