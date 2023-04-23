@@ -22,7 +22,8 @@ RUN pip install -r api-requirements.txt
 
 # Clone rest of files files
 COPY *.py ./
-COPY clsp/ ./
+COPY clsp/ ./clsp/
+COPY include ./include/
 COPY build.sh ./
 
 # Build code
