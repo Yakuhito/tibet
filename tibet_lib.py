@@ -611,14 +611,16 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
     new_state_puzzle = p2_merkle_solution.at("f") # p2_merkle_tree_modified -> parameters (which is a puzzle)
     params = p2_merkle_solution.at("rrf").at("r")
 
-    # SINGLETON_STRUCT is only used to create extra conditions
+    # SINGLETON_STRUCT and my_coin_id are only used to create extra conditions
     # in inner inner puzzle
     dummy_singleton_struct = (b"\x00" * 32, (b"\x00" * 32, b"\x00" * 32))
+    dummy_coin_id = b"\x00" * 32
 
     new_state_puzzle_sol = Program.to([
         old_state,
         params,
-        dummy_singleton_struct
+        dummy_singleton_struct,
+        dummy_coin_id
     ])
 
     new_state_puzzle_output = new_state_puzzle.run(new_state_puzzle_sol)
@@ -865,7 +867,7 @@ async def respond_to_deposit_liquidity_offer(
     liquidity_cat_tail = pair_liquidity_tail_puzzle(pair_launcher_id)
     liquidity_cat_tail_hash = liquidity_cat_tail.get_tree_hash()
 
-    liquidity_cat_mint_coin_tail_solution = Program.to([pair_singleton_inner_puzzle.get_tree_hash()])
+    liquidity_cat_mint_coin_tail_solution = Program.to([pair_singleton_inner_puzzle.get_tree_hash(), current_pair_coin.parent_coin_info])
     # output everything from solution
     # this is usually not safe to use, but in this case we don't really care since we are accepting an offer
     # that is asking for liquidity tokens - it's kind of circular; if we don't get out tokens, 
@@ -1126,7 +1128,7 @@ async def respond_to_remove_liquidity_offer(
 
     liquidity_cat_tail_puzzle = pair_liquidity_tail_puzzle(pair_launcher_id)
     liquidity_cat_tail_hash = liquidity_cat_tail_puzzle.get_tree_hash()
-    liquidity_cat_burn_coin_tail_solution = Program.to([pair_singleton_inner_puzzle_hash])
+    liquidity_cat_burn_coin_tail_solution = Program.to([pair_singleton_inner_puzzle_hash, current_pair_coin.parent_coin_info])
     liquidity_burn_coin_inner_puzzle = Program.to((
         1,
         [[ConditionOpcode.CREATE_COIN, 0, -113, liquidity_cat_tail_puzzle, liquidity_cat_burn_coin_tail_solution]]

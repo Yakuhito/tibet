@@ -13,7 +13,7 @@
       delta
       inner_conditions
       tail_solution 
-        ; (singleton_inner_puzzle_hash singleton_parent_id)
+        ; (singleton_inner_puzzle_hash . singleton_parent_id)
     )
 
     (include tibet_utils.clib)
