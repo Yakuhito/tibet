@@ -190,7 +190,7 @@
     )
 
     ;; stagers
-    (defun-inline stager_two (new_state extra_conditions coin_ids)
+    (defun-inline stager_three (coin_ids new_state extra_conditions)
         (create_output_conditions
             (f coin_ids)
             (f (r coin_ids))
@@ -209,17 +209,35 @@
         )
     )
 
-    (defun-inline stager (
+    (defun-inline stager_two (
+        coin_ids
         inner_output
     )
         (stager_two
+            coin_ids
             (f inner_output)
             (r inner_output)
-            (f inner_solution)
+        )
+    )
+
+    (defun-inline stager (
+        coin_ids
+    )
+        (stager_two
+            coin_ids
+            (a
+                inner_puzzle
+                (list
+                    state
+                    (r inner_solution)
+                    SINGLETON_STRUCT
+                    (f coin_ids)
+                )
+            )
         )
     )
 
     (stager
-        (a inner_puzzle (list state (r inner_solution) SINGLETON_STRUCT))
+        (f inner_solution)
     )
 )

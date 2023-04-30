@@ -4,6 +4,7 @@
         current_state
         params
         my_singleton_struct
+        my_coin_id
     )
 
     (include tibet_utils.clib)
@@ -39,7 +40,7 @@
             )
             ; extra conditions
             (liquidity_extra_conditions
-                liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD my_singleton_struct LIQUIDITY_TAIL_MOD_HASH CAT_MOD_HASH
+                my_coin_id liquidity_tokens_amount liquidity_parent_id liquidity_inner_puzzle_hash BURN_KEYWORD my_singleton_struct LIQUIDITY_TAIL_MOD_HASH CAT_MOD_HASH
             )
         )
     )

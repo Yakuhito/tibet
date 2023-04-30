@@ -5,7 +5,8 @@
             ;; 0.7% is kept as lp fee
         current_state
         params
-        my_singleton_struct
+        my_singleton_struct ; unused
+        my_coin_id ; unused
     )
 
     (include tibet_utils.clib)
