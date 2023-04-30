@@ -264,7 +264,7 @@ async def get_wallet_client(
 
 
 async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0):
-    comment: List[Tuple[str, str]] = [("tibet", "v1")]
+    comment: List[Tuple[str, str]] = [("tibet", "v2")]
     conds, launcher_coin_spend = launch_conditions_and_coinsol(parent_coin, get_router_puzzle(), comment, 1)
     if parent_coin.amount > fee + 1:
         conds.append(
