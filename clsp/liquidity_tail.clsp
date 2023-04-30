@@ -13,7 +13,7 @@
       delta
       inner_conditions
       tail_solution 
-        ; (singleton_inner_puzzle_hash)
+        ; (singleton_inner_puzzle_hash singleton_parent_id)
     )
 
     (include tibet_utils.clib)
@@ -21,6 +21,7 @@
 
     ; tail solution to function args
     (defun-inline singleton_inner_puzzle_hash_from_solution (tail_solution) (f tail_solution))
+    (defun-inline singleton_parent_id_from_solution (tail_solution) (f (r tail_solution)))
 
     (defun-inline calculate_full_puzzle_hash (inner_puzzle_hash)
        (curry_hashes_inline (singleton_mod_hash_from_struct SINGLETON_STRUCT)
@@ -30,7 +31,8 @@
     )
 
     (defun-inline output_conditions (
-        singleton_inner_puzzle_hash
+        singleton_full_puzzle_hash
+        singleton_coin_id
         my_id ; trusted (from Truths)
         my_amount ; trusted (from Truths)
         keyword ; either "mint" or "burn"
@@ -39,11 +41,32 @@
             (list
                 ASSERT_PUZZLE_ANNOUNCEMENT
                 (sha256
-                    (calculate_full_puzzle_hash singleton_inner_puzzle_hash)
-                    (sha256 keyword my_id my_amount)
+                    singleton_full_puzzle_hash
+                    (sha256
+                        singleton_coin_id
+                        keyword
+                        my_id
+                        my_amount
+                    )
                )
             )
-            (list CREATE_COIN_ANNOUNCEMENT keyword)
+            (list
+                CREATE_COIN_ANNOUNCEMENT
+                (sha256 singleton_coin_id keyword)
+            )
+        )
+    )
+
+    (defun-inline stager (
+        singleton_full_puzzle_hash
+        singleton_parent_id
+    )
+        (output_conditions
+            singleton_full_puzzle_hash
+            (calculate_coin_id singleton_parent_id singleton_full_puzzle_hash 1)
+            (my_id_cat_truth Truths)
+            (my_amount_cat_truth Truths)
+            (if parent_is_cat BURN_KEYWORD MINT_KEYWORD)
         )
     )
 
@@ -52,11 +75,9 @@
             (all (not parent_is_cat) (= delta 0)) ; mint
             (all parent_is_cat (= (- 0 delta) (my_amount_cat_truth Truths))) ; burn
         )
-        (output_conditions
-            (singleton_inner_puzzle_hash_from_solution tail_solution)
-            (my_id_cat_truth Truths)
-            (my_amount_cat_truth Truths)
-            (if parent_is_cat BURN_KEYWORD MINT_KEYWORD)
+        (stager
+            (calculate_full_puzzle_hash (singleton_inner_puzzle_hash_from_solution tail_solution))
+            (singleton_parent_id_from_solution tail_solution)
         )
         ; else
         (x)
