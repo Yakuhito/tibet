@@ -213,7 +213,7 @@
         coin_ids
         inner_output
     )
-        (stager_two
+        (stager_three
             coin_ids
             (f inner_output)
             (r inner_output)

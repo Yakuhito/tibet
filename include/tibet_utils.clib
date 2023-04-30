@@ -79,6 +79,7 @@
         (my_coin_id liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword singleton_struct liquidity_tail_mod_hash cat_mod_hash)
 
         (_liquidity_extra_conditions
+            my_coin_id
             liquidity_token_amount
             keyword
 
