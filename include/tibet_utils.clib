@@ -60,23 +60,23 @@
 
     ; liquidity TAIL
     (defun-inline _liquidity_extra_conditions
-        (liquidity_token_amount keyword liquidity_coin_id)
+        (my_coin_id liquidity_token_amount keyword liquidity_coin_id)
 
         (list
             (list
                 CREATE_PUZZLE_ANNOUNCEMENT
-                (sha256 keyword liquidity_coin_id liquidity_token_amount)
+                (sha256 my_coin_id keyword liquidity_coin_id liquidity_token_amount)
             )
 
             (list
                 ASSERT_COIN_ANNOUNCEMENT
-                (sha256 liquidity_coin_id keyword)
+                (sha256 liquidity_coin_id (sha256 my_coin_id keyword))
             )
         )
     )
 
     (defun-inline liquidity_extra_conditions
-        (liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword singleton_struct liquidity_tail_mod_hash cat_mod_hash)
+        (my_coin_id liquidity_token_amount liquidity_parent_id liquidity_inner_puzzle_hash keyword singleton_struct liquidity_tail_mod_hash cat_mod_hash)
 
         (_liquidity_extra_conditions
             liquidity_token_amount
