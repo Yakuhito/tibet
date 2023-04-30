@@ -40,7 +40,7 @@ To finish configuring `tibet.py`, run the following 3 commands:
 
 ```bash
 python3 tibet.py test-node-config
-python3 tibet.py set-router --launcher-id 33dd7279ca0ecdbdfdac52060c32f3084bfc002bbd18330d9060bf2ec4c3ba2b
+python3 tibet.py set-router --launcher-id [launcher_id]
 python3 tibet.py sync-pairs
 ```
 

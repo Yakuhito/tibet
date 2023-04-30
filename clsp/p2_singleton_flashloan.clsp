@@ -1,5 +1,5 @@
 ; p2_singleton, but for flashloans!
-;; code modified from https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/p2_singleton.clvm
+;; code modified from https://github.com/Chia-Network/chia-blockchain/blob/main/chia/wallet/puzzles/p2_singleton.clsp
 ;; this puzzle is INSECURE for most use cases
 ;; as it allows anyone to do anything with the funds once a singleton spends them
 
@@ -36,17 +36,20 @@
         )
     )
 
-    (defun-inline claim_rewards (SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH singleton_inner_puzzle_hash my_id)
-        (list
-            (list ASSERT_PUZZLE_ANNOUNCEMENT (sha256 (calculate_full_puzzle_hash SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH singleton_inner_puzzle_hash) my_id))
-            (list CREATE_COIN_ANNOUNCEMENT '$')
-            (list ASSERT_MY_COIN_ID my_id)
+    (defun-inline add_claim_rewards_conditions (
+        SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH singleton_inner_puzzle_hash my_id
+        base_condition_list
+    )
+        (c (list ASSERT_PUZZLE_ANNOUNCEMENT (sha256 (calculate_full_puzzle_hash SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH singleton_inner_puzzle_hash) my_id))
+            (c (list CREATE_COIN_ANNOUNCEMENT '$')
+                (c (list ASSERT_MY_COIN_ID my_id) base_condition_list)
+            )
         )
     )
 
     ; main
-    (merge_list
-        (claim_rewards SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH singleton_inner_puzzle_hash my_id)
+    (add_claim_rewards_conditions
+        SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH singleton_inner_puzzle_hash my_id
         additional_output_conditions
     )
 )
