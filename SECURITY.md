@@ -9,7 +9,7 @@ Reading chialisp is not easy, and TibetSwap is powered by multiple puzzles that 
 
 [XCH London Presentation](https://pitch.com/public/b3854be9-7714-4b02-9a65-04b3972cfe29)
 
-[Technical Follow-Up]()
+[XCH London Technical Follow-Up: The Magic Behind TibetSwap](https://youtu.be/JWK32glsyUY)
 
 ## Contact
 
