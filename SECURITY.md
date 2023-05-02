@@ -11,6 +11,8 @@ Reading chialisp is not easy, and TibetSwap is powered by multiple puzzles that 
 
 [XCH London Technical Follow-Up: The Magic Behind TibetSwap](https://youtu.be/JWK32glsyUY)
 
+[V1 Post-Mortem](https://blog.kuhi.to/tibetswap-v1-post-mortem)
+
 ## Contact
 
 If you found a bug pr have any questions, please do not hesitate to contact us. Specifically, you can reach yakuhito via the following channels:
