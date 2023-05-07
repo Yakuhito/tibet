@@ -124,7 +124,7 @@ def launch_router(push_tx, fee):
 async def _launch_router(push_tx, fee):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(2 + fee, 1, min_coin_amount=2 + fee) # wallet id 1, amount 2
+    coins = await wallet_client.select_coins(2 + fee, 1, min_coin_amount=2 + fee) # wallet id 1, amount 2 (+ fee)
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -222,7 +222,7 @@ async def _launch_test_token(amount, push_tx):
 @click.command()
 @click.option('--asset-id', required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
-@click.option('--fee', default=0, help='Fee to use for transaction')
+@click.option('--fee', default=ROUTER_MIN_FEE, help=f'Fee to use for transaction (min fee: {ROUTER_MIN_FEE} = 0.042 XCH)')
 def create_pair(asset_id, push_tx, fee):
     # very basic check to prevent most mistakes
     if len(asset_id) != 64:
@@ -233,6 +233,10 @@ def create_pair(asset_id, push_tx, fee):
 
 
 async def _create_pair(tail_hash, push_tx, fee):
+    if fee < ROUTER_MIN_FEE:
+        click.echo("The router imposes a minimum fee of 42000000000 mojos (0.042 XCH)")
+        sys.exit(1)
+
     click.echo(f"Creating pair for {tail_hash}...")
 
     router_launcher_id = get_config_item("router_launcher_id")

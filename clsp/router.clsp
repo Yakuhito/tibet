@@ -15,7 +15,7 @@
 
         ; required for the router to work
         LAUNCHER_PUZZLE_HASH
-        ROUTER_MOD_HASH ; my mod hash (for re-creation)
+        ROUTER_MOD_HASH
 
         ; inputs
         my_coin_id
@@ -23,6 +23,10 @@
     )
 
     (include tibet_utils.clib)
+
+    ; minimum fee required to spend the router (launch a new pair)
+    ; (prevents spam)
+    (defconstant MIN_FEE 42000000000)
 
     (defun-inline new_pair_launcher_id ()
         ; launcher amount needs to be 2, since 1 would mean wrapping it in our singleton top layer puzzle
@@ -70,17 +74,25 @@
     )
 
     ; main
-    (list
-        (list ASSERT_MY_COIN_ID my_coin_id)
-        (list CREATE_COIN (my_puzzle_hash) 1)
-        (list CREATE_COIN LAUNCHER_PUZZLE_HASH 2)
-        ; make sure the pair singleton is launched
+    (if (size_b32 new_pair_tail_hash)
         (list
-            ASSERT_COIN_ANNOUNCEMENT
-            (sha256
-                (new_pair_launcher_id)
-                (sha256tree (list (pair_puzzle_hash new_pair_tail_hash) 1 ()))
+            (list ASSERT_MY_COIN_ID my_coin_id)
+
+            (list CREATE_COIN (my_puzzle_hash) 1)
+            (list CREATE_COIN LAUNCHER_PUZZLE_HASH 2)
+
+            (list RESERVE_FEE MIN_FEE)
+            
+            ; make sure the pair singleton is launched
+            (list
+                ASSERT_COIN_ANNOUNCEMENT
+                (sha256
+                    (new_pair_launcher_id)
+                    (sha256tree (list (pair_puzzle_hash new_pair_tail_hash) 1 ()))
+                )
             )
         )
+        ; else
+        (x)
     )
 )

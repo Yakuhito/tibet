@@ -89,6 +89,7 @@ from chia.full_node.bundle_tools import simple_solution_generator
 from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
 
 MEMPOOL_MIN_FEE_INCREASE = uint64(10000000)
+ROUTER_MIN_FEE = 42000000000
 
 def program_from_hex(h: str) -> Program:
     return SerializedProgram.from_bytes(bytes.fromhex(h)).to_program()
@@ -386,17 +387,20 @@ async def create_pair_from_coin(
     router_launcher_id,
     current_router_coin,
     current_router_coin_creation_spend,
-    fee=0
+    fee=ROUTER_MIN_FEE
 ):
+    if fee < ROUTER_MIN_FEE:
+        raise Exception(f"The router requires a minimum fee of {ROUTER_MIN_FEE} to be spent.")
+
     lineage_proof = lineage_proof_for_coinsol(current_router_coin_creation_spend)
     
     router_inner_puzzle = get_router_puzzle()
+    router_singleton_puzzle = puzzle_for_singleton(router_launcher_id, router_inner_puzzle)
+
     router_inner_solution = Program.to([
         current_router_coin.name(),
         tail_hash
     ])
-
-    router_singleton_puzzle = puzzle_for_singleton(router_launcher_id, router_inner_puzzle)
     router_singleton_solution = solution_for_singleton(lineage_proof, current_router_coin.amount, router_inner_solution)
     router_singleton_spend = CoinSpend(current_router_coin, router_singleton_puzzle, router_singleton_solution)
 
@@ -432,8 +436,9 @@ async def create_pair_from_coin(
     # important to note: router also takes care of assert_launcher_announcement, but we need it to link the fund spend to the bundle
     conds = []
     conds.append([ConditionOpcode.CREATE_COIN, coin.puzzle_hash, coin.amount - fee - 2])
-    if fee > 0:
-        conds.append([ConditionOpcode.RESERVE_FEE, fee])
+    # RESERVE_FEE ROUTER_MIN_FEE is already created by the router
+    # 1 comes from the pair launcher coin being spent (amount=2; only CREATE_COIN uses 1)
+    conds.append([ConditionOpcode.RESERVE_FEE, 1 + fee - ROUTER_MIN_FEE])
     conds.append(assert_launcher_announcement)
     fund_spend = CoinSpend(
         coin,

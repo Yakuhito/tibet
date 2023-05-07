@@ -299,7 +299,7 @@ class TestTibetSwap:
         current_router_coin,
         current_router_coin_creation_spend
     ):
-        coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, 2)
+        coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, ROUTER_MIN_FEE + 2)
 
         pair_launcher_id, sb = await create_pair_from_coin(
             coin,
