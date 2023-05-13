@@ -7,7 +7,7 @@ Security is a priority for TibetSwap. There is an ongoing bug bounty program tha
 Reading chialisp is not easy, and TibetSwap is powered by multiple puzzles that interact in complex ways. With that in mind, you can use the following resources to get a basic understanding of what's going on, which you can then use to hunt for bugs.
 
 
-[XCH London Presentation](https://pitch.com/public/b3854be9-7714-4b02-9a65-04b3972cfe29)
+[XCH London Presentation](https://pitch.com/public/b3854be9-7714-4b02-9a65-04b3972cfe29) | [Mirror](/pdfs/XCHLDN.pdf)
 
 [XCH London Technical Follow-Up: The Magic Behind TibetSwap](https://youtu.be/JWK32glsyUY)
 
