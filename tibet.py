@@ -370,7 +370,7 @@ async def _get_pair_info(token_tail_hash):
         last_synced_pair_id_not_none = pair_launcher_id
 
     current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
-        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
@@ -415,7 +415,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         last_synced_pair_id_not_none = pair_launcher_id
 
     current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
-        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
@@ -558,7 +558,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         last_synced_pair_id_not_none = pair_launcher_id
 
     current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
-        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
@@ -700,7 +700,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
         last_synced_pair_id_not_none = pair_launcher_id
 
     current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
-        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
@@ -845,7 +845,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
         last_synced_pair_id_not_none = pair_launcher_id
 
     current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
-        full_node_client, bytes.fromhex(last_synced_pair_id_not_none), bytes.fromhex(token_tail_hash)
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none)
     )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")

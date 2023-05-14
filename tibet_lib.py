@@ -539,7 +539,7 @@ def get_coin_spend_from_sb(sb, coin_name):
     return None
 
 
-async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
+async def sync_pair(full_node_client, last_synced_coin_id):
     state = {
         "liquidity": 0,
         "xch_reserve": 0,
@@ -560,7 +560,7 @@ async def sync_pair(full_node_client, last_synced_coin_id, tail_hash):
 
     if not coin_record.spent:
         # hack
-        current_pair_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(full_node_client, coin_record.coin.parent_coin_info, tail_hash)
+        current_pair_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(full_node_client, coin_record.coin.parent_coin_info)
         return current_pair_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain
 
     creation_spend = None
@@ -1694,7 +1694,7 @@ async def respond_to_swap_offer(
     )
 
 async def get_fee_estimate(mempool_sb, full_node_client):
-    cost_of_operation = 300000000 # upper bound
+    cost_of_operation = 700000000 # upper bound (exaggerated so the tx doesn't fail)
     # from benchmarks:
     #   - add/remove liquidity -> ~250,000,000
     #   - add/remove liquidity -> ~250,000,000
@@ -1702,7 +1702,11 @@ async def get_fee_estimate(mempool_sb, full_node_client):
     #   - token to xch -> ~200,000,000
     if mempool_sb is None:
         fee_per_cost_resp = await full_node_client.get_fee_estimate(target_times=[0], cost=cost_of_operation)
-        return int(fee_per_cost_resp['current_fee_rate'] * cost_of_operation) + 1
+        fee = int(fee_per_cost_resp['current_fee_rate'] * cost_of_operation) + 1
+        # logic for the thing below: if there is no fee, as is currently the case on mainnet,
+        # this branch would still return 1 mojo as suggested fee
+        # we don't want to teach users to ignore the minimum fee, do we?
+        return fee if fee != 1 else 0
 
     cost_of_mempool_sb = get_spend_bundle_cost(mempool_sb)
     fee_of_mempool_sb = max(mempool_sb.fees(), 1)

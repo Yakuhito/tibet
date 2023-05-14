@@ -484,7 +484,7 @@ class TestTibetSwap:
 
         # get pair state, even though it's 0 - we need to test teh func-tion!
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
-            full_node_client, current_pair_coin.name(), token_tail_hash
+            full_node_client, current_pair_coin.name()
         )
         assert pair_state["liquidity"] == 0
         assert pair_state["xch_reserve"] == 0
@@ -544,7 +544,7 @@ class TestTibetSwap:
         offer_str = offer.to_bech32()
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
-            full_node_client, current_pair_coin.name(), token_tail_hash
+            full_node_client, current_pair_coin.name()
         )
         assert pair_state["liquidity"] == 1000
         assert pair_state["xch_reserve"] == 100000000
@@ -603,7 +603,7 @@ class TestTibetSwap:
         offer_str = offer.to_bech32()
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
-            full_node_client, current_pair_coin.name(), token_tail_hash
+            full_node_client, current_pair_coin.name()
         )
         assert pair_state["liquidity"] == 5000
         assert pair_state["xch_reserve"] == 500000000
@@ -650,7 +650,7 @@ class TestTibetSwap:
         liquidity_balance_before = liquidity_balance_now
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
-            full_node_client, current_pair_coin.name(), token_tail_hash
+            full_node_client, current_pair_coin.name()
         )
         assert pair_state["liquidity"] == 4200
         assert pair_state["xch_reserve"] == 420000000
@@ -709,7 +709,7 @@ class TestTibetSwap:
         liquidity_balance_before = liquidity_balance_now
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
-            full_node_client, current_pair_coin.name(), token_tail_hash
+            full_node_client, current_pair_coin.name()
         )
         assert pair_state["liquidity"] == 4200
         assert pair_state["xch_reserve"] == 420000000 + xch_amount
@@ -765,7 +765,7 @@ class TestTibetSwap:
         liquidity_balance_before = liquidity_balance_now
         
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
-            full_node_client, current_pair_coin.name(), token_tail_hash
+            full_node_client, current_pair_coin.name()
         )
         assert pair_state["liquidity"] == 4200
 
