@@ -1466,7 +1466,7 @@ async def respond_to_swap_offer(
         new_xch_reserve_amount -= 993 * token_amount * pair_xch_reserve // (1000 * pair_token_reserve + 993 * token_amount)
         new_token_reserve_amount += token_amount
     else:
-        xch_amount = eph_coin.amount
+        xch_amount = eph_coin.amount - total_donation_amount
         new_token_reserve_amount -= 993 * xch_amount * pair_token_reserve // (1000 * pair_xch_reserve + 993 * xch_amount)
         new_xch_reserve_amount += xch_amount
 
@@ -1495,7 +1495,7 @@ async def respond_to_swap_offer(
             )
         ),
         [
-            eph_coin.amount,
+            eph_coin.amount if eph_coin_is_cat else eph_coin.amount - total_donation_amount,
             0 if eph_coin_is_cat else 1,
         ]
     ))
@@ -1639,9 +1639,9 @@ async def respond_to_swap_offer(
     if not eph_coin_is_cat:
         total_xch_amount += eph_coin.amount
     else:
-        total_xch_amount -= asked_for_amount
+        total_xch_amount -= asked_for_amount + total_donation_amount
 
-    if total_xch_amount > new_xch_reserve_amount:
+    if total_donation_amount > 0:
         extra_xch_amount = total_xch_amount - new_xch_reserve_amount
         # only donate if donation addresses were provided
         # and the correct total_donation_amount was requested
@@ -1653,7 +1653,7 @@ async def respond_to_swap_offer(
         total_distributed = 0
         donation_conds = []
         for i, donation_address in enumerate(donation_addresses[1:]):
-            donation_amount = extra_xch_amount * donation_weights[i] // total_weights
+            donation_amount = extra_xch_amount * donation_weights[i + 1] // total_weights
             
             donation_conds.append([
                 ConditionOpcode.CREATE_COIN,
@@ -1672,16 +1672,16 @@ async def respond_to_swap_offer(
 
         # convert the donations to a coin that it spent
         # the superset rule provides some protection in the mempool
-        donation_coin_puzzle = Program.to([1, donation_conds])
+        donation_coin_puzzle = Program.to((1, donation_conds))
         donation_coin_puzzle_hash = donation_coin_puzzle.get_tree_hash()
         donation_coin = Coin(last_xch_reserve_coin.name(), donation_coin_puzzle_hash, total_donation_amount)
-        donation_coin_spend = Coinspend(donation_coin, donation_coin_puzzle, Program.to([]))
+        donation_coin_spend = CoinSpend(donation_coin, donation_coin_puzzle, Program.to([]))
         coin_spends.append(donation_coin_spend)
 
         # lastly, make sure this coin is created :)
         last_xch_reserve_coin_extra_conditions.append([
             ConditionOpcode.CREATE_COIN,
-            decode_puzzle_hash(donation_addresses[0]),
+            donation_coin_puzzle_hash,
             total_donation_amount
         ])
         
@@ -1716,7 +1716,7 @@ async def respond_to_swap_offer(
         intermediary_xch_reserve_coin_notarized_payments.append(
             [
                 notarized_payment.nonce,
-                [notarized_payment.puzzle_hash, pair_xch_reserve - new_xch_reserve_amount, notarized_payment.memos]
+                [notarized_payment.puzzle_hash, asked_for_amount, notarized_payment.memos]
             ]
         )
     intermediary_xch_reserve_coin_solution = Program.to(intermediary_xch_reserve_coin_notarized_payments)

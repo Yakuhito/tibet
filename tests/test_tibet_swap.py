@@ -29,8 +29,7 @@ from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.coin_spend import CoinSpend
 from chia.types.condition_opcodes import ConditionOpcode
 from chia.types.spend_bundle import SpendBundle
-from chia.util.bech32m import (bech32_decode, bech32_encode, convertbits,
-                               decode_puzzle_hash, encode_puzzle_hash)
+from chia.util.bech32m import (decode_puzzle_hash, encode_puzzle_hash)
 from chia.util.condition_tools import conditions_dict_for_solution
 from chia.util.config import load_config
 from chia.util.hash import std_hash
@@ -700,7 +699,7 @@ class TestTibetSwap:
         token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_amount)
         
         liquidity_balance_now = await self.get_balance(wallet_client, pair_liquidity_tail_hash)
-        assert liquidity_balance_before == liquidity_balance_before
+        assert liquidity_balance_before == liquidity_balance_now
 
         # 5. Change 1000 tokens to XCH
         # python3 tibet.py token-to-xch --token-amount 1000 --asset-id [asset_id] --push-tx
@@ -814,3 +813,229 @@ class TestTibetSwap:
 
         await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_total_supply - token_balance_before)
         await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, liquidity_balance_before, -liquidity_balance_before)
+
+    @pytest.mark.asyncio
+    async def test_donations(self, setup):
+        full_node_client, wallet_client, bob_wallet_client = setup
+        router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
+            wallet_client, full_node_client
+        )
+            
+        token_total_supply = 1000000 * 1000 # in mojos
+        token_tail_hash = await self.create_test_cat(
+            wallet_client, full_node_client, token_amount=token_total_supply // 1000
+        )
+        await self.wait_for_wallet_sync(wallet_client)
+            
+        pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
+            wallet_client,
+            full_node_client,
+            router_launcher_id,
+            token_tail_hash,
+            current_router_coin,
+            router_creation_spend
+        )
+            
+        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(pair_launcher_id).get_tree_hash()
+        
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, 0, token_total_supply)
+        assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash)) == 0
+
+        xch_balance_before_all_ops = xch_balance_before = await self.get_balance(wallet_client)
+
+        # 1. Deposit liquidity: 1000 CAT mojos and 100000000 mojos
+        # python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id] --push-tx
+        token_wallet_id = await self.get_wallet_id_for_cat(wallet_client, token_tail_hash)
+        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash)
+
+        xch_amount = 100000000
+        token_amount = 1000
+        liquidity_token_amount = token_amount # initial deposit
+
+        offer_dict = {}
+        offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
+        offer_dict[token_wallet_id] = -token_amount
+        offer_dict[liquidity_wallet_id] = liquidity_token_amount
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer = offer_resp[0]
+        offer_str = offer.to_bech32()
+
+        # get pair state, even though it's 0 - we need to test teh func-tion!
+        current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
+            full_node_client, current_pair_coin.name()
+        )
+        assert pair_state["liquidity"] == 0
+        assert pair_state["xch_reserve"] == 0
+        assert pair_state["token_reserve"] == 0
+
+        # there are no reserves at this point, but the function should be tested nonetheless
+        xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+            full_node_client,
+            pair_launcher_id,
+            current_pair_coin,
+            token_tail_hash,
+            pair_creation_spend,
+            sb_to_aggregate
+        )
+
+        sb = await respond_to_deposit_liquidity_offer(
+            pair_launcher_id,
+            current_pair_coin,
+            pair_creation_spend,
+            token_tail_hash,
+            pair_state["liquidity"],
+            pair_state["xch_reserve"],
+            pair_state["token_reserve"],
+            offer_str,
+            xch_reserve_coin,
+            token_reserve_coin,
+            token_reserve_lineage_proof
+        )
+
+        resp = await full_node_client.push_tx(sb)
+
+        assert resp["success"]
+
+        await self.wait_for_wallet_sync(wallet_client)
+        xch_balance_now = await self.get_balance(wallet_client)
+        assert xch_balance_before - xch_balance_now == xch_amount + liquidity_token_amount
+
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_total_supply, -token_amount)
+        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, 0, liquidity_token_amount)
+
+        # Change 100000000 XCH to tokens
+        # BUT leave 10000 mojos as a tip
+        # != python3 tibet.py xch-to-token --xch-amount 100000000 --asset-id [asset_id] --push-tx
+        xch_balance_before = xch_balance_now
+        token_balance_before = token_balance_now
+
+        current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
+            full_node_client, current_pair_coin.name()
+        )
+        assert pair_state["xch_reserve"] == 100000000
+        assert pair_state["token_reserve"] == 1000
+        assert pair_state["liquidity"] == 1000
+
+        xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+            full_node_client,
+            pair_launcher_id,
+            current_pair_coin,
+            token_tail_hash,
+            pair_creation_spend,
+            sb_to_aggregate
+        )
+
+        xch_amount = 100000000
+        xch_donation_amount = 10000
+        token_amount = pair_state["token_reserve"] * xch_amount * 993 // (1000 * pair_state["xch_reserve"] + 993 * xch_amount)
+
+        offer_dict = {}
+        offer_dict[1] = -(xch_amount + xch_donation_amount) # offer XCH
+        offer_dict[token_wallet_id] = token_amount # ask for token
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer = offer_resp[0]
+        offer_str = offer.to_bech32()
+
+        first_donation_ph = b"\xd1" * 32
+        second_donation_ph = b"\xd2" * 32
+        first_donation_address = encode_puzzle_hash(first_donation_ph, "xch")
+        second_donation_address = encode_puzzle_hash(second_donation_ph, "xch")
+        sb = await respond_to_swap_offer(
+           pair_launcher_id,
+           current_pair_coin,
+            pair_creation_spend,
+            token_tail_hash,
+            pair_state["liquidity"],
+            pair_state["xch_reserve"],
+            pair_state["token_reserve"],
+            offer_str,
+            xch_reserve_coin,
+            token_reserve_coin,
+            token_reserve_lineage_proof,
+            total_donation_amount=xch_donation_amount,
+            donation_addresses=[first_donation_address, second_donation_address],
+            donation_weights=[2, 1]
+        )
+
+        resp = await full_node_client.push_tx(sb)
+        await self.wait_for_wallet_sync(wallet_client)
+
+        assert resp["success"]
+
+        xch_balance_now = await self.get_balance(wallet_client)
+        assert xch_balance_before - xch_balance_now == xch_amount + xch_donation_amount
+
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_amount)
+
+        first_donation_address_coins = await full_node_client.get_coin_records_by_puzzle_hash(first_donation_ph)
+        assert len(first_donation_address_coins) == 1
+        assert first_donation_address_coins[0].coin.amount == xch_donation_amount // 3 * 2 + 1 # 6667
+
+        second_donation_address_coins = await full_node_client.get_coin_records_by_puzzle_hash(second_donation_ph)
+        assert len(second_donation_address_coins) == 1
+        assert second_donation_address_coins[0].coin.amount == xch_donation_amount // 3
+
+        # test donations for token -> XCH swaps
+
+        xch_balance_before = xch_balance_now
+        token_balance_before = token_balance_now
+
+        current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
+            full_node_client, current_pair_coin.name()
+        )
+        assert pair_state["xch_reserve"] == 200000000
+        assert pair_state["token_reserve"] == 502
+        assert pair_state["liquidity"] == 1000
+
+        xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+            full_node_client,
+            pair_launcher_id,
+            current_pair_coin,
+            token_tail_hash,
+            pair_creation_spend,
+            sb_to_aggregate
+        )
+
+        token_amount = 1000
+        xch_donation_amount = 100000
+        xch_amount = pair_state["xch_reserve"] * token_amount * 993 // (1000 * pair_state["token_reserve"] + 993 * token_amount) - xch_donation_amount
+
+        offer_dict = {}
+        offer_dict[1] = xch_amount - xch_donation_amount # ask for XCH
+        offer_dict[token_wallet_id] = - token_amount # offer token
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
+        offer = offer_resp[0]
+        offer_str = offer.to_bech32()
+
+        third_donation_ph = b"\xd3" * 32
+        third_donation_address = encode_puzzle_hash(third_donation_ph, "xch")
+        sb = await respond_to_swap_offer(
+           pair_launcher_id,
+           current_pair_coin,
+            pair_creation_spend,
+            token_tail_hash,
+            pair_state["liquidity"],
+            pair_state["xch_reserve"],
+            pair_state["token_reserve"],
+            offer_str,
+            xch_reserve_coin,
+            token_reserve_coin,
+            token_reserve_lineage_proof,
+            total_donation_amount=xch_donation_amount,
+            donation_addresses=[third_donation_address],
+            donation_weights=[1]
+        )
+
+        resp = await full_node_client.push_tx(sb)
+        await self.wait_for_wallet_sync(wallet_client)
+
+        assert resp["success"]
+
+        xch_balance_now = await self.get_balance(wallet_client)
+        assert xch_balance_now - xch_balance_before == xch_amount - xch_donation_amount
+
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, -token_amount)
+
+        third_donation_address_coins = await full_node_client.get_coin_records_by_puzzle_hash(third_donation_ph)
+        assert len(third_donation_address_coins) == 1
+        assert third_donation_address_coins[0].coin.amount == xch_donation_amount
