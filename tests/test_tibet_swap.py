@@ -12,7 +12,6 @@ from typing import List
 
 from blspy import AugSchemeMPL, PrivateKey
 from cdv.cmds.rpc import get_client
-from cdv.cmds.sim_utils import SIMULATOR_ROOT_PATH
 from cdv.test import setup as setup_test
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
