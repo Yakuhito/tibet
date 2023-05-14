@@ -125,7 +125,7 @@ def init_router(db: Session):
     if router is None:
         try:
             launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
-            current_id = os.environ["TIBETSWAP_CURRENT_ID"]
+            current_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
             network = os.environ["TIBETSWAP_NETWORK"]
         except KeyError as e:
             print(f"Error: Environment variable {e} is not set. Exiting...")
@@ -337,7 +337,18 @@ async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amoun
     return quote
 
 
-async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.ActionType, return_address: str = DEFAULT_RETURN_ADDRESS) -> schemas.OfferResponse:
+async def create_offer(
+    db: Session,
+    pair_id: str,
+    offer: str,
+    action: schemas.ActionType,
+    total_donation_amount: int,
+    donation_addresses: List[str],
+    donation_weights: List[int]
+) -> schemas.OfferResponse:
+    if total_donation_amount < 0:
+        raise HTTPException(status_code=400, detail="total_donation_amount negative")
+
     pair = await get_pair(db, pair_id)
     if pair is None:
         raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
@@ -373,7 +384,9 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
                 xch_reserve_coin,
                 token_reserve_coin,
                 token_reserve_lineage_proof,
-                return_address=return_address
+                total_donation_amount=total_donation_amount,
+                donation_addresses=donation_addresses,
+                donation_weights=donation_addresses
             )
         elif action == schemas.ActionType.ADD_LIQUIDITY:
             sb = await respond_to_deposit_liquidity_offer(
@@ -387,8 +400,7 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
                 offer,
                 xch_reserve_coin,
                 token_reserve_coin,
-                token_reserve_lineage_proof,
-                return_address=return_address
+                token_reserve_lineage_proof
             )
         elif action == schemas.ActionType.REMOVE_LIQUIDITY:
             sb = await respond_to_remove_liquidity_offer(
@@ -402,8 +414,7 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
                 offer,
                 xch_reserve_coin,
                 token_reserve_coin,
-                token_reserve_lineage_proof,
-                return_address=return_address
+                token_reserve_lineage_proof
             )
 
         try:
@@ -452,7 +463,9 @@ async def create_offer(db: Session, pair_id: str, offer: str, action: schemas.Ac
 async def create_offer_endpoint(pair_id: str,
                                 offer: str = Body(...),
                                 action: schemas.ActionType = Body(...),
-                                return_address: str = Body(DEFAULT_RETURN_ADDRESS),
+                                total_donation_amount: int = Body(0),
+                                donation_addresses: List[str] = Body([]),
+                                donation_weights: List[int] = Body([]),
                                 db: Session = Depends(get_db)):
     response = await create_offer(db, pair_id, offer, action, return_address)
 
