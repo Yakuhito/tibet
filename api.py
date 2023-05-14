@@ -386,7 +386,7 @@ async def create_offer(
                 token_reserve_lineage_proof,
                 total_donation_amount=total_donation_amount,
                 donation_addresses=donation_addresses,
-                donation_weights=donation_addresses
+                donation_weights=donation_weights
             )
         elif action == schemas.ActionType.ADD_LIQUIDITY:
             sb = await respond_to_deposit_liquidity_offer(
