@@ -240,7 +240,7 @@ async def get_pair(db: Session, pair_id: str, force_refresh: bool = False) -> mo
 
 
 async def get_all_pairs(db: Session, force_refresh: bool = False) -> List[models.Pair]:
-    pairs = db.query(models.Pair).all()
+    pairs = db.query(models.Pair).order_by(models.Pair.xch_reserve.desc()).all()
 
     for pair in pairs:
         pair_id = pair.launcher_id
