@@ -1646,7 +1646,7 @@ async def respond_to_swap_offer(
         # only donate if donation addresses were provided
         # and the correct total_donation_amount was requested
         # this way, we know this is not an error
-        if len(donation_weights) == 0 or extra_xch_amount != total_donation_amount:
+        if len(donation_weights) == 0 or (extra_xch_amount != total_donation_amount and extra_xch_amount != 0):
             raise Exception(f"You offered an excess of {extra_xch_amount} mojos.")
         
         total_weights = sum(donation_weights)

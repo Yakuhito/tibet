@@ -158,3 +158,5 @@ spend_bundle.json
 fml/fml
 database.db
 data/*
+offer.*.json
+spend_bundle.*.json
