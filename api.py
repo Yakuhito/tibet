@@ -467,7 +467,15 @@ async def create_offer_endpoint(pair_id: str,
                                 donation_addresses: List[str] = Body([]),
                                 donation_weights: List[int] = Body([]),
                                 db: Session = Depends(get_db)):
-    response = await create_offer(db, pair_id, offer, action, return_address)
+    response = await create_offer(
+        db,
+        pair_id,
+        offer,
+        action,
+        total_donation_amount,
+        donation_addresses,
+        donation_weights
+    )
 
     try:
         if response.success:
