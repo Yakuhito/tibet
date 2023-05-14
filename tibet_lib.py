@@ -733,8 +733,7 @@ async def respond_to_deposit_liquidity_offer(
     offer_str,
     last_xch_reserve_coin,
     last_token_reserve_coin,
-    last_token_reserve_lineage_proof, # coin_parent_coin_info, inner_puzzle_hash, amount
-    return_address = DEFAULT_RETURN_ADDRESS
+    last_token_reserve_lineage_proof # coin_parent_coin_info, inner_puzzle_hash, amount
 ):
     # 1. Detect ephemeral coins (those created by the offer that we're allowed to use)
     offer = Offer.from_bech32(offer_str)
@@ -814,13 +813,14 @@ async def respond_to_deposit_liquidity_offer(
 
     # send extra tokens to return address
     if eph_token_coin.amount > deposited_token_amount:
-        not_payment = Program.to([
-            current_pair_coin.name(),
-            [decode_puzzle_hash(return_address), eph_token_coin.amount - deposited_token_amount]
-        ])
-        eph_token_coin_notarized_payments.append(not_payment)
-        for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
-            announcement_asserts.append(ann_assert)
+        raise Exception(f"You provided {eph_token_coin.amount - deposited_token_amount} too many token mojos.")
+        # not_payment = Program.to([
+        #     current_pair_coin.name(),
+        #     [decode_puzzle_hash(return_address), eph_token_coin.amount - deposited_token_amount]
+        # ])
+        # eph_token_coin_notarized_payments.append(not_payment)
+        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
+        #     announcement_asserts.append(ann_assert)
 
     eph_token_coin_inner_solution = Program.to(eph_token_coin_notarized_payments)
     
@@ -896,14 +896,15 @@ async def respond_to_deposit_liquidity_offer(
     ]
     # send extra XCH to return address
     if eph_xch_coin.amount > deposited_xch_amount + new_liquidity_token_amount:
-        not_payment = Program.to([
-            current_pair_coin.name(),
-            [decode_puzzle_hash(return_address), eph_xch_coin.amount - deposited_xch_amount - new_liquidity_token_amount]
-        ])
-        eph_xch_coin_settlement_things.append(not_payment)
+        raise Exception(f"You provided {eph_xch_coin.amount - deposited_xch_amount - new_liquidity_token_amount} too many mojos.")
+        # not_payment = Program.to([
+        #     current_pair_coin.name(),
+        #     [decode_puzzle_hash(return_address), eph_xch_coin.amount - deposited_xch_amount - new_liquidity_token_amount]
+        # ])
+        # eph_xch_coin_settlement_things.append(not_payment)
 
-        for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment]):
-            announcement_asserts.append(ann_assert)
+        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment]):
+        #     announcement_asserts.append(ann_assert)
 
     eph_xch_coin_solution = Program.to(eph_xch_coin_settlement_things)
     eph_xch_coin_spend = CoinSpend(eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
@@ -1058,7 +1059,6 @@ async def respond_to_remove_liquidity_offer(
     last_xch_reserve_coin,
     last_token_reserve_coin,
     last_token_reserve_lineage_proof, # coin_parent_coin_info, inner_puzzle_hash, amount
-    return_address = DEFAULT_RETURN_ADDRESS
 ):
     # 1. detect offered ephemeral coin (ephemeral liquidity coin, created the offer so we can use it)
     offer = Offer.from_bech32(offer_str)
@@ -1290,14 +1290,15 @@ async def respond_to_remove_liquidity_offer(
             [p2_singleton_puzzle_hash, new_token_reserve_amount]
         ])
     if last_token_reserve_coin.amount > removed_token_amount + new_token_reserve_amount:
-        not_payment = [
-            current_pair_coin.name(),
-            [decode_puzzle_hash(return_address), token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount]
-        ]
-        eph_token_coin_notarized_payments.append(not_payment)
+        raise Exception(f"You asked for too few tokens - your offer is {token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount} token mojos short.")
+        # not_payment = [
+        #     current_pair_coin.name(),
+        #     [decode_puzzle_hash(return_address), token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount]
+        # ]
+        # eph_token_coin_notarized_payments.append(not_payment)
 
-        for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
-            announcement_asserts.append(ann_assert)
+        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
+        #     announcement_asserts.append(ann_assert)
 
     eph_token_coin_inner_solution = Program.to(eph_token_coin_notarized_payments)
     eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
@@ -1321,13 +1322,14 @@ async def respond_to_remove_liquidity_offer(
     # 8. Spend XCH reserve
     xch_eph_coin_extra_payment = None
     if last_xch_reserve_coin.amount > removed_xch_amount + new_xch_reserve_amount:
-        xch_eph_coin_extra_payment = [
-            current_pair_coin.name(),
-            [decode_puzzle_hash(return_address), xch_reserve_coin.amount - removed_xch_amount - new_xch_reserve_amount]
-        ]
+        raise Exception(f"Your offer asks for too few XCH - you're {xch_reserve_coin.amount - removed_xch_amount - new_xch_reserve_amount} mojos short.")
+        # xch_eph_coin_extra_payment = [
+        #     current_pair_coin.name(),
+        #     [decode_puzzle_hash(return_address), xch_reserve_coin.amount - removed_xch_amount - new_xch_reserve_amount]
+        # ]
 
-        for ann_assert in get_announcements_asserts_for_notarized_payments([xch_eph_coin_extra_payment]):
-            announcement_asserts.append(ann_assert)
+        # for ann_assert in get_announcements_asserts_for_notarized_payments([xch_eph_coin_extra_payment]):
+        #     announcement_asserts.append(ann_assert)
 
     last_xch_reserve_coin_extra_conditions = [
         [
@@ -1405,7 +1407,9 @@ async def respond_to_swap_offer(
     last_xch_reserve_coin,
     last_token_reserve_coin,
     last_token_reserve_lineage_proof, # coin_parent_coin_info, inner_puzzle_hash, amount
-    return_address = DEFAULT_RETURN_ADDRESS
+    total_donation_amount = 0,
+    donation_addresses = [],
+    donation_weights = []
 ):
     coin_spends = [] # all spends that will get included in the returned spend bundle
 
@@ -1530,11 +1534,12 @@ async def respond_to_swap_offer(
         total_token_amount -= total_token_amount
 
     if total_token_amount > new_token_reserve_amount:
-        last_token_reserve_coin_extra_conditions.append([
-            ConditionOpcode.CREATE_COIN,
-            decode_puzzle_hash(return_address),
-            total_token_amount - new_token_reserve_amount
-        ])
+        raise Exception(f"You offered an extra {total_token_amount - new_token_reserve_amount} tokens - please use the exact amounts shown.")
+        # last_token_reserve_coin_extra_conditions.append([
+        #     ConditionOpcode.CREATE_COIN,
+        #     decode_puzzle_hash(return_address),
+        #     total_token_amount - new_token_reserve_amount
+        # ])
 
     last_token_reserve_coin_inner_solution = solution_for_p2_singleton_flashloan(
         last_token_reserve_coin,
@@ -1640,12 +1645,49 @@ async def respond_to_swap_offer(
         total_xch_amount -= asked_for_amount
 
     if total_xch_amount > new_xch_reserve_amount:
-        last_token_reserve_coin_extra_conditions.append([
+        extra_xch_amount = total_xch_amount - new_xch_reserve_amount
+        # only donate if donation addresses were provided
+        # and the correct total_donation_amount was requested
+        # this way, we know this is not an error
+        if len(donation_weights) == 0 or extra_xch_amount != total_donation_amount:
+            raise Exception(f"You offered an excess of {extra_xch_amount} mojos.")
+        
+        total_weights = sum(donation_weights)
+        total_distributed = 0
+        donation_conds = []
+        for i, donation_address in enumerate(donation_addresses[1:]):
+            donation_amount = extra_xch_amount * donation_weights[i] // total_weights
+            
+            donation_conds.append([
+                ConditionOpcode.CREATE_COIN,
+                decode_puzzle_hash(donation_address),
+                donation_amount
+            ])
+            total_distributed += donation_amount
+
+        # make sure no moo remains unaccounted for by sending
+        # everything left to the first donation address
+        donation_conds.append([
             ConditionOpcode.CREATE_COIN,
-            decode_puzzle_hash(return_address),
-            total_xch_amount - new_xch_reserve_amount
+            decode_puzzle_hash(donation_addresses[0]),
+            total_donation_amount - total_distributed
         ])
 
+        # convert the donations to a coin that it spent
+        # the superset rule provides some protection in the mempool
+        donation_coin_puzzle = Program.to([1, donation_conds])
+        donation_coin_puzzle_hash = donation_coin_puzzle.get_tree_hash()
+        donation_coin = Coin(last_xch_reserve_coin.name(), donation_coin_puzzle_hash, total_donation_amount)
+        donation_coin_spend = Coinspend(donation_coin, donation_coin_puzzle, Program.to([]))
+        coin_spends.append(donation_coin_spend)
+
+        # lastly, make sure this coin is created :)
+        last_xch_reserve_coin_extra_conditions.append([
+            ConditionOpcode.CREATE_COIN,
+            decode_puzzle_hash(donation_addresses[0]),
+            total_donation_amount
+        ])
+        
     last_xch_reserve_coin_solution = solution_for_p2_singleton_flashloan(
         last_xch_reserve_coin,
         pair_singleton_inner_puzzle.get_tree_hash(),
