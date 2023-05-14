@@ -258,7 +258,7 @@ async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
     client = await get_client()
 
     _, _, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
-        client, bytes.fromhex(pair.last_coin_id_on_chain), bytes.fromhex(pair.asset_id)
+        client, bytes.fromhex(pair.last_coin_id_on_chain)
     )
 
     pair.xch_reserve = pair_state['xch_reserve'] 
@@ -358,7 +358,7 @@ async def create_offer(
         client = await get_client()
 
         current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
-            client, bytes.fromhex(pair.last_coin_id_on_chain), bytes.fromhex(pair.asset_id)
+            client, bytes.fromhex(pair.last_coin_id_on_chain)
         )
         current_pair_coin_id = current_pair_coin.name().hex()
 

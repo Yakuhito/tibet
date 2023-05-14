@@ -34,7 +34,7 @@ Configure:
 rm config.json # delete prev. config
 python3 tibet.py config-node --use-preset testnet10 --fireacademyio-api-key [you-api-key]
 python3 tibet.py test-node-config
-python3 tibet.py set-router --launcher-id 8db07d7a2570a92af66faa05e0e945adddf56ec4f96a3c3b8bd6acf4b2c676fc
+python3 tibet.py set-router --launcher-id d037e35cc7269df10e45d0d152d2ff53d26f318adf5ea20578e5cfb80b5b2a71
 python3 tibet.py sync-pairs
 ```
 
