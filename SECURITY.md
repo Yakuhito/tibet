@@ -13,6 +13,8 @@ Reading chialisp is not easy, and TibetSwap is powered by multiple puzzles that 
 
 [V1 Post-Mortem](https://blog.kuhi.to/tibetswap-v1-post-mortem)
 
+[Detailed Transaction Structure](https://pitch.com/public/c7bcad7d-e4a9-4d46-848b-95841d07abaf)
+
 ## Contact
 
 If you found a bug pr have any questions, please do not hesitate to contact us. Specifically, you can reach yakuhito via the following channels:
