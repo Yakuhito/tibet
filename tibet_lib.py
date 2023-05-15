@@ -1655,20 +1655,32 @@ async def respond_to_swap_offer(
         for i, donation_address in enumerate(donation_addresses[1:]):
             donation_amount = extra_xch_amount * donation_weights[i + 1] // total_weights
             
-            donation_conds.append([
-                ConditionOpcode.CREATE_COIN,
-                decode_puzzle_hash(donation_address),
-                donation_amount
-            ])
+            if donation_address != "FEE":
+                donation_conds.append([
+                    ConditionOpcode.CREATE_COIN,
+                    decode_puzzle_hash(donation_address),
+                    donation_amount
+                ])
+            else:
+                donation_conds.append([
+                    ConditionOpcode.RESERVE_FEE,
+                    donation_amount
+                ])
             total_distributed += donation_amount
 
         # make sure no moo remains unaccounted for by sending
         # everything left to the first donation address
-        donation_conds.append([
-            ConditionOpcode.CREATE_COIN,
-            decode_puzzle_hash(donation_addresses[0]),
-            total_donation_amount - total_distributed
-        ])
+        if donation_addresses[0] != "FEE":
+            donation_conds.append([
+                ConditionOpcode.CREATE_COIN,
+                decode_puzzle_hash(donation_addresses[0]),
+                total_donation_amount - total_distributed
+            ])
+        else:
+            donation_conds.append([
+                ConditionOpcode.RESERVE_FEE,
+                total_donation_amount - total_distributed
+            ])
 
         # convert the donations to a coin that it spent
         # the superset rule provides some protection in the mempool
