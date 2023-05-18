@@ -390,7 +390,7 @@ async def _get_pair_info(token_tail_hash):
 @click.option("--xch-amount", default=0, help="Only required if pair has no liquidity. If offer is none, this amount of XCH will be asked for in the generated offer. Unit is mojos.")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
-@click.option('--use-fee-estimate', is_flag=True, default=True, show_default=True, help='Estimate required fee when generating offer')
+@click.option('--use-fee-estimate', is_flag=True, default=False, show_default=True, help='Estimate required fee when generating offer')
 def deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
@@ -533,7 +533,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 @click.option("--liquidity-token-amount", default=0, help="If offer is none, this amount of liqudity tokens will be included in the offer. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
-@click.option('--use-fee-estimate', is_flag=True, default=True, show_default=True, help='Estimate required fee when generating offer')
+@click.option('--use-fee-estimate', is_flag=True, default=False, show_default=True, help='Estimate required fee when generating offer')
 def remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
@@ -675,7 +675,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
 @click.option("--xch-amount", default=0, help="If offer is none, this amount of xch will be included in the offer. Unit is mojos.")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the spend bundle to the network.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
-@click.option('--use-fee-estimate', is_flag=True, default=True, show_default=True, help='Estimate required fee when generating offer')
+@click.option('--use-fee-estimate', is_flag=True, default=False, show_default=True, help='Estimate required fee when generating offer')
 def xch_to_token(asset_id, offer, xch_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
@@ -820,7 +820,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
 @click.option("--token-amount", default=0, help="If offer is none, this amount of tokens will be included in the offer. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the spend bundle to the network.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
-@click.option('--use-fee-estimate', is_flag=True, default=True, show_default=True, help='Estimate required fee when generating offer')
+@click.option('--use-fee-estimate', is_flag=True, default=False, show_default=True, help='Estimate required fee when generating offer')
 def token_to_xch(asset_id, offer, token_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
