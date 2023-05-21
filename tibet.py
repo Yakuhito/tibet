@@ -455,7 +455,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         liquidity_token_amount = token_amount
         if pair_state['liquidity'] != 0:
             liquidity_token_amount = pair_state['liquidity'] * token_amount // pair_state['token_reserve']
-            xch_amount = liquidity_token_amount * pair_state['xch_reserve'] // pair_state['liquidity']
+            xch_amount = pair_state['xch_reserve'] * token_amount // pair_state['token_reserve']
 
         if use_fee_estimate:
             fee = await get_fee_estimate(sb_to_aggregate, full_node_client)

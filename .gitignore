@@ -160,3 +160,4 @@ database.db
 data/*
 offer.*.json
 spend_bundle.*.json
+start_api.sh

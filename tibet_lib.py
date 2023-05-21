@@ -793,9 +793,12 @@ async def respond_to_deposit_liquidity_offer(
     if pair_token_reserve != 0:
         deposited_xch_amount = pair_xch_reserve * deposited_token_amount // pair_token_reserve
 
-    if target_liquidity_tokens > new_liquidity_token_amount or deposited_xch_amount > eph_xch_coin.amount:
+    if target_liquidity_tokens > new_liquidity_token_amount:
         raise Exception(f"Your offer is asking for too much liquidity ({new_liquidity_token_amount}; should be {target_liquidity_tokens}) - you need to offer at least {deposited_xch_amount} mojos and {deposited_token_amount} token mojos (/1000 to find out the number of tokens).")
     
+    if eph_xch_coin.amount - new_liquidity_token_amount != deposited_xch_amount:
+        raise Exception(f"For {new_liquidity_token_amount} liquidity, you should be asking for {deposited_xch_amount + new_liquidity_token_amount} mojos, not ({eph_xch_coin.amount})")
+
     # 3. spend the token ephemeral coin to create the token reserve coin
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_cat =  construct_cat_puzzle(CAT_MOD, token_tail_hash, p2_singleton_puzzle)
@@ -1752,7 +1755,7 @@ async def get_fee_estimate(mempool_sb, full_node_client):
     #   - xch to token -> ~150,000,000
     #   - token to xch -> ~200,000,000
     if mempool_sb is None:
-        fee_per_cost_resp = await full_node_client.get_fee_estimate(target_times=[60], cost=cost_of_operation)
+        fee_per_cost_resp = await full_node_client.get_fee_estimate(target_times=[0], cost=cost_of_operation)
         fee = int(fee_per_cost_resp['estimates'][0]) + 1
         # logic for the thing below: if there is no fee, as is currently the case on mainnet,
         # this branch would still return 1 mojo as suggested fee
