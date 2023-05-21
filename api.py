@@ -417,6 +417,9 @@ async def create_offer(
                 token_reserve_lineage_proof
             )
 
+        if sb_to_aggregate is not None:
+            sb = SpendBundle.aggregate([sb, sb_to_aggregate])
+
         try:
             resp = await client.push_tx(sb)
         except Exception as e:
