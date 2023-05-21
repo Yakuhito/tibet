@@ -1745,15 +1745,15 @@ async def respond_to_swap_offer(
     )
 
 async def get_fee_estimate(mempool_sb, full_node_client):
-    cost_of_operation = 700000000 # upper bound (exaggerated so the tx doesn't fail)
+    cost_of_operation = 420000000 # upper bound (exaggerated so the tx doesn't fail)
     # from benchmarks:
     #   - add/remove liquidity -> ~250,000,000
     #   - add/remove liquidity -> ~250,000,000
     #   - xch to token -> ~150,000,000
     #   - token to xch -> ~200,000,000
     if mempool_sb is None:
-        fee_per_cost_resp = await full_node_client.get_fee_estimate(target_times=[0], cost=cost_of_operation)
-        fee = int(fee_per_cost_resp['current_fee_rate'] * cost_of_operation) + 1
+        fee_per_cost_resp = await full_node_client.get_fee_estimate(target_times=[60], cost=cost_of_operation)
+        fee = int(fee_per_cost_resp['estimates'][0]) + 1
         # logic for the thing below: if there is no fee, as is currently the case on mainnet,
         # this branch would still return 1 mojo as suggested fee
         # we don't want to teach users to ignore the minimum fee, do we?
