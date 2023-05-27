@@ -359,7 +359,7 @@ async def _get_pair_info(token_tail_hash):
 
     pair_launcher_id = get_config_item("pairs", token_tail_hash)
     if pair_launcher_id is None:
-        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or launch-pair.")
+        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
         sys.exit(1)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
@@ -404,7 +404,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 
     pair_launcher_id = get_config_item("pairs", token_tail_hash)
     if pair_launcher_id is None:
-        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or launch-pair.")
+        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
         sys.exit(1)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
