@@ -308,8 +308,11 @@ async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_
         # amount_in given
         amount_out = get_input_price(amount_in, input_reserve, output_reserve)
 
-    # warn price change when traded amount > 2% of reserves
-    price_warning = amount_in > input_reserve / 50 or amount_out > output_reserve / 50
+    # https://docs.mimo.finance/the-formulas#price-impact
+    price_impact = 1 - (output_reserve - amount_out) ** 2 / output_reserve ** 2
+
+    # warn price change when price impact > 5%
+    price_warning = price_impact > 0.05
 
     recommended_fee = None
     if estimate_fee:
@@ -319,6 +322,7 @@ async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_
         amount_in=amount_in,
         amount_out=amount_out,
         price_warning=price_warning,
+        price_impact=price_impact,
         fee=recommended_fee,
         asset_id=pair.asset_id,
         input_reserve=input_reserve,
@@ -354,6 +358,7 @@ async def create_offer(
         raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
     
     sb = None
+    offerId = "" # will be set outside function
     try:
         client = await get_client()
 
@@ -438,7 +443,8 @@ async def create_offer(
         success = resp['status'] == 'SUCCESS'
         response = schemas.OfferResponse(
             success=success,
-            message=json.dumps(resp)
+            message=json.dumps(resp),
+            offer_id=offerId
         )
 
         return response
@@ -451,7 +457,8 @@ async def create_offer(
             })
         response = schemas.OfferResponse(
             success=False,
-            message=msg
+            message=msg,
+            offer_id=offerId
         )
         t = int(time.time())
         if sb is not None:
@@ -487,7 +494,14 @@ async def create_offer_endpoint(pair_id: str,
                 dexie_url = "https://api-testnet.dexie.space/v1/offers"
             # this is a very important print statement
             # do not remove under any circumstance 
-            print(requests.post(dexie_url, json={"offer": offer, "drop_only": True}, headers={"User-Agent": "TibetSwap v1 fren"}).text)
+            r = requests.post(dexie_url, json={"offer": offer, "drop_only": True}, headers={"User-Agent": "TibetSwap v1 fren"})
+            # edit: I had to separate the original print statement in two parts
+            # but I did not remove it!
+            print(r.text)
+
+            resp = r.json()
+            if resp["success"]:
+                response.offer_id = resp["id"]
     except:
         pass
     return response

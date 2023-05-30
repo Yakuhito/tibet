@@ -41,6 +41,7 @@ class Quote(BaseModel):
     amount_in: int
     amount_out: int
     price_warning: bool
+    price_impact: float
     fee: Optional[int]
     asset_id: str
     input_reserve: int
@@ -49,6 +50,7 @@ class Quote(BaseModel):
 class OfferResponse(BaseModel):
     success: bool
     message: str
+    offer_id: str
 
 class ActionType(Enum):
     SWAP = "SWAP"
