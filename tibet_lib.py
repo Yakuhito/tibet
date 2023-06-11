@@ -1656,7 +1656,7 @@ async def respond_to_swap_offer(
         total_distributed = 0
         donation_conds = []
         for i, donation_address in enumerate(donation_addresses[1:]):
-            donation_amount = extra_xch_amount * donation_weights[i + 1] // total_weights
+            donation_amount = total_donation_amount * donation_weights[i + 1] // total_weights
             
             if donation_address != "FEE":
                 donation_conds.append([
