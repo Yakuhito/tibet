@@ -57,7 +57,7 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
         sys.exit(1)
     
     if use_preset in ["mainnet", "testnet10"]:
-        chia_root = "~/.chia/mainnet"
+    	chia_root = os.getenv('CHIA_ROOT', default="~/.chia/mainnet")
     elif use_preset == "simulator":
         chia_root = "~/.chia/simulator/main"
     
@@ -460,7 +460,6 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         if use_fee_estimate:
             fee = await get_fee_estimate(sb_to_aggregate, full_node_client)
             print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
-
         offer_dict = {}
         offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
         offer_dict[token_wallet_id] = -token_amount
