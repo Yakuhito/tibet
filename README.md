@@ -34,7 +34,7 @@ I chose to go with XCH-token pairs instead of token-token (and having 'Wrapped C
 
 ## Zap and Other Things
 
-This is Chia, so you can chain actions together. For example, you can have a transaction where x XCH get supplied as liquidity without supplying the other token - under the hood, it swaps about 50% of x to the other token and then supplies liquidity to the pair. Or you can have token1-token2 swaps by grouping 2 swaps in the same spend bundle. These things will probably not be offered until there's demand for them, but no-one's preventing any developer fromimplementing them before that.
+This is Chia, so you can chain actions together. For example, you can have a transaction where x XCH get supplied as liquidity without supplying the other token - under the hood, it swaps about 50% of x to the other token and then supplies liquidity to the pair. Or you can have token1-token2 swaps by grouping 2 swaps in the same spend bundle. These things will probably not be offered until there's demand for them, but no-one's preventing any developer from implementing them before that.
 
 ## Offers
 
@@ -46,7 +46,7 @@ Unlike Uniswap, the router does not allow users to make trades on pairs. Since w
 
 ## High Fees
 
-'But uniswap has a fee of 0.3% and that goes to liquidity providers' Yes, but this is not Uniswap. The ecosystem is small and good incentives need to be put in place. 0.3% is a lot when your daily volume is over $900 million; 50% is very little when daily volume is $10. Yes, fees should be reduced in the future. Until then, thank you for (forcefully) contributing to the development of the Chia ecosystem. Also, you might end up paying even more fees for Uniswap in the form of slippage, which is impossible here. The current fee candidate is 0.7% and I'm open to discussing it until we deploy the router on mainnet, which sets the fee in stone (i.e., the router needs to be re-deployed and liquiditymoved to new pairs if we want to change the fee).
+'But Uniswap has a fee of 0.3% and that goes to liquidity providers' Yes, but this is not Uniswap. The ecosystem is small and good incentives need to be put in place. 0.3% is a lot when your daily volume is over $900 million; 50% is very little when daily volume is $10. Yes, fees should be reduced in the future. Until then, thank you for (forcefully) contributing to the development of the Chia ecosystem. Also, you might end up paying even more fees for Uniswap in the form of slippage, which is impossible here. The current fee candidate is 0.7% and I'm open to discussing it until we deploy the router on mainnet, which sets the fee in stone (i.e., the router needs to be re-deployed and liquidity moved to new pairs if we want to change the fee).
 
 ## Flash Loans
 
