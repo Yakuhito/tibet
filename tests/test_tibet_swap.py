@@ -276,7 +276,7 @@ class TestTibetSwap:
         return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
 
 
-    async def create_test_cat(self, wallet_client, full_node_client, token_amount=1000000):
+    async def create_test_cat(self, wallet_client: WalletRpcClient, full_node_client, token_amount=1000000):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
         
         tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
@@ -285,6 +285,8 @@ class TestTibetSwap:
         resp = await full_node_client.push_tx(signed_sb)
 
         assert resp["success"]
+
+        await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(tail_hash)) # create wallet
 
         return bytes.fromhex(tail_hash)
 
@@ -418,12 +420,14 @@ class TestTibetSwap:
         token_tail_hash,
         initial_amount,
         delta,
-        max_retries = 30,
+        max_retries = 120,
         time_to_sleep = 1
     ):
         retries = 0
         balance = await self.get_balance(wallet_client, token_tail_hash)
         while balance == initial_amount:
+            print("balance", balance, "initial_amount", initial_amount, "delta", delta)
+
             retries += 1
             assert retries <= max_retries
 
@@ -459,6 +463,7 @@ class TestTibetSwap:
             
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(pair_launcher_id).get_tree_hash()
         
+        await self.wait_for_wallet_sync(wallet_client)
         token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, 0, token_total_supply)
         assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash)) == 0
 

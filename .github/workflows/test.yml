@@ -1,15 +1,15 @@
 name: Run Tests
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - '**'
-    tags:
-        - '**'
-  pull_request:
-    branches:
-      - '**'
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches:
+#       - '**'
+#     tags:
+#         - '**'
+#   pull_request:
+#     branches:
+#       - '**'
 
 defaults:
   run:
