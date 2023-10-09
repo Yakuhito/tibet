@@ -9,7 +9,6 @@ RUN python -m venv venv
 RUN /bin/bash -c "source venv/bin/activate"
 
 # Always needed
-RUN pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
 RUN pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools
 
 # Install requirements from requirements.txt
@@ -32,4 +31,3 @@ RUN chmod +x build.sh && ./build.sh
 
 # Start the Uvicorn server
 CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
-

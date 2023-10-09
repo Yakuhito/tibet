@@ -39,9 +39,10 @@ from chia.wallet.cat_wallet.cat_utils import (
     get_innerpuzzle_from_puzzle,
     unsigned_spend_bundle_for_spendable_cats,
 )
+from chia.wallet.cat_wallet.cat_utils import CAT_MOD
+from chia.wallet.cat_wallet.cat_wallet import CAT_MOD_HASH
 from chia.wallet.derive_keys import master_sk_to_wallet_sk_unhardened
 from chia.wallet.lineage_proof import LineageProof
-from chia.wallet.puzzles.cat_loader import CAT_MOD, CAT_MOD_HASH
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import (
     DEFAULT_HIDDEN_PUZZLE_HASH,
@@ -213,7 +214,7 @@ class TestTibetSwap:
     def get_created_coins_from_coin_spend(self, cs):
         coins = []
 
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             cs.puzzle_reveal,
             cs.solution,
             INFINITE_COST
@@ -417,7 +418,7 @@ class TestTibetSwap:
         token_tail_hash,
         initial_amount,
         delta,
-        max_retries = 18,
+        max_retries = 30,
         time_to_sleep = 1
     ):
         retries = 0

@@ -1,2 +1,2 @@
 requests
-chia-blockchain==1.7.0
+chia-blockchain

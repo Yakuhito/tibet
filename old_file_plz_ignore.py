@@ -2,7 +2,7 @@ import os
 import sys
 import asyncio
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 from chia.wallet.sign_coin_spends import sign_coin_spends
 from blspy import PrivateKey, AugSchemeMPL
 from chia.types.blockchain_format.coin import Coin
@@ -15,10 +15,8 @@ from clvm.casts import int_to_bytes
 from cdv.cmds.rpc import get_client
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import launch_conditions_and_coinsol, pay_to_singleton_puzzle, SINGLETON_MOD_HASH, SINGLETON_MOD, P2_SINGLETON_MOD, SINGLETON_LAUNCHER_HASH, SINGLETON_LAUNCHER, lineage_proof_for_coinsol, puzzle_for_singleton, solution_for_singleton, generate_launcher_coin
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import puzzle_for_pk, calculate_synthetic_secret_key, DEFAULT_HIDDEN_PUZZLE_HASH, puzzle_for_synthetic_public_key, solution_for_delegated_puzzle
-from chia.wallet.puzzles.cat_loader import CAT_MOD_HASH, CAT_MOD
 from chia.wallet.trading.offer import OFFER_MOD_HASH, OFFER_MOD
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
-from cdv.cmds.sim_utils import SIMULATOR_ROOT_PATH
 from chia.simulator.simulator_full_node_rpc_client import SimulatorFullNodeRpcClient
 from chia.util.config import load_config
 from chia.util.ints import uint16, uint32
@@ -27,7 +25,8 @@ from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.types.coin_spend import CoinSpend
 from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
 from chia.wallet.puzzles.tails import GenesisById
-from chia.wallet.puzzles.cat_loader import CAT_MOD, CAT_MOD_HASH
+from chia.wallet.cat_wallet.cat_utils import CAT_MOD
+from chia.wallet.cat_wallet.cat_wallet import CAT_MOD_HASH
 from chia_rs import run_chia_program
 from chia.types.blockchain_format.program import INFINITE_COST, Program
 from chia.util.condition_tools import conditions_dict_for_solution
@@ -124,7 +123,7 @@ async def get_full_node_client() -> FullNodeRpcClient:
         await client.await_closed()
         pass
     
-    root_path = SIMULATOR_ROOT_PATH / "main"
+    root_path = "/home/yakuhito/.chia/simulator/main"
     config = load_config(root_path, "config.yaml")
     self_hostname = config["self_hostname"]
     rpc_port = config["full_node"]["rpc_port"]
@@ -325,7 +324,7 @@ async def get_unspent_singleton_info(client, launcher_id):
 
     while res.spent:
         coin_spend = await client.get_puzzle_and_solution(coin.name(), res.spent_block_index)
-        _, conditions_dict, __ = conditions_dict_for_solution(coin_spend.puzzle_reveal, coin_spend.solution, INFINITE_COST)
+        conditions_dict = conditions_dict_for_solution(coin_spend.puzzle_reveal, coin_spend.solution, INFINITE_COST)
         for cwa in conditions_dict[ConditionOpcode.CREATE_COIN]: #cwa = condition with args
             if len(cwa.vars) >= 2 and cwa.vars[1] == b"\x01":
                 creation_spend = coin_spend

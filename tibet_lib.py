@@ -9,7 +9,6 @@ from typing import List
 from blspy import AugSchemeMPL
 from blspy import PrivateKey
 from cdv.cmds.rpc import get_client
-from cdv.cmds.sim_utils import SIMULATOR_ROOT_PATH
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
 from chia.rpc.wallet_rpc_client import WalletRpcClient
@@ -45,8 +44,8 @@ from chia.wallet.cat_wallet.cat_utils import \
     unsigned_spend_bundle_for_spendable_cats
 from chia.wallet.derive_keys import master_sk_to_wallet_sk_unhardened
 from chia.wallet.lineage_proof import LineageProof
-from chia.wallet.puzzles.cat_loader import CAT_MOD
-from chia.wallet.puzzles.cat_loader import CAT_MOD_HASH
+from chia.wallet.cat_wallet.cat_utils import CAT_MOD
+from chia.wallet.cat_wallet.cat_wallet import CAT_MOD_HASH
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import \
     DEFAULT_HIDDEN_PUZZLE_HASH
@@ -84,7 +83,7 @@ from clvm.casts import int_to_bytes
 from clvm import SExp
 
 from leaflet_client import LeafletFullNodeRpcClient
-from cic.drivers.merkle_utils import build_merkle_tree
+from cic import build_merkle_tree
 from chia.full_node.bundle_tools import simple_solution_generator
 from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
 
@@ -462,7 +461,7 @@ async def sync_router(full_node_client, last_router_id):
 
     while coin_record.spent:
         creation_spend = await full_node_client.get_puzzle_and_solution(last_router_id, coin_record.spent_block_index)
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             creation_spend.puzzle_reveal,
             creation_spend.solution,
             INFINITE_COST
@@ -548,7 +547,7 @@ async def sync_pair(full_node_client, last_synced_coin_id):
 
     if coin_record.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
         creation_spend = await full_node_client.get_puzzle_and_solution(last_synced_coin_id, coin_record.spent_block_index)
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             creation_spend.puzzle_reveal,
             creation_spend.solution,
             INFINITE_COST
@@ -563,7 +562,7 @@ async def sync_pair(full_node_client, last_synced_coin_id):
     creation_spend = None
     while coin_record.spent:
         creation_spend = await full_node_client.get_puzzle_and_solution(last_synced_coin_id, coin_record.spent_block_index)
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             creation_spend.puzzle_reveal,
             creation_spend.solution,
             INFINITE_COST
@@ -589,7 +588,7 @@ async def sync_pair(full_node_client, last_synced_coin_id):
     coin_spend = get_coin_spend_from_sb(sb, last_coin_on_chain_id)
     while coin_spend != None:
         creation_spend = coin_spend
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             creation_spend.puzzle_reveal,
             creation_spend.solution,
             INFINITE_COST
@@ -646,7 +645,7 @@ async def get_pair_reserve_info(
     cached_sb
 ):
     puzzle_announcements_asserts = []
-    _, conditions_dict, __ = conditions_dict_for_solution(
+    conditions_dict = conditions_dict_for_solution(
         creation_spend.puzzle_reveal,
         creation_spend.solution,
         INFINITE_COST
@@ -675,7 +674,7 @@ async def get_pair_reserve_info(
     token_reserve_coin = None
     token_reserve_lineage_proof = []
     for spend in spends:
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             spend.puzzle_reveal,
             spend.solution,
             INFINITE_COST
@@ -703,7 +702,7 @@ async def get_pair_reserve_info(
 
 
 def get_announcements_asserts_for_notarized_payments(not_payments, puzzle_hash=OFFER_MOD_HASH):
-    _, conditions_dict, __ = conditions_dict_for_solution(
+    conditions_dict = conditions_dict_for_solution(
         OFFER_MOD,
         not_payments,
         INFINITE_COST
@@ -753,7 +752,7 @@ async def respond_to_deposit_liquidity_offer(
             continue
         
         cs_from_initial_offer.append(coin_spend)
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             coin_spend.puzzle_reveal,
             coin_spend.solution,
             INFINITE_COST
@@ -1082,7 +1081,7 @@ async def respond_to_remove_liquidity_offer(
             continue
         
         cs_from_initial_offer.append(coin_spend)
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             coin_spend.puzzle_reveal,
             coin_spend.solution,
             INFINITE_COST
@@ -1436,7 +1435,7 @@ async def respond_to_swap_offer(
             continue
         
         coin_spends.append(coin_spend)
-        _, conditions_dict, __ = conditions_dict_for_solution(
+        conditions_dict = conditions_dict_for_solution(
             coin_spend.puzzle_reveal,
             coin_spend.solution,
             INFINITE_COST

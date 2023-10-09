@@ -44,10 +44,7 @@ jobs:
         directories: ${{ steps.create-venv.outputs.activate-venv-directories }}
 
     - name: Setup chia-dev-tools
-      run: pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools==1.1.5
-
-    - name: Install chia-internal-custody
-      run: pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
+      run: pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools
 
     - name: Install other required libraries
       run: python3 -m pip install -r requirements.txt

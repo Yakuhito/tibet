@@ -6,7 +6,6 @@ from typing import List
 
 from blspy import AugSchemeMPL, PrivateKey
 from cdv.cmds.rpc import get_client
-from cdv.cmds.sim_utils import SIMULATOR_ROOT_PATH
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
 from chia.rpc.wallet_rpc_client import WalletRpcClient
@@ -31,7 +30,6 @@ from chia.wallet.cat_wallet.cat_utils import (
 )
 from chia.wallet.derive_keys import master_sk_to_wallet_sk_unhardened
 from chia.wallet.lineage_proof import LineageProof
-from chia.wallet.puzzles.cat_loader import CAT_MOD, CAT_MOD_HASH
 from chia.wallet.puzzles.load_clvm import load_clvm
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import (
