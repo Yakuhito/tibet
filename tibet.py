@@ -266,12 +266,13 @@ async def _create_pair(tail_hash, push_tx, fee):
         save_config(config)
 
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
-    coins = await wallet_client.select_coins(fee, 1, min_coin_amount=fee) # wallet id 1 = XCH
+    print(f"Fee: {fee}")
+    coins = await wallet_client.select_coins(fee, 1, min_coin_amount=fee + 1) # wallet id 1 = XCH
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
 
-    click.echo(f"Using coin 0x{coin.name().hex()}...")
+    click.echo(f"Using coin 0x{coin.name().hex()} (amount: {coin.amount})...")
 
     pair_launcher_id, sb = await create_pair_from_coin(
         coin,

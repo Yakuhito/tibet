@@ -273,16 +273,16 @@ async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
     
     return pair, sb_to_aggregate
 
-def get_input_price(input_amount, input_reserve, output_reserve):
+def get_input_price(input_amount, input_reserve, output_reserve) -> int:
     input_amount_with_fee = input_amount * 993
     numerator = input_amount_with_fee * output_reserve
     denominator = (input_reserve * 1000) + input_amount_with_fee
-    return numerator / denominator
+    return numerator // denominator
 
-def get_output_price(output_amount, input_reserve, output_reserve):
+def get_output_price(output_amount, input_reserve, output_reserve) -> int:
     numerator: uint256 = input_reserve * output_amount * 1000
     denominator: uint256 = (output_reserve - output_amount) * 993
-    return numerator / denominator + 1
+    return numerator // denominator + 1
 
 async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_out: Optional[int], xch_is_input: bool, estimate_fee: bool = False) -> schemas.Quote:
     # Fetch the pair with the given launcher_id
@@ -346,10 +346,11 @@ async def create_offer(
     pair_id: str,
     offer: str,
     action: schemas.ActionType,
-    total_donation_amount: int,
+    total_donation_amount: float,
     donation_addresses: List[str],
     donation_weights: List[int]
 ) -> schemas.OfferResponse:
+    total_donation_amount: int = int(total_donation_amount)
     if total_donation_amount < 0:
         raise HTTPException(status_code=400, detail="total_donation_amount negative")
 
@@ -473,10 +474,11 @@ async def create_offer(
 async def create_offer_endpoint(pair_id: str,
                                 offer: str = Body(...),
                                 action: schemas.ActionType = Body(...),
-                                total_donation_amount: int = Body(0),
+                                total_donation_amount: float = Body(0.0),
                                 donation_addresses: List[str] = Body([]),
                                 donation_weights: List[int] = Body([]),
                                 db: Session = Depends(get_db)):
+    total_donation_amount: int = int(total_donation_amount)
     response = await create_offer(
         db,
         pair_id,
