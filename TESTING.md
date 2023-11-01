@@ -3,7 +3,7 @@
 # python3 -m venv venv + install
 . ./venv/bin/activate
 export CHIA_ROOT=~/.chia/simulator/main
-pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools
+pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools==1.2.2
 pip install -r requirements.txt
 
 
