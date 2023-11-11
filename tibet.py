@@ -331,8 +331,6 @@ async def _create_pair(tail_hash, push_tx, fee):
     click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
     signed_sb = await sign_spend_bundle(wallet_client, sb, additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data")))
-    import json
-    open("sb.json", "w").write(json.dumps(signed_sb.to_json_dict()))
 
     if push_tx:
         click.echo(f"Pushing tx...")
