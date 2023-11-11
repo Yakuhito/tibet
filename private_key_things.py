@@ -51,6 +51,7 @@ from chia.wallet.util.puzzle_compression import (
 from chia_rs import run_chia_program
 from clvm.casts import int_to_bytes
 
+
 async def get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client):
     fingerprint = await wallet_client.get_logged_in_fingerprint()
 
@@ -58,23 +59,26 @@ async def get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client):
     sk_hex = sk_resp['sk']
     return PrivateKey.from_bytes(bytes.fromhex(sk_hex))
 
+
 async def get_standard_coin_puzzle(wallet_client, std_coin):
     master_sk = await get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client)
 
     i = 0
     while i < 10000:
         wallet_sk = master_sk_to_wallet_sk_unhardened(master_sk, i)
-        synth_secret_key = calculate_synthetic_secret_key(wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
+        synth_secret_key = calculate_synthetic_secret_key(
+            wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
         synth_key = synth_secret_key.get_g1()
         puzzle = puzzle_for_synthetic_public_key(synth_key)
-        puzzle_hash = puzzle.get_tree_hash()            
+        puzzle_hash = puzzle.get_tree_hash()
         if puzzle_hash == std_coin.puzzle_hash:
             return puzzle
         i += 1
 
     return None
 
-async def sign_spend_bundle(wallet_client, sb, additional_data=DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA, no_max_keys = 1):
+
+async def sign_spend_bundle(wallet_client, sb, additional_data=DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA, no_max_keys=1):
     master_sk = await get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client)
 
     puzzle_hashes = [c.coin.puzzle_hash for c in sb.coin_spends]
@@ -82,24 +86,32 @@ async def sign_spend_bundle(wallet_client, sb, additional_data=DEFAULT_CONSTANTS
     i = 0
     while i < 10000:
         wallet_sk = master_sk_to_wallet_sk_unhardened(master_sk, i)
-        synth_secret_key = calculate_synthetic_secret_key(wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
+        synth_secret_key = calculate_synthetic_secret_key(
+            wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
         synth_key = synth_secret_key.get_g1()
         puzzle = puzzle_for_synthetic_public_key(synth_key)
-        puzzle_hash = puzzle.get_tree_hash()            
+        puzzle_hash = puzzle.get_tree_hash()
         if puzzle_hash in puzzle_hashes:
             keys_used += 1
+
             async def pk_to_sk(pk):
+                return synth_secret_key
+
+            async def ph_to_sk(ph):
                 return synth_secret_key
 
             sig_old = sb.aggregated_signature
             sb = await sign_coin_spends(
                 sb.coin_spends,
                 pk_to_sk,
+                ph_to_sk,
                 additional_data,
                 DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
+                []
             )
 
-            new_agg_sig = AugSchemeMPL.aggregate([sig_old, sb.aggregated_signature])
+            new_agg_sig = AugSchemeMPL.aggregate(
+                [sig_old, sb.aggregated_signature])
             sb = SpendBundle(sb.coin_spends, new_agg_sig)
 
         if keys_used >= no_max_keys:
@@ -107,6 +119,7 @@ async def sign_spend_bundle(wallet_client, sb, additional_data=DEFAULT_CONSTANTS
         i += 1
 
     return sb
+
 
 async def sign_spend_bundle_with_specific_sk(sb, sk, additional_data=DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA):
     async def pk_to_sk(pk):
@@ -120,6 +133,5 @@ async def sign_spend_bundle_with_specific_sk(sb, sk, additional_data=DEFAULT_CON
         DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
     )
     new_agg_sig = AugSchemeMPL.aggregate([sig_old, sb.aggregated_signature])
-    
+
     return SpendBundle(sb.coin_spends, new_agg_sig)
-    

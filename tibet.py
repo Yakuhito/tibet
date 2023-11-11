@@ -5,29 +5,42 @@ import sys
 
 import click
 from chia.wallet.util.wallet_types import WalletType
+from chia.wallet.util.tx_config import CoinSelectionConfig, TXConfig
+
 
 from private_key_things import *
 from tibet_lib import *
+
+tx_config = TXConfig(
+    1,
+    1337 * 10 ** 15,
+    [],
+    [],
+    True
+)
 
 
 @click.group()
 def cli():
     pass
 
+
 cached_config = None
+
 
 def get_config_item(*args):
     global cached_config
     if cached_config is None:
         get_config()
-    
+
     ret = cached_config
     for arg in args:
         if ret is None:
             return ret
         ret = ret.get(arg, None)
-    
+
     return ret
+
 
 def get_config():
     global cached_config
@@ -37,13 +50,14 @@ def get_config():
         except:
             open("config.json", "w").write("{}")
             cached_config = {}
-        
+
     return cached_config
 
 
 def save_config(config):
     cached_config = config
-    open("config.json", "w").write(json.dumps(config, sort_keys=True, indent=4))
+    open("config.json", "w").write(
+        json.dumps(config, sort_keys=True, indent=4))
 
 
 @click.command()
@@ -55,12 +69,12 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
     if use_preset == 'custom' and (chia_root is None or full_node_rpc_port is None or wallet_rpc_port is None):
         click.echo("Use a preset or fill out all options.")
         sys.exit(1)
-    
+
     if use_preset in ["mainnet", "testnet10"]:
-    	chia_root = os.getenv('CHIA_ROOT', default="~/.chia/mainnet")
+        chia_root = os.getenv('CHIA_ROOT', default="~/.chia/mainnet")
     elif use_preset == "simulator":
         chia_root = "~/.chia/simulator/main"
-    
+
     chia_root = os.path.expanduser(chia_root)
 
     root_path = Path(chia_root)
@@ -68,7 +82,8 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
     selected_network = config["selected_network"]
     agg_sig_me_additional_data = DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA.hex()
     try:
-        agg_sig_me_additional_data = config['full_node']['network_overrides']['constants'][selected_network]['AGG_SIG_ME_ADDITIONAL_DATA']
+        agg_sig_me_additional_data = config['full_node']['network_overrides'][
+            'constants'][selected_network]['AGG_SIG_ME_ADDITIONAL_DATA']
     except:
         pass
 
@@ -76,9 +91,10 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
     config["chia_root"] = chia_root
     if fireacademyio_api_key is not None:
         if len(fireacademyio_api_key) != 36:
-            print("Invalid API key for FireAcademy.io - please get one at https://dashboard.fireacademy.io/")
+            print(
+                "Invalid API key for FireAcademy.io - please get one at https://dashboard.fireacademy.io/")
             sys.exit(1)
-        
+
         leaflet_url = f"https://kraken.fireacademy.io/{fireacademyio_api_key}/"
         if fireacademyio_network == "mainnet" or use_preset == "mainnet":
             leaflet_url += "leaflet/"
@@ -98,6 +114,7 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
 @click.command()
 def test_node_config():
     asyncio.run(_test_node_config())
+
 
 async def _test_node_config():
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
@@ -121,10 +138,17 @@ async def _test_node_config():
 def launch_router(push_tx, fee):
     asyncio.run(_launch_router(push_tx, fee))
 
+
 async def _launch_router(push_tx, fee):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(2 + fee, 1, min_coin_amount=2 + fee) # wallet id 1, amount 2 (+ fee)
+    # wallet id 1, amount 2 (+ fee)
+    coins = await wallet_client.select_coins(2 + fee, 1, min_coin_amount=2 + fee, coin_selection_config=CoinSelectionConfig(
+        min_coin_amount=fee + 3,
+        max_coin_amount=1337 * 10 ** 12,
+        excluded_coin_amounts=[],
+        excluded_coin_ids=[]
+    ))
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -152,7 +176,8 @@ async def _launch_router(push_tx, fee):
         save_config(config)
         click.echo("Done.")
     else:
-        open("spend_bundle.json", "w").write(json.dumps(signed_sb.to_json_dict(), sort_keys=True, indent=4))
+        open("spend_bundle.json", "w").write(json.dumps(
+            signed_sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -164,6 +189,7 @@ async def _launch_router(push_tx, fee):
 @click.option('--launcher-id', required=True, help='Launcher coin id of the router.')
 def set_router(launcher_id):
     asyncio.run(_set_router(launcher_id))
+
 
 async def _set_router(router_launcher_id):
     click.echo("Saving config...")
@@ -183,10 +209,17 @@ def launch_test_token(amount, push_tx):
 
 
 async def _launch_test_token(amount, push_tx):
-    click.echo(f"Creating test CAT with a supply of {amount} ({amount * 1000} mojos used)...")
+    click.echo(
+        f"Creating test CAT with a supply of {amount} ({amount * 1000} mojos used)...")
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
-    coins = await wallet_client.select_coins(amount * 1000, 1, min_coin_amount=amount * 1000) # wallet id 1 = XCH
+    # wallet id 1 = XCH
+    coins = await wallet_client.select_coins(amount * 1000, 1, min_coin_amount=amount * 1000, coin_selection_config=CoinSelectionConfig(
+        min_coin_amount=amount * 1000,
+        max_coin_amount=1337 * 10 ** 12,
+        excluded_coin_amounts=[],
+        excluded_coin_ids=[]
+    ))
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -211,7 +244,8 @@ async def _launch_test_token(amount, push_tx):
         click.echo(resp)
         click.echo("Done.")
     else:
-        open("spend_bundle.json", "w").write(json.dumps(signed_sb.to_json_dict(), sort_keys=True, indent=4))
+        open("spend_bundle.json", "w").write(json.dumps(
+            signed_sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -234,7 +268,8 @@ def create_pair(asset_id, push_tx, fee):
 
 async def _create_pair(tail_hash, push_tx, fee):
     if fee < ROUTER_MIN_FEE:
-        click.echo("The router imposes a minimum fee of 42000000000 mojos (0.042 XCH)")
+        click.echo(
+            "The router imposes a minimum fee of 42000000000 mojos (0.042 XCH)")
         sys.exit(1)
 
     click.echo(f"Creating pair for {tail_hash}...")
@@ -244,7 +279,7 @@ async def _create_pair(tail_hash, push_tx, fee):
     if router_launcher_id is None or router_last_processed_id is None:
         click.echo("Oops - looks like someone forgot to launch their router.")
         sys.exit(1)
-    
+
     click.echo("But first, we do a little sync")
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
     current_router_coin, latest_creation_spend, pairs = await sync_router(
@@ -267,7 +302,13 @@ async def _create_pair(tail_hash, push_tx, fee):
 
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
     print(f"Fee: {fee}")
-    coins = await wallet_client.select_coins(fee, 1, min_coin_amount=fee + 1) # wallet id 1 = XCH
+    # wallet id 1 = XCH
+    coins = await wallet_client.select_coins(fee + 1, 1, coin_selection_config=CoinSelectionConfig(
+        min_coin_amount=fee + 1,
+        max_coin_amount=1337 * 10 ** 12,
+        excluded_coin_amounts=[],
+        excluded_coin_ids=[]
+    ))
 
     coin = coins[0]
     coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
@@ -285,22 +326,26 @@ async def _create_pair(tail_hash, push_tx, fee):
     )
     click.echo(f"Pair launcher id: {pair_launcher_id}")
 
-    pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
+    pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(
+        bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
     click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
     signed_sb = await sign_spend_bundle(wallet_client, sb, additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data")))
+    import json
+    open("sb.json", "w").write(json.dumps(signed_sb.to_json_dict()))
 
     if push_tx:
         click.echo(f"Pushing tx...")
         resp = await full_node_client.push_tx(signed_sb)
         click.echo(resp)
-        
+
         click.echo("Adding liquidity asset id to wallet...")
         resp = await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(pair_liquidity_tail_hash))
         click.echo(resp)
         click.echo("Done.")
     else:
-        open("spend_bundle.json", "w").write(json.dumps(signed_sb.to_json_dict(), sort_keys=True, indent=4))
+        open("spend_bundle.json", "w").write(json.dumps(
+            signed_sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -318,9 +363,10 @@ def sync_pairs():
 async def _sync_pairs():
     router_last_processed_id = get_config_item("router_last_processed_id")
     if router_last_processed_id is None or len(router_last_processed_id) != 64:
-        click.echo("No router launcher id. Please either set it or launch a new router.")
+        click.echo(
+            "No router launcher id. Please either set it or launch a new router.")
         sys.exit(1)
-    
+
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
 
     current_router_coin, latest_creation_spend, pairs = await sync_router(
@@ -345,6 +391,7 @@ async def _sync_pairs():
     full_node_client.close()
     await full_node_client.await_closed()
 
+
 @click.command()
 @click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
 def get_pair_info(asset_id):
@@ -360,7 +407,8 @@ async def _get_pair_info(token_tail_hash):
 
     pair_launcher_id = get_config_item("pairs", token_tail_hash)
     if pair_launcher_id is None:
-        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
+        click.echo(
+            "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
         sys.exit(1)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
@@ -396,7 +444,8 @@ def deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee, u
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_deposit_liquidity(asset_id, offer, xch_amount, token_amount, push_tx, fee, use_fee_estimate))
+    asyncio.run(_deposit_liquidity(asset_id, offer, xch_amount,
+                token_amount, push_tx, fee, use_fee_estimate))
 
 
 async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, push_tx, fee, use_fee_estimate):
@@ -405,7 +454,8 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 
     pair_launcher_id = get_config_item("pairs", token_tail_hash)
     if pair_launcher_id is None:
-        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
+        click.echo(
+            "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
         sys.exit(1)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
@@ -436,17 +486,21 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
             await full_node_client.await_closed()
             sys.exit(1)
 
-        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
+        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(
+            bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
         wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
-        
-        token_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(token_tail_hash)), None)
-        liquidity_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(pair_liquidity_tail_hash)), None)
+        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
+
+        token_wallet_id = next((_['id'] for _ in wallets if _[
+                               'data'].startswith(token_tail_hash)), None)
+        liquidity_wallet_id = next((_['id'] for _ in wallets if _[
+                                   'data'].startswith(pair_liquidity_tail_hash)), None)
 
         if token_wallet_id is None or liquidity_wallet_id is None:
-            click.echo("You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
+            click.echo(
+                "You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
             wallet_client.close()
             await wallet_client.await_closed()
             full_node_client.close()
@@ -455,17 +509,20 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
 
         liquidity_token_amount = token_amount
         if pair_state['liquidity'] != 0:
-            liquidity_token_amount = pair_state['liquidity'] * token_amount // pair_state['token_reserve']
-            xch_amount = pair_state['xch_reserve'] * token_amount // pair_state['token_reserve']
+            liquidity_token_amount = pair_state['liquidity'] * \
+                token_amount // pair_state['token_reserve']
+            xch_amount = pair_state['xch_reserve'] * \
+                token_amount // pair_state['token_reserve']
 
         if use_fee_estimate:
             fee = await get_fee_estimate(sb_to_aggregate, full_node_client)
             print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
         offer_dict = {}
-        offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
+        # also for liqiudity TAIL creation
+        offer_dict[1] = - xch_amount - liquidity_token_amount
         offer_dict[token_wallet_id] = -token_amount
         offer_dict[liquidity_wallet_id] = liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, fee=fee)
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config, fee=fee)
         offer = offer_resp[0]
 
         offer_str = offer.to_bech32()
@@ -519,7 +576,8 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         else:
             click.echo("That's not a clear 'Yes'!")
     else:
-        open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+        open("spend_bundle.json", "w").write(json.dumps(
+            sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -538,7 +596,8 @@ def remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee, use_
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_remove_liquidity(asset_id, offer, liquidity_token_amount, push_tx, fee, use_fee_estimate))
+    asyncio.run(_remove_liquidity(asset_id, offer,
+                liquidity_token_amount, push_tx, fee, use_fee_estimate))
 
 
 async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push_tx, fee, use_fee_estimate):
@@ -547,7 +606,8 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
 
     pair_launcher_id = get_config_item("pairs", token_tail_hash)
     if pair_launcher_id is None:
-        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs.")
+        click.echo(
+            "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
         sys.exit(1)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
@@ -573,41 +633,48 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         click.echo("Generating new offer...")
 
         if liquidity_token_amount == 0:
-            click.echo("Please set ---liquidity-token-amount to use this option.")
+            click.echo(
+                "Please set ---liquidity-token-amount to use this option.")
             full_node_client.close()
             await full_node_client.await_closed()
             sys.exit(1)
 
-        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
+        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(
+            bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
         wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
-        
-        token_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(token_tail_hash)), None)
-        liquidity_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(pair_liquidity_tail_hash)), None)
+        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
+
+        token_wallet_id = next((_['id'] for _ in wallets if _[
+                               'data'].startswith(token_tail_hash)), None)
+        liquidity_wallet_id = next((_['id'] for _ in wallets if _[
+                                   'data'].startswith(pair_liquidity_tail_hash)), None)
 
         if token_wallet_id is None or liquidity_wallet_id is None:
-            click.echo("You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
+            click.echo(
+                "You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
             wallet_client.close()
             await wallet_client.await_closed()
             full_node_client.close()
             await full_node_client.await_closed()
             sys.exit(1)
 
-        
-        token_amount = pair_state['token_reserve'] * liquidity_token_amount // pair_state['liquidity']
-        xch_amount = pair_state['xch_reserve'] * liquidity_token_amount // pair_state['liquidity']
+        token_amount = pair_state['token_reserve'] * \
+            liquidity_token_amount // pair_state['liquidity']
+        xch_amount = pair_state['xch_reserve'] * \
+            liquidity_token_amount // pair_state['liquidity']
 
         if use_fee_estimate:
             fee = await get_fee_estimate(sb_to_aggregate, full_node_client)
             print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
 
         offer_dict = {}
-        offer_dict[1] = xch_amount + liquidity_token_amount # also ask for xch from liquidity cat burn
+        # also ask for xch from liquidity cat burn
+        offer_dict[1] = xch_amount + liquidity_token_amount
         offer_dict[token_wallet_id] = token_amount
         offer_dict[liquidity_wallet_id] = -liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, fee=fee)
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict,  tx_config=tx_config,  fee=fee)
         offer = offer_resp[0]
 
         offer_str = offer.to_bech32()
@@ -661,7 +728,8 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         else:
             click.echo("That's not a clear 'Yes'!")
     else:
-        open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+        open("spend_bundle.json", "w").write(json.dumps(
+            sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -680,7 +748,8 @@ def xch_to_token(asset_id, offer, xch_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_xch_to_token(asset_id, offer, xch_amount, push_tx, fee, use_fee_estimate))
+    asyncio.run(_xch_to_token(asset_id, offer, xch_amount,
+                push_tx, fee, use_fee_estimate))
 
 
 async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fee_estimate):
@@ -689,7 +758,8 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
 
     pair_launcher_id = get_config_item("pairs", token_tail_hash)
     if pair_launcher_id is None:
-        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs.")
+        click.echo(
+            "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
         sys.exit(1)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
@@ -720,25 +790,31 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
             await full_node_client.await_closed()
             sys.exit(1)
 
-        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
+        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(
+            bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
         wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
-        
-        token_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(token_tail_hash)), None)
-        
+        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
+
+        token_wallet_id = next((_['id'] for _ in wallets if _[
+                               'data'].startswith(token_tail_hash)), None)
+
         if token_wallet_id is None:
-            click.echo("You don't have a wallet for the token offered in the pair. Please set them up before using this command.")
+            click.echo(
+                "You don't have a wallet for the token offered in the pair. Please set them up before using this command.")
             wallet_client.close()
             await wallet_client.await_closed()
             full_node_client.close()
             await full_node_client.await_closed()
             sys.exit(1)
-        
-        token_amount = 993 * xch_amount * pair_state['token_reserve'] // (1000 * pair_state['xch_reserve'] + 993 * xch_amount)
 
-        click.echo(f"You'll receive {token_amount / 1000} tokens from this trade.")
+        token_amount = 993 * xch_amount * \
+            pair_state['token_reserve'] // (1000 *
+                                            pair_state['xch_reserve'] + 993 * xch_amount)
+
+        click.echo(
+            f"You'll receive {token_amount / 1000} tokens from this trade.")
         if token_amount == 0:
             wallet_client.close()
             await wallet_client.await_closed()
@@ -750,9 +826,9 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
             print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
 
         offer_dict = {}
-        offer_dict[1] = -xch_amount # offer XCH
-        offer_dict[token_wallet_id] = token_amount # ask for token
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, fee=fee)
+        offer_dict[1] = -xch_amount  # offer XCH
+        offer_dict[token_wallet_id] = token_amount  # ask for token
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict,  tx_config=tx_config, fee=fee)
         offer = offer_resp[0]
 
         offer_str = offer.to_bech32()
@@ -806,7 +882,8 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
         else:
             click.echo("That's not a clear 'Yes'!")
     else:
-        open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+        open("spend_bundle.json", "w").write(json.dumps(
+            sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
@@ -825,7 +902,8 @@ def token_to_xch(asset_id, offer, token_amount, push_tx, fee, use_fee_estimate):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_token_to_xch(asset_id, offer, token_amount, push_tx, fee, use_fee_estimate))
+    asyncio.run(_token_to_xch(asset_id, offer, token_amount,
+                push_tx, fee, use_fee_estimate))
 
 
 async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_fee_estimate):
@@ -834,7 +912,8 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
 
     pair_launcher_id = get_config_item("pairs", token_tail_hash)
     if pair_launcher_id is None:
-        click.echo("Corresponding pair launcher id not found in config - you might want to sync-pairs.")
+        click.echo(
+            "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
         sys.exit(1)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
@@ -865,25 +944,31 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
             await full_node_client.await_closed()
             sys.exit(1)
 
-        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
+        pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(
+            bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
         wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
-        
-        token_wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(token_tail_hash)), None)
-        
+        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
+
+        token_wallet_id = next((_['id'] for _ in wallets if _[
+                               'data'].startswith(token_tail_hash)), None)
+
         if token_wallet_id is None:
-            click.echo("You don't have a wallet for the token offered in the pair. Please set them up before using this command.")
+            click.echo(
+                "You don't have a wallet for the token offered in the pair. Please set them up before using this command.")
             wallet_client.close()
             await wallet_client.await_closed()
             full_node_client.close()
             await full_node_client.await_closed()
             sys.exit(1)
 
-        xch_amount = 993 * token_amount * pair_state['xch_reserve'] // (1000 * pair_state['token_reserve'] + 993 * token_amount)
+        xch_amount = 993 * token_amount * \
+            pair_state['xch_reserve'] // (1000 *
+                                          pair_state['token_reserve'] + 993 * token_amount)
 
-        click.echo(f"You'll receive {xch_amount / 1000000000000} XCH from this trade.")
+        click.echo(
+            f"You'll receive {xch_amount / 1000000000000} XCH from this trade.")
         if token_amount == 0:
             wallet_client.close()
             await wallet_client.await_closed()
@@ -895,9 +980,9 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
             print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
 
         offer_dict = {}
-        offer_dict[1] = xch_amount # ask for XCH
-        offer_dict[token_wallet_id] = -token_amount # offer tokens
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, fee=fee)
+        offer_dict[1] = xch_amount  # ask for XCH
+        offer_dict[token_wallet_id] = -token_amount  # offer tokens
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict,  tx_config=tx_config, fee=fee)
         offer = offer_resp[0]
 
         offer_str = offer.to_bech32()
@@ -940,7 +1025,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
 
     if sb_to_aggregate is not None:
         sb = SpendBundle.aggregate([sb, sb_to_aggregate])
-    
+
     if push_tx:
         resp = input("Are you sure you want to broadcast this spend? (Yes): ")
         if resp == "Yes":
@@ -951,7 +1036,8 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
         else:
             click.echo("That's not a clear 'Yes'!")
     else:
-        open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+        open("spend_bundle.json", "w").write(json.dumps(
+            sb.to_json_dict(), sort_keys=True, indent=4))
         click.echo("Spend bundle written to spend_bundle.json.")
         click.echo("Use --push-tx to broadcast this spend.")
 
