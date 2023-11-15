@@ -377,11 +377,11 @@ def get_spend_bundle_cost(sb: SpendBundle):
     program: BlockGenerator = simple_solution_generator(
         SpendBundle(coin_spends, agg_sig))
     npc_result: NPCResult = get_name_puzzle_conditions(
-        # cost_per_byte=0 is meaningless and will be removed in the next chia-blockchain version
         program,
         INFINITE_COST,
-        cost_per_byte=0,
+        height=DEFAULT_CONSTANTS.SOFT_FORK2_HEIGHT,
         mempool_mode=True,
+        constants=DEFAULT_CONSTANTS,
     )
     return int(npc_result.cost)
 
@@ -1864,7 +1864,7 @@ async def respond_to_swap_offer(
     )
 
 
-async def get_fee_estimate(mempool_sb, full_node_client):
+async def get_fee_estimate(mempool_sb, full_node_client: FullNodeRpcClient):
     # upper bound (exaggerated so the tx doesn't fail)
     cost_of_operation = 700000000
     # from benchmarks:
