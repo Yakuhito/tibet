@@ -73,7 +73,7 @@ async def get_client():
         full_node_client = await get_full_node_client("~/.chia/mainnet", leaflet_url)
     return full_node_client
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, pool_size=50, max_overflow=0)
 models.Base.metadata.create_all(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
