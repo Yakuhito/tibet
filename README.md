@@ -1,7 +1,7 @@
 # tibet
 
 ```bash
-ghcr.io/yakuhito/tibet:1.3.8
+ghcr.io/yakuhito/tibet:1.3.9
 ```
 
 Also referred to as `yakSwap`, `tibet` is an attempt to recreate [`Uniswap V1`](https://github.com/Uniswap/v1-contracts) on the Chia blockchain.
