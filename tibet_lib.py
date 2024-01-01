@@ -550,8 +550,8 @@ async def get_spend_bundle_in_mempool(full_node_client, coin):
 async def get_spend_bundle_in_mempool_full_node(full_node_client: FullNodeRpcClient, coin_id: bytes32):
     items = await full_node_client.fetch("get_mempool_items_by_coin_name", {"coin_name": coin_id.hex()})
 
-    for sb_id, d in items["mempool_items"].items():
-        sb = SpendBundle.from_json_dict(d["spend_bundle"])
+    for sb_json in items["mempool_items"]:
+        sb = SpendBundle.from_json_dict(sb_json["spend_bundle"])
         for cs in sb.coin_spends:
             if cs.coin.name() == coin_id:
                 return sb
