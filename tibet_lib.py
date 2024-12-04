@@ -1873,7 +1873,10 @@ async def get_fee_estimate(mempool_sb, full_node_client: FullNodeRpcClient):
     #   - xch to token -> ~150,000,000
     #   - token to xch -> ~200,000,000
     if mempool_sb is None:
-        fee_per_cost_resp = await full_node_client.get_fee_estimate(target_times=[0], cost=cost_of_operation)
+        try:
+            fee_per_cost_resp = await full_node_client.get_fee_estimate(target_times=[0], cost=cost_of_operation)
+        except:
+            fee_per_cost_resp = {'estimates': [0]}
         fee = int(fee_per_cost_resp['estimates'][0]) + 1
         # logic for the thing below: if there is no fee, as is currently the case on mainnet,
         # this branch would still return 1 mojo as suggested fee

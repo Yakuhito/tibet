@@ -92,7 +92,7 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
     if fireacademyio_api_key is not None:
         if len(fireacademyio_api_key) != 36:
             print(
-                "Invalid API key for FireAcademy.io - please get one at https://dashboard.fireacademy.io/")
+                "Invalid API key for FireAcademy.io :(")
             sys.exit(1)
 
         leaflet_url = f"https://kraken.fireacademy.io/{fireacademyio_api_key}/"
