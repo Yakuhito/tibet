@@ -437,9 +437,9 @@ async def create_offer(
                 "action": str(action)
             })
             t = int(time.time())
-            open(f"spend_bundle.{t}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
-            open(f"offer.{t}.json", "w").write(offer)
-            capture_message(f"{t} - Failed to push spend bundle; data written in files spend_bundle.{t}.json and offer.{t}.json")
+            #open(f"spend_bundle.{t}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+            #open(f"offer.{t}.json", "w").write(offer)
+            #capture_message(f"{t} - Failed to push spend bundle; data written in files spend_bundle.{t}.json and offer.{t}.json")
         
         success = resp['status'] == 'SUCCESS'
         response = schemas.OfferResponse(
@@ -463,9 +463,9 @@ async def create_offer(
         )
         t = int(time.time())
         if sb is not None:
-            open(f"spend_bundle.{t}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
-        open(f"offer.{t}.json", "w").write(offer)
-        capture_exception(e)
+            #open(f"spend_bundle.{t}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
+        #open(f"offer.{t}.json", "w").write(offer)
+        #capture_exception(e)
         
         return response
         
