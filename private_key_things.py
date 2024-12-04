@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from blspy import AugSchemeMPL, PrivateKey
+from chia_rs import AugSchemeMPL, PrivateKey
 from cdv.cmds.rpc import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
@@ -14,7 +14,7 @@ from chia.simulator.simulator_full_node_rpc_client import \
 from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import INFINITE_COST, Program
 from chia.types.blockchain_format.sized_bytes import bytes32
-from chia.types.coin_spend import CoinSpend
+from chia.types.coin_spend import CoinSpend, make_spend
 from chia.types.condition_opcodes import ConditionOpcode
 from chia.types.spend_bundle import SpendBundle
 from chia.util.bech32m import (bech32_decode, bech32_encode, convertbits,
@@ -57,6 +57,8 @@ async def get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client):
 
     sk_resp = await wallet_client.get_private_key(fingerprint)
     sk_hex = sk_resp['sk']
+    if sk_hex.startswith("0x"):
+        sk_hex = sk_hex[2:]
     return PrivateKey.from_bytes(bytes.fromhex(sk_hex))
 
 

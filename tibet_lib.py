@@ -22,7 +22,7 @@ try:
 except:
     from chia.types.blockchain_format.program import SerializedProgram
 from chia.types.blockchain_format.sized_bytes import bytes32
-from chia.types.coin_spend import CoinSpend
+from chia.types.coin_spend import make_spend
 from chia.types.condition_opcodes import ConditionOpcode
 from chia.types.spend_bundle import SpendBundle
 from chia.util.bech32m import bech32_decode
@@ -294,7 +294,7 @@ async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0):
             fee
         ])
 
-    p2_coin_spend = CoinSpend(
+    p2_coin_spend = make_spend(
         parent_coin,
         parent_coin_puzzle,
         solution_for_delegated_puzzle(Program.to((1, conds)), [])
@@ -319,7 +319,7 @@ async def create_test_cat(token_amount, coin, coin_puzzle):
     cat_puzzle = construct_cat_puzzle(CAT_MOD, tail_hash, cat_inner_puzzle)
     cat_puzzle_hash = cat_puzzle.get_tree_hash()
 
-    cat_creation_tx = CoinSpend(
+    cat_creation_tx = make_spend(
         coin,
         cat_inner_puzzle,  # same as this coin's puzzle
         solution_for_delegated_puzzle(Program.to((1, [
@@ -389,7 +389,7 @@ def get_spend_bundle_cost(sb: SpendBundle):
 # # run '(mod () (include condition_codes.clvm) (list (list CREATE_COIN 0x0000000000000000000000000000000000000000000000000000000000000001 1)))' -i include/ -d
 # my_puzzle = program_from_hex("ff02ffff01ff04ffff04ff02ffff01ffa00000000000000000000000000000000000000000000000000000000000000001ff018080ff8080ffff04ffff0133ff018080")
 # my_coin = Coin(b"\x00" * 32, my_puzzle.get_tree_hash(), 1)
-# my_cs = CoinSpend(my_coin, my_puzzle, my_solution)
+# my_cs = make_spend(my_coin, my_puzzle, my_solution)
 # sb = SpendBundle(
 #     [my_cs],
 #     AugSchemeMPL.aggregate([])
@@ -423,7 +423,7 @@ async def create_pair_from_coin(
     ])
     router_singleton_solution = solution_for_singleton(
         lineage_proof, current_router_coin.amount, router_inner_solution)
-    router_singleton_spend = CoinSpend(
+    router_singleton_spend = make_spend(
         current_router_coin, router_singleton_puzzle, router_singleton_solution)
 
     pair_launcher_coin = Coin(
@@ -450,7 +450,7 @@ async def create_pair_from_coin(
         std_hash(pair_launcher_coin.name() +
                  pair_launcher_solution.get_tree_hash()),
     ]
-    pair_launcher_spend = CoinSpend(
+    pair_launcher_spend = make_spend(
         pair_launcher_coin,
         SINGLETON_LAUNCHER,
         pair_launcher_solution,
@@ -466,7 +466,7 @@ async def create_pair_from_coin(
     # 1 comes from the pair launcher coin being spent (amount=2; only CREATE_COIN uses 1)
     # conds.append([ConditionOpcode.RESERVE_FEE, 1 + fee - ROUTER_MIN_FEE])
     conds.append(assert_launcher_announcement)
-    fund_spend = CoinSpend(
+    fund_spend = make_spend(
         coin,
         coin_puzzle,
         solution_for_delegated_puzzle(Program.to((1, conds)), [])
@@ -970,7 +970,7 @@ async def respond_to_deposit_liquidity_offer(
         #     announcement_asserts.append(ann_assert)
 
     eph_xch_coin_solution = Program.to(eph_xch_coin_settlement_things)
-    eph_xch_coin_spend = CoinSpend(
+    eph_xch_coin_spend = make_spend(
         eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
 
     # 5. Re-create the pair singleton (spend it)
@@ -1006,7 +1006,7 @@ async def respond_to_deposit_liquidity_offer(
     pair_singleton_solution = solution_for_singleton(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
     )
-    pair_singleton_spend = CoinSpend(
+    pair_singleton_spend = make_spend(
         current_pair_coin, pair_singleton_puzzle, pair_singleton_solution)
 
     # 6. Spend liquidity cat mint coin
@@ -1050,7 +1050,7 @@ async def respond_to_deposit_liquidity_offer(
         [],
         []
     ])
-    liquidity_cat_mint_coin_spend = CoinSpend(
+    liquidity_cat_mint_coin_spend = make_spend(
         liquidity_cat_mint_coin,
         liquidity_cat_mint_coin_puzzle,
         liquidity_cat_mint_coin_solution
@@ -1104,7 +1104,7 @@ async def respond_to_deposit_liquidity_offer(
             last_xch_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
         )
         last_xch_reserve_spend_maybe.append(
-            CoinSpend(last_xch_reserve_coin, last_xch_reserve_coin_puzzle,
+            make_spend(last_xch_reserve_coin, last_xch_reserve_coin_puzzle,
                       last_xch_reserve_coin_solution)
         )
 
@@ -1321,7 +1321,7 @@ async def respond_to_remove_liquidity_offer(
     pair_singleton_solution = solution_for_singleton(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
     )
-    pair_singleton_spend = CoinSpend(
+    pair_singleton_spend = make_spend(
         current_pair_coin, pair_singleton_puzzle, pair_singleton_solution)
 
     # 6. spend token reserve
@@ -1438,7 +1438,7 @@ async def respond_to_remove_liquidity_offer(
         pair_singleton_inner_puzzle.get_tree_hash(),
         extra_conditions=last_xch_reserve_coin_extra_conditions
     )
-    last_xch_reserve_coin_spend = CoinSpend(
+    last_xch_reserve_coin_spend = make_spend(
         last_xch_reserve_coin,
         p2_singleton_puzzle,
         last_xch_reserve_coin_solution
@@ -1472,7 +1472,7 @@ async def respond_to_remove_liquidity_offer(
         eph_xch_coin_notarized_payments.append(xch_eph_coin_extra_payment)
 
     eph_xch_coin_solution = Program.to(eph_xch_coin_notarized_payments)
-    eph_xch_coin_spend = CoinSpend(
+    eph_xch_coin_spend = make_spend(
         eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
 
     sb = SpendBundle(
@@ -1616,7 +1616,7 @@ async def respond_to_swap_offer(
         lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
     )
 
-    pair_singleton_spend = CoinSpend(
+    pair_singleton_spend = make_spend(
         current_pair_coin, pair_singleton_puzzle, pair_singleton_solution)
     coin_spends.append(pair_singleton_spend)
 
@@ -1737,7 +1737,7 @@ async def respond_to_swap_offer(
     # 6. spend eph coin if it is xch
     if not eph_coin_is_cat:
         # just destroy the XCH; they'll be used to create the new reserve
-        coin_spends.append(CoinSpend(eph_coin, OFFER_MOD, Program.to([])))
+        coin_spends.append(make_spend(eph_coin, OFFER_MOD, Program.to([])))
 
     # 7. Spend last xch reserve to create intermediary coin
     last_xch_reserve_coin_extra_conditions = [
@@ -1803,7 +1803,7 @@ async def respond_to_swap_offer(
         donation_coin_puzzle_hash = donation_coin_puzzle.get_tree_hash()
         donation_coin = Coin(last_xch_reserve_coin.name(),
                              donation_coin_puzzle_hash, total_donation_amount)
-        donation_coin_spend = CoinSpend(
+        donation_coin_spend = make_spend(
             donation_coin, donation_coin_puzzle, Program.to([]))
         coin_spends.append(donation_coin_spend)
 
@@ -1820,7 +1820,7 @@ async def respond_to_swap_offer(
         extra_conditions=last_xch_reserve_coin_extra_conditions
     )
 
-    last_xch_reserve_coin_spend = CoinSpend(
+    last_xch_reserve_coin_spend = make_spend(
         last_xch_reserve_coin,
         p2_singleton_puzzle,
         last_xch_reserve_coin_solution
@@ -1852,7 +1852,7 @@ async def respond_to_swap_offer(
     intermediary_xch_reserve_coin_solution = Program.to(
         intermediary_xch_reserve_coin_notarized_payments)
 
-    intermediary_token_reserve_coin_spend = CoinSpend(
+    intermediary_token_reserve_coin_spend = make_spend(
         intermediary_xch_reserve_coin,
         OFFER_MOD,
         intermediary_xch_reserve_coin_solution
