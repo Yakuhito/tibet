@@ -462,7 +462,7 @@ async def create_offer(
             offer_id=offerId
         )
         t = int(time.time())
-        if sb is not None:
+        #if sb is not None:
             #open(f"spend_bundle.{t}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
         #open(f"offer.{t}.json", "w").write(offer)
         #capture_exception(e)
