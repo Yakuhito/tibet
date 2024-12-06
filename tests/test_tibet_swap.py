@@ -10,7 +10,7 @@ import asyncio
 from pathlib import Path
 from typing import List
 
-from blspy import AugSchemeMPL, PrivateKey
+from chia_rs import AugSchemeMPL, PrivateKey
 from cdv.cmds.rpc import get_client
 from cdv.test import setup as setup_test
 from chia.consensus.default_constants import DEFAULT_CONSTANTS

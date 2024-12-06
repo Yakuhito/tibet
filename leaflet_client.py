@@ -6,8 +6,13 @@ import time
 class LeafletFullNodeRpcClient(FullNodeRpcClient):
     def __init__(self, leaflet_url):
         self.leaflet_url = leaflet_url
-        super().__init__()
-        self.session = aiohttp.ClientSession()
+        super().__init__(
+            url=leaflet_url,
+            session=aiohttp.ClientSession(),
+            ssl_context=None,
+            hostname='localhost',
+            port=1337,
+        )
         self.closing_task = None
 
 

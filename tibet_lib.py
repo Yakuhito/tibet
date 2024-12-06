@@ -6,8 +6,7 @@ import requests
 from pathlib import Path
 from typing import List
 
-from blspy import AugSchemeMPL
-from blspy import PrivateKey
+from chia_rs import AugSchemeMPL, PrivateKey
 from cdv.cmds.rpc import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
