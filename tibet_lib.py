@@ -382,7 +382,7 @@ def get_spend_bundle_cost(sb: SpendBundle):
         mempool_mode=True,
         constants=DEFAULT_CONSTANTS,
     )
-    return int(npc_result.cost)
+    return int(npc_result.conds.cost)
 
 # my_solution = program_from_hex("80") # ()
 # # run '(mod () (include condition_codes.clvm) (list (list CREATE_COIN 0x0000000000000000000000000000000000000000000000000000000000000001 1)))' -i include/ -d
