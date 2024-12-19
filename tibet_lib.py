@@ -365,7 +365,7 @@ async def create_test_cat(token_amount, coin, coin_puzzle):
 
 
 # https://github.com/Chia-Network/chia-dev-tools/blob/main/cdv/cmds/chia_inspect.py#L312
-def get_spend_bundle_cost(sb: SpendBundle):
+def get_spend_bundle_cost_and_fees(sb: SpendBundle):
     agg_sig = sb.aggregated_signature
     coin_spends = []
     for cs in sb.coin_spends:
@@ -382,7 +382,7 @@ def get_spend_bundle_cost(sb: SpendBundle):
         mempool_mode=True,
         constants=DEFAULT_CONSTANTS,
     )
-    return int(npc_result.conds.cost)
+    return int(npc_result.conds.cost), int(npc_result.conds.reserve_fee)
 
 # my_solution = program_from_hex("80") # ()
 # # run '(mod () (include condition_codes.clvm) (list (list CREATE_COIN 0x0000000000000000000000000000000000000000000000000000000000000001 1)))' -i include/ -d
@@ -1882,8 +1882,7 @@ async def get_fee_estimate(mempool_sb, full_node_client: FullNodeRpcClient):
         # we don't want to teach users to ignore the minimum fee, do we?
         return fee if fee != 1 else 0
 
-    cost_of_mempool_sb = get_spend_bundle_cost(mempool_sb)
-    fee_of_mempool_sb = max(mempool_sb.fees(), 1)
+    cost_of_mempool_sb, fee_of_mempool_sb = get_spend_bundle_cost_and_fees(mempool_sb)
     mempool_fee_per_cost: float = fee_of_mempool_sb / cost_of_mempool_sb
 
     fee = int(max(5, mempool_fee_per_cost) * (cost_of_operation +
