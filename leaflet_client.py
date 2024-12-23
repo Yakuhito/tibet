@@ -23,11 +23,12 @@ class LeafletFullNodeRpcClient(FullNodeRpcClient):
         if "," in leaflet_url:
             leaflet_url = leaflet_url.split(",")[0]
             if 'push_tx' in path or 'get_fee_estimate' in path:
-                random.choice(leaflet_url.split(",")[1:])
+                leaflet_url = random.choice(self.leaflet_url.split(",")[1:])
         
         async with self.session.post(leaflet_url + path, json=request_json) as response:
             if 'push_tx' in path or 'get_fee_estimate' in path:
                 print(f"Using {leaflet_url} for {path}:", leaflet_url)
+                print("Response:", await response.text())
 
             response.raise_for_status()
 
