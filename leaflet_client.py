@@ -3,6 +3,7 @@ import aiohttp
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
 import time
 import json
+import random
 
 class LeafletFullNodeRpcClient(FullNodeRpcClient):
     def __init__(self, leaflet_url):
@@ -18,9 +19,13 @@ class LeafletFullNodeRpcClient(FullNodeRpcClient):
 
 
     async def fetch(self, path, request_json):
-        async with self.session.post(self.leaflet_url + path, json=request_json) as response:
+        leaflet_url = self.leaflet_url
+        if "," in leaflet_url:
+            leaflet_url = random.choice(leaflet_url.split(","))
+        
+        async with self.session.post(leaflet_url + path, json=request_json) as response:
             if 'push_tx' in path:
-                print("push_tx response:", await response.text())
+                print("Using the following URL for push_tx:", leaflet_url)
 
             response.raise_for_status()
 
