@@ -354,6 +354,15 @@ async def create_offer(
     if total_donation_amount < 0:
         raise HTTPException(status_code=400, detail="total_donation_amount negative")
 
+    fee_share_address = os.environ.get("TIBETSWAP_FEE_ADDRESS", "")
+    if len(donation_addresses) > 0 and len(fee_share_address) > 0:
+        given_shares = 0
+        for i, address in enumerate(donation_addresses):
+            if address == fee_share_address:
+                given_shares += donation_weights[i]
+        if given_shares / sum(donation_weights) < 0.5:
+            raise HTTPException(status_code=400, detail=f"To use this endpoint, please provide at least 50% of fees to our address: {fee_share_address}")
+
     pair = await get_pair(db, pair_id)
     if pair is None:
         raise HTTPException(status_code=400, detail="Unknown pair id (launcher id)")
