@@ -247,7 +247,7 @@ async def get_all_pairs(db: Session, force_refresh: bool = False) -> List[models
         last_update = last_pair_update.get(pair_id)
 
         now = datetime.now()
-        if force_refresh or last_update is None or now - last_update >= timedelta(seconds=5):
+        if force_refresh or last_update is None:
             last_pair_update[pair_id] = now
             pair, _ = await check_pair_update(db, pair)
 
