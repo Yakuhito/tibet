@@ -4,8 +4,9 @@ import sys
 import time
 import requests
 from pathlib import Path
+from secrets import token_bytes
 from typing import List
-
+from chia.util.keychain import bytes_to_mnemonic, mnemonic_to_seed
 from chia_rs import AugSchemeMPL, PrivateKey
 from cdv.cmds.rpc import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
@@ -88,6 +89,7 @@ from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
 
 MEMPOOL_MIN_FEE_INCREASE = uint64(10000000)
 ROUTER_MIN_FEE = 42000000000
+DEV_DEPLOYMENT_FEE = 420000000000
 
 
 def program_from_hex(h: str) -> Program:
@@ -1890,31 +1892,160 @@ async def get_fee_estimate(mempool_sb, full_node_client: FullNodeRpcClient):
               cost_of_mempool_sb)) - fee_of_mempool_sb + MEMPOOL_MIN_FEE_INCREASE
     return fee
 
-
-
-async def create_pair_from_coin(
-    coin,
-    coin_puzzle,
-    tail_hash,
+"""
+XCH coin breakdown:
+initial_xch_liquidity - provided as XCH liquidity
+initial_cat_liquidity - used to mint LP tokens
+ROUTER_MIN_FEE - tx fee
+DEV_DEPLOYMENT_FEE - sent to tibetswap dev
+1 - amount locked in pair singleton
+"""
+async def create_pair_with_liquidity(
+    tail_hash, # bytes
+    offer_str, # str
+    initial_xch_liquidity,
+    initial_cat_liquidity,
+    liquidity_destination_address,
     router_launcher_id,
     current_router_coin,
     current_router_coin_creation_spend,
-    fee=ROUTER_MIN_FEE
 ):
+    # 1. Detect ephemeral coins (those created by the offer that we're allowed to use)
+    offer = Offer.from_bech32(offer_str)
+    offer_spend_bundle = offer.to_spend_bundle()
+    offer_coin_spends = offer_spend_bundle.coin_spends
 
+    eph_xch_coin = None
+    eph_token_coin = None
 
+    # needed when spending eph_token_coin since it's a CAT
+    eph_token_coin_creation_spend = None
+    announcement_asserts = []  # assert everything when the liquidity cat is minted
 
-async def respond_to_deposit_liquidity_offer(
-    pair_launcher_id,
-    current_pair_coin,
-    creation_spend,
-    token_tail_hash,
-    pair_liquidity,
-    pair_xch_reserve,
-    pair_token_reserve,
-    offer_str,
-    last_xch_reserve_coin,
-    last_token_reserve_coin,
-    # coin_parent_coin_info, inner_puzzle_hash, amount
-    last_token_reserve_lineage_proof
-):
+    ephemeral_token_coin_puzzle = construct_cat_puzzle(
+        CAT_MOD, token_tail_hash, OFFER_MOD)
+    ephemeral_token_coin_puzzle_hash = ephemeral_token_coin_puzzle.get_tree_hash()
+
+    # all valid coin spends (i.e., not 'hints' for offered assets or coins)
+    #cs_from_initial_offer = []
+    cs_to_aggregate = []
+    cs_for_second_offer = []
+
+    for coin_spend in offer_coin_spends:
+        # 'hint' for offer requested coin (liquidity CAT)
+        if coin_spend.coin.parent_coin_info == b"\x00" * 32:
+            continue
+
+        # cs_from_initial_offer.append(coin_spend)
+        conditions_dict = conditions_dict_for_solution(
+            coin_spend.puzzle_reveal,
+            coin_spend.solution,
+            INFINITE_COST
+        )
+
+        # is this spend creating an ephemeral coin?
+        ephemeral = False
+        for cwa in conditions_dict.get(ConditionOpcode.CREATE_COIN, []):
+            puzzle_hash = cwa.vars[0]
+            amount = SExp.to(cwa.vars[1]).as_int()
+
+            if puzzle_hash == OFFER_MOD_HASH:
+                eph_xch_coin = Coin(coin_spend.coin.name(),
+                                    puzzle_hash, amount)
+                ephemeral = True
+                cs_to_aggregate.append(coin_spend)
+                if amount != initial_xch_liquidity + initial_cat_liquidity + ROUTER_MIN_FEE + DEV_DEPLOYMENT_FEE + 1:
+                    raise Exception(f"Invalid XCH offer amount; should be {initial_xch_liquidity + ROUTER_MIN_FEE + DEV_DEPLOYMENT_FEE + 1} mojos")
+
+            if puzzle_hash == ephemeral_token_coin_puzzle_hash:
+                eph_token_coin = Coin(
+                    coin_spend.coin.name(), puzzle_hash, amount)
+                if amount != initial_cat_liquidity:
+                    raise Exception(f"Invalid CAT offer amount; should be {initial_cat_liquidity} mojos")
+                eph_token_coin_creation_spend = coin_spend
+                ephemeral = True
+                cs_for_second_offer.append(coin_spend)
+
+        if not ephemeral:
+            cs_for_second_offer.append(coin_spend)
+
+        # is there any announcement that we'll need to assert?
+        # cwa = condition with args
+        for cwa in conditions_dict.get(ConditionOpcode.CREATE_COIN_ANNOUNCEMENT, []):
+            announcement_asserts.append([
+                ConditionOpcode.ASSERT_COIN_ANNOUNCEMENT,
+                std_hash(coin_spend.coin.name() + cwa.vars[0])
+            ])
+
+    # 2. Spend ephemeral XCH coin to create a standard coin - this will be used
+    #   to launch the router and request liquidity tokens for the 'add liquidity' part
+    rand_bytes = token_bytes(nbytes=32)
+    temp_sk = AugSchemeMPL.key_gen(mnemonic_to_seed(bytes_to_mnemonic(rand_bytes)))
+    temp_pk = temp_sk.get_g1()
+
+    temp_custody_puzzle = puzzle_for_pk(temp_pk)
+    temp_custody_puzzle_hash = temp_custody_puzzle.get_tree_hash()
+
+    eph_xch_coin_solution = Program.to([
+        Program.to([
+            eph_xch_coin.name(),
+            [temp_custody_puzzle_hash, eph_xch_coin.amount]
+        ]),
+    ])
+    eph_xch_coin_spend = make_spend(
+        eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
+    cs_to_aggregate.append(eph_xch_coin_spend)
+
+    temp_custody_coin = Coin(eph_xch_coin.name(), temp_custody_puzzle_hash, eph_xch_coin.amount)
+    router_launcher_coin = Coin(temp_custody_coin.name(), temp_custody_puzzle_hash, ROUTER_MIN_FEE + 1)
+    new_ephemeral_xch_coin = Coin(temp_custody_coin.name(), temp_custody_puzzle_hash, initial_xch_liquidity + initial_cat_liquidity)
+    temp_custody_conditions = [
+        [ConditionOpcode.CREATE_COIN, temp_custody_puzzle_hash, ROUTER_MIN_FEE + 1],
+        [ConditionOpcode.CREATE_COIN, decode_puzzle_hash(os.environ.get("TIBETSWAP_FEE_ADDRESS", "")), DEV_DEPLOYMENT_FEE],
+        [ConditionOpcode.CREATE_COIN, temp_custody_puzzle_hash, initial_xch_liquidity + initial_cat_liquidity],
+        [ConditionOpcode.ASSERT_CONCURRENT_SPEND, router_launcher_coin.name()]
+    ]
+
+    # 3. Create deposit liquidity offer
+
+    TODO
+
+    # 4. Spend temp custody coin
+
+    TODO
+    temp_custody_coin_sig = TODO
+    router_launcher_coin_sig = TODO
+    new_ephemeral_xch_coin_sig = TODO
+
+    # 5. Deposit liquidity using function
+
+    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
+    for cs in router_launch_sb.coin_spends:
+        cs_to_aggregate.append(cs)
+
+    liquidity_sb = await respond_to_deposit_liquidity_offer(
+        bytes.fromhex(pair_launcher_id_hex),
+        current_pair_coin,
+        pair_launcher_spend,
+        tail_hash,
+        0, 0, 0, # no liquidity
+        liquidity_offer_str,
+        None, None, None # no previous reserves since pool was just added
+    )
+
+    # 6. Assmeble final spend bundle
+    coin_spends = liqudity_sb.coin_spends
+    for cs in cs_to_aggregate:
+        coin_spends.append(cs)
+
+    final_sb = SpendBundle(
+        coin_spends,
+        AugSchemeMPL.aggregate([
+            offer_spend_bundle.aggregated_signature,
+            temp_custody_coin_sig,
+            router_launcher_coin_sig,
+            new_ephemeral_xch_coin_sig
+        ])
+    )
+
+    return final_sb
