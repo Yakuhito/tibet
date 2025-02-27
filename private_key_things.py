@@ -127,12 +127,17 @@ async def sign_spend_bundle_with_specific_sk(sb, sk, additional_data=DEFAULT_CON
     async def pk_to_sk(pk):
         return sk
 
+    async def ph_to_sk(ph):
+        return sk
+
     sig_old = sb.aggregated_signature
     sb = await sign_coin_spends(
         sb.coin_spends,
         pk_to_sk,
+        ph_to_sk,
         additional_data,
         DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
+        []
     )
     new_agg_sig = AugSchemeMPL.aggregate([sig_old, sb.aggregated_signature])
 

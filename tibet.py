@@ -1050,14 +1050,14 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
 @click.option("--xch-amount", required=True, help="XCH amount to deposit as initial liquidity. Unit is mojos.")
 @click.option("--liquidity-destination-address", required=True, help="Address to send liquidity tokens to.")
 @click.option("--push-tx", is_flag=True, default=False, help="Push the tx to the network.")
-def create_pair_with_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx):
+def create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_create_pair_with_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx))
+    asyncio.run(_create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx))
 
 
-async def _create_pair_with_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx):
+async def _create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx):
     click.echo("Deploying pair AND depositing liquidity in the same tx - that's crazy!")
     offer_str = ""
 
@@ -1096,8 +1096,8 @@ async def _create_pair_with_liquidity(asset_id, offer, xch_amount, token_amount,
     sb = await create_pair_with_liquidity(
         bytes.fromhex(asset_id),
         offer,
-        xch_amount,
-        token_amount,
+        int(xch_amount),
+        int(token_amount),
         liquidity_destination_address,
         bytes.fromhex(router_launcher_id),
         current_router_coin,
@@ -1136,5 +1136,5 @@ if __name__ == "__main__":
     cli.add_command(remove_liquidity)
     cli.add_command(xch_to_token)
     cli.add_command(token_to_xch)
-    cli.add_command(create_pair_with_liquidity)
+    cli.add_command(create_pair_with_initial_liquidity)
     cli()

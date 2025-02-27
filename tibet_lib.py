@@ -1923,7 +1923,7 @@ async def create_pair_with_liquidity(
     announcement_asserts = []  # assert everything when the liquidity cat is minted
 
     ephemeral_token_coin_puzzle = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, OFFER_MOD)
+        CAT_MOD, tail_hash, OFFER_MOD)
     ephemeral_token_coin_puzzle_hash = ephemeral_token_coin_puzzle.get_tree_hash()
 
     # all valid coin spends (i.e., not 'hints' for offered assets or coins)
@@ -2011,23 +2011,32 @@ async def create_pair_with_liquidity(
             [ConditionOpcode.CREATE_COIN, OFFER_MOD_HASH, initial_xch_liquidity + initial_cat_liquidity]
         ])), [])
     )
-    cs_to_aggregate.append(new_ephemeral_xch_coin_spend)
+    cs_for_second_offer.append(new_ephemeral_xch_coin_spend)
 
     # this requires that liq tokens are paid to the right recipients
-    payment_req_coin = Coin(bytes32.zeros, OFFER_MOD_HASH, initial_xch_liquidity + initial_cat_liquidity)
+    payment_req_coin = Coin(b'\x00' * 32, OFFER_MOD_HASH, initial_xch_liquidity + initial_cat_liquidity)
     liq_token_notarized_payments = Program.to([
         Program.to([
             new_ephemeral_xch_coin.name(),
-            [decode_puzzle_hash(liquidity_destination_address), initial_xch_liquidity + initial_cat_liquidity]
+            [decode_puzzle_hash(liquidity_destination_address), initial_xch_liquidity + initial_cat_liquidity, [decode_puzzle_hash(liquidity_destination_address)]]
         ])
     ])
     for ann in get_announcements_asserts_for_notarized_payments(liq_token_notarized_payments):
         temp_custody_conditions.append(ann)
 
-    cs_for_second_offer.append(make_spend(payment_req_coin, Program.to([]), liq_token_notarized_payments))
+    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
+    for cs in router_launch_sb.coin_spends:
+        cs_to_aggregate.append(cs)
+
+    liquidity_tail_hash = pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id_hex)).get_tree_hash()
+    cs_for_second_offer.append(make_spend(
+        payment_req_coin,
+        construct_cat_puzzle(CAT_MOD, liquidity_tail_hash, OFFER_MOD),
+        liq_token_notarized_payments
+    ))
 
     liquidity_offer_sb = SpendBundle(
-        cs_for_second_offer
+        cs_for_second_offer,
         AugSchemeMPL.aggregate([])
     )
     liquidity_offer = Offer.from_spend_bundle(liquidity_offer_sb)
@@ -2044,10 +2053,6 @@ async def create_pair_with_liquidity(
 
     # 5. Deposit liquidity using function
 
-    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
-    for cs in router_launch_sb.coin_spends:
-        cs_to_aggregate.append(cs)
-
     liquidity_sb = await respond_to_deposit_liquidity_offer(
         bytes.fromhex(pair_launcher_id_hex),
         current_pair_coin,
@@ -2059,7 +2064,7 @@ async def create_pair_with_liquidity(
     )
 
     # 6. Assmeble final spend bundle and isgn it
-    coin_spends = liqudity_sb.coin_spends
+    coin_spends = liquidity_sb.coin_spends
     for cs in cs_to_aggregate:
         coin_spends.append(cs)
 
