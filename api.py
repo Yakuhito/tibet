@@ -220,8 +220,8 @@ async def get_router():
                             asset_id=pair_tail_hash,
                             pair_id=pair_launcher_id,
                             name=token_info["name"],
-                            short_name=token_info["code"],
-                            image_url=token_info["icon"],
+                            short_name=token_info["symbol"],
+                            image_url=token_info["preview_url"],
                             verified=False,
                         )
                 except:
