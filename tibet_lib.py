@@ -1979,7 +1979,7 @@ async def create_pair_with_liquidity(
     temp_sk = AugSchemeMPL.key_gen(mnemonic_to_seed(bytes_to_mnemonic(rand_bytes)))
     temp_pk = temp_sk.get_g1()
 
-    temp_custody_puzzle = puzzle_for_pk(temp_pk)
+    temp_custody_puzzle = puzzle_for_synthetic_public_key(temp_pk)
     temp_custody_puzzle_hash = temp_custody_puzzle.get_tree_hash()
 
     eph_xch_coin_solution = Program.to([
@@ -2018,11 +2018,9 @@ async def create_pair_with_liquidity(
     liq_token_notarized_payments = Program.to([
         Program.to([
             new_ephemeral_xch_coin.name(),
-            [decode_puzzle_hash(liquidity_destination_address), initial_xch_liquidity + initial_cat_liquidity, [decode_puzzle_hash(liquidity_destination_address)]]
+            [decode_puzzle_hash(liquidity_destination_address), initial_cat_liquidity, [decode_puzzle_hash(liquidity_destination_address)]]
         ])
     ])
-    for ann in get_announcements_asserts_for_notarized_payments(liq_token_notarized_payments):
-        temp_custody_conditions.append(ann)
 
     pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
     for cs in router_launch_sb.coin_spends:
@@ -2068,10 +2066,11 @@ async def create_pair_with_liquidity(
     for cs in cs_to_aggregate:
         coin_spends.append(cs)
 
-    final_sb = SpendBundle(
-        coin_spends,
-        offer_spend_bundle.aggregated_signature,
-    )
-    final_sb = await sign_spend_bundle_with_specific_sk(final_sb, temp_sk)
+    cs_to_sign = [cs for cs in coin_spends if cs.coin.puzzle_hash == temp_custody_puzzle_hash]
+    assert len(cs_to_sign) == 3
+    temp_custody_sb = await sign_spend_bundle_with_specific_sk(cs_to_sign, temp_sk)
 
-    return final_sb
+    return SpendBundle(
+        coin_spends,
+        AugSchemeMPL.aggregate([offer_spend_bundle.aggregated_signature, temp_custody_sb.aggregated_signature])
+    )
