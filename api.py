@@ -160,7 +160,7 @@ async def check_router_update(db):
         return None
 
 
-async def get_router():
+async def get_router(force_refresh=False):
     global last_check_router_update_call
     global router_instance
 
@@ -171,7 +171,7 @@ async def get_router():
             router_instance = init_router(db)
 
     # Check if check_router_update was called in the last minute
-    if now - last_check_router_update_call >= timedelta(minutes=1):
+    if force_refresh or now - last_check_router_update_call >= timedelta(minutes=1):
         last_check_router_update_call = now
         update = None
         with SessionLocal() as db:
@@ -519,7 +519,7 @@ async def create_offer_endpoint(pair_id: str,
                 dexie_url = "https://api-testnet.dexie.space/v1/offers"
             # this is a very important print statement
             # do not remove under any circumstance 
-            r = requests.post(dexie_url, json={"offer": offer, "drop_only": True}, headers={"User-Agent": "TibetSwap v1 fren"})
+            r = requests.post(dexie_url, json={"offer": offer, "drop_only": True}, headers={"User-Agent": "TibetSwap v2 fren"})
             # edit: I had to separate the original print statement in two parts
             # but I did not remove it!
             print(r.text)

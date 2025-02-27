@@ -315,7 +315,7 @@ async def _create_pair(tail_hash, push_tx, fee):
 
     click.echo(f"Using coin 0x{coin.name().hex()} (amount: {coin.amount})...")
 
-    pair_launcher_id, sb = await create_pair_from_coin(
+    pair_launcher_id, sb, _a, _b = await create_pair_from_coin(
         coin,
         coin_puzzle,
         bytes.fromhex(tail_hash),

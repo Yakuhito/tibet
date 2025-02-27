@@ -472,12 +472,13 @@ async def create_pair_from_coin(
     )
 
     pair_launcher_id = Coin(current_router_coin.name(),
-                            SINGLETON_LAUNCHER_HASH, 2).name().hex()
+                            SINGLETON_LAUNCHER_HASH, 2).name()
     sb = SpendBundle(
         [router_singleton_spend, pair_launcher_spend, fund_spend],
         AugSchemeMPL.aggregate([])
     )
-    return pair_launcher_id, sb
+    current_pair_coin = Coin(pair_launcher_id, pair_puzzle.get_tree_hash(), 1)
+    return pair_launcher_id.hex(), sb, current_pair_coin, pair_launcher_spend
 
 
 async def sync_router(full_node_client, last_router_id):
@@ -1888,3 +1889,32 @@ async def get_fee_estimate(mempool_sb, full_node_client: FullNodeRpcClient):
     fee = int(max(5, mempool_fee_per_cost) * (cost_of_operation +
               cost_of_mempool_sb)) - fee_of_mempool_sb + MEMPOOL_MIN_FEE_INCREASE
     return fee
+
+
+
+async def create_pair_from_coin(
+    coin,
+    coin_puzzle,
+    tail_hash,
+    router_launcher_id,
+    current_router_coin,
+    current_router_coin_creation_spend,
+    fee=ROUTER_MIN_FEE
+):
+
+
+
+async def respond_to_deposit_liquidity_offer(
+    pair_launcher_id,
+    current_pair_coin,
+    creation_spend,
+    token_tail_hash,
+    pair_liquidity,
+    pair_xch_reserve,
+    pair_token_reserve,
+    offer_str,
+    last_xch_reserve_coin,
+    last_token_reserve_coin,
+    # coin_parent_coin_info, inner_puzzle_hash, amount
+    last_token_reserve_lineage_proof
+):
