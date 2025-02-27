@@ -50,11 +50,13 @@ app.add_middleware(
 cache = TTLCache(maxsize=100, ttl=3)
 
 leaflet_url = None
-taildatabase_tail_info_url = None
+dexie_token_url = None
+spacescan_token_url = None
 try:
     # https://kraken.fireacademy.io/[api-key]/leaflet[-testnet10]/
     leaflet_url = os.environ["FIREACADEMYIO_LEAFLET_URL"]
-    taildatabase_tail_info_url = os.environ["TAILDATABASE_TAIL_INFO_URL"]
+    dexie_token_url = os.environ["DEXIE_TOKEN_URL"]
+    spacescan_token_url = os.environ["SPACESCAN_TOKEN_URL"]
 except KeyError as e:
     print(f"Error: Environment variable {e} is not set. Exiting...")
     sys.exit(1)
@@ -200,16 +202,28 @@ async def get_router():
                 # Create a new Token object
                 token = None
                 try:
-                    r = requests.get(taildatabase_tail_info_url + pair_tail_hash)
-                    resp = r.json()
-                    token = models.Token(
-                        asset_id=pair_tail_hash,
-                        pair_id=pair_launcher_id,
-                        name=resp["name"],
-                        short_name=resp["code"],
-                        image_url=resp["nft_uri"],
-                        verified=False,
-                    )
+                    token_data = requests.get(dexie_token_url + pair_tail_hash).json()
+                    if token_data["success"]:
+                        token_data = token_data["token"]
+                        token = models.Token(
+                            asset_id=pair_tail_hash,
+                            pair_id=pair_launcher_id,
+                            name=token_data["name"],
+                            short_name=token_data["code"],
+                            image_url=token_data["icon"],
+                            verified=True,
+                        )
+                    else:
+                        print(f"Token not verified on Dexie: {pair_tail_hash}; falling back to SpaceScan resolution...")
+                        token_info = requests.get(spacescan_token_url + pair_tail_hash).json()["info"]
+                        token = models.Token(
+                            asset_id=pair_tail_hash,
+                            pair_id=pair_launcher_id,
+                            name=token_info["name"],
+                            short_name=token_info["code"],
+                            image_url=token_info["icon"],
+                            verified=False,
+                        )
                 except:
                     token = models.Token(
                         asset_id=pair_tail_hash,
