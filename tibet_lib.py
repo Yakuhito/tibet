@@ -86,6 +86,7 @@ from leaflet_client import LeafletFullNodeRpcClient
 from cic import build_merkle_tree
 from chia.full_node.bundle_tools import simple_solution_generator
 from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
+from private_key_things import sign_spend_bundle_with_specific_sk
 
 MEMPOOL_MIN_FEE_INCREASE = uint64(10000000)
 ROUTER_MIN_FEE = 42000000000
@@ -1034,8 +1035,7 @@ async def respond_to_deposit_liquidity_offer(
 
     # also assert the XCH ephemeral coin announcement
     # specifically, for the payment made to mint liquidity tokens
-    eph_xch_settlement_announcement = eph_xch_coin_settlement_things[1].get_tree_hash(
-    )
+    eph_xch_settlement_announcement = eph_xch_coin_settlement_things[1].get_tree_hash()
     output_conditions.append([
         ConditionOpcode.ASSERT_PUZZLE_ANNOUNCEMENT,
         std_hash(eph_xch_coin.puzzle_hash + eph_xch_settlement_announcement)
@@ -1932,10 +1932,6 @@ async def create_pair_with_liquidity(
     cs_for_second_offer = []
 
     for coin_spend in offer_coin_spends:
-        # 'hint' for offer requested coin (liquidity CAT)
-        if coin_spend.coin.parent_coin_info == b"\x00" * 32:
-            continue
-
         # cs_from_initial_offer.append(coin_spend)
         conditions_dict = conditions_dict_for_solution(
             coin_spend.puzzle_reveal,
@@ -2008,14 +2004,43 @@ async def create_pair_with_liquidity(
 
     # 3. Create deposit liquidity offer
 
-    TODO
+    new_ephemeral_xch_coin_spend = make_spend(
+        new_ephemeral_xch_coin,
+        temp_custody_puzzle,
+        solution_for_delegated_puzzle(Program.to((1, [
+            [ConditionOpcode.CREATE_COIN, OFFER_MOD_HASH, initial_xch_liquidity + initial_cat_liquidity]
+        ])), [])
+    )
+    cs_to_aggregate.append(new_ephemeral_xch_coin_spend)
+
+    # this requires that liq tokens are paid to the right recipients
+    payment_req_coin = Coin(bytes32.zeros, OFFER_MOD_HASH, initial_xch_liquidity + initial_cat_liquidity)
+    liq_token_notarized_payments = Program.to([
+        Program.to([
+            new_ephemeral_xch_coin.name(),
+            [decode_puzzle_hash(liquidity_destination_address), initial_xch_liquidity + initial_cat_liquidity]
+        ])
+    ])
+    for ann in get_announcements_asserts_for_notarized_payments(liq_token_notarized_payments):
+        temp_custody_conditions.append(ann)
+
+    cs_for_second_offer.append(make_spend(payment_req_coin, Program.to([]), liq_token_notarized_payments))
+
+    liquidity_offer_sb = SpendBundle(
+        cs_for_second_offer
+        AugSchemeMPL.aggregate([])
+    )
+    liquidity_offer = Offer.from_spend_bundle(liquidity_offer_sb)
+    liquidity_offer_str = liquidity_offer.to_bech32()
 
     # 4. Spend temp custody coin
 
-    TODO
-    temp_custody_coin_sig = TODO
-    router_launcher_coin_sig = TODO
-    new_ephemeral_xch_coin_sig = TODO
+    temp_custody_spend = make_spend(
+        temp_custody_coin,
+        temp_custody_puzzle,
+        solution_for_delegated_puzzle(Program.to((1, temp_custody_conditions)), [])
+    )
+    cs_to_aggregate.append(temp_custody_spend)
 
     # 5. Deposit liquidity using function
 
@@ -2033,19 +2058,15 @@ async def create_pair_with_liquidity(
         None, None, None # no previous reserves since pool was just added
     )
 
-    # 6. Assmeble final spend bundle
+    # 6. Assmeble final spend bundle and isgn it
     coin_spends = liqudity_sb.coin_spends
     for cs in cs_to_aggregate:
         coin_spends.append(cs)
 
     final_sb = SpendBundle(
         coin_spends,
-        AugSchemeMPL.aggregate([
-            offer_spend_bundle.aggregated_signature,
-            temp_custody_coin_sig,
-            router_launcher_coin_sig,
-            new_ephemeral_xch_coin_sig
-        ])
+        offer_spend_bundle.aggregated_signature,
     )
+    final_sb = await sign_spend_bundle_with_specific_sk(final_sb, temp_sk)
 
     return final_sb
