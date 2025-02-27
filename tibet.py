@@ -1043,6 +1043,86 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
     await full_node_client.await_closed()
 
 
+@click.command()
+@click.option('--asset-id', required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
+@click.option("--offer", required=True, help='Offer to build tx from. Should contain CATs and 0.42 + 0.042 + 1 + [liquidity XCH] + [liquidity CAT] XCH.')
+@click.option("--token-amount", required=True, help="CAT amount to deposit as initial liquidity. Unit is mojos (1 CAT = 1000 mojos).")
+@click.option("--xch-amount", required=True, help="XCH amount to deposit as initial liquidity. Unit is mojos.")
+@click.option("--liquidity-destination-address", required=True, help="Address to send liquidity tokens to.")
+@click.option("--push-tx", is_flag=True, default=False, help="Push the tx to the network.")
+def create_pair_with_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx):
+    if len(asset_id) != 64:
+        click.echo("Oops! That asset id doesn't look right...")
+        sys.exit(1)
+    asyncio.run(_create_pair_with_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx))
+
+
+async def _create_pair_with_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx):
+    click.echo("Deploying pair AND depositing liquidity in the same tx - that's crazy!")
+    offer_str = ""
+
+    pair_launcher_id = get_config_item("pairs", asset_id)
+    if pair_launcher_id is not None:
+        click.echo(
+            "A pair for that asset already exists :(")
+        sys.exit(1)
+
+    router_launcher_id = get_config_item("router_launcher_id")
+    router_last_processed_id = get_config_item("router_last_processed_id")
+    if router_launcher_id is None or router_last_processed_id is None:
+        click.echo("Oops - looks like someone forgot to launch their router.")
+        sys.exit(1)
+
+    click.echo("But first, we do a little sync")
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    current_router_coin, latest_creation_spend, pairs = await sync_router(
+        full_node_client, bytes.fromhex(router_last_processed_id)
+    )
+    router_last_processed_id_new = current_router_coin.name().hex()
+    click.echo(f"Last router id: {router_last_processed_id_new}")
+
+    if len(pairs) != 0 or router_last_processed_id_new != router_last_processed_id:
+        click.echo("New pairs found! Saving them...")
+        router_last_processed_id = router_last_processed_id_new
+
+        config = get_config()
+        config["router_last_processed_id"] = router_last_processed_id
+        config["pairs"] = config.get("pairs", {})
+        for pair in pairs:
+            if config["pairs"].get(pair[0], -1) == -1:
+                config["pairs"][pair[0]] = pair[1]
+        save_config(config)
+
+    sb = await create_pair_with_liquidity(
+        bytes.fromhex(asset_id),
+        offer,
+        xch_amount,
+        token_amount,
+        liquidity_destination_address,
+        bytes.fromhex(router_launcher_id),
+        current_router_coin,
+        latest_creation_spend
+    )
+
+    if push_tx:
+        resp = input("Are you sure you want to broadcast this spend? (Yes): ")
+        if resp == "Yes":
+            click.echo(f"Pushing tx...")
+            resp = await full_node_client.push_tx(sb)
+            click.echo(resp)
+            click.echo("Enjoy your lp fees!")
+        else:
+            click.echo("That's not a clear 'Yes'!")
+    else:
+        open("spend_bundle.json", "w").write(json.dumps(
+            sb.to_json_dict(), sort_keys=True, indent=4))
+        click.echo("Spend bundle written to spend_bundle.json.")
+        click.echo("Use --push-tx to broadcast this spend.")
+
+    full_node_client.close()
+    await full_node_client.await_closed()
+
+
 if __name__ == "__main__":
     cli.add_command(config_node)
     cli.add_command(test_node_config)
@@ -1056,4 +1136,5 @@ if __name__ == "__main__":
     cli.add_command(remove_liquidity)
     cli.add_command(xch_to_token)
     cli.add_command(token_to_xch)
+    cli.add_command(create_pair_with_liquidity)
     cli()
