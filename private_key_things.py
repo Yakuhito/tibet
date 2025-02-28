@@ -93,8 +93,7 @@ async def sign_coin_spends(
     msg_list: List[bytes] = []
     for coin_spend in coin_spends:
         conditions_dict = conditions_dict_for_solution(coin_spend.puzzle_reveal, coin_spend.solution, max_cost)
-        for pk_bytes, msg in pkm_pairs_for_conditions_dict(conditions_dict, coin_spend.coin, additional_data):
-            pk = G1Element.from_bytes(pk_bytes)
+        for pk, msg in pkm_pairs_for_conditions_dict(conditions_dict, coin_spend.coin, additional_data):
             pk_list.append(pk)
             msg_list.append(msg)
             if inspect.iscoroutinefunction(secret_key_for_public_key_f):

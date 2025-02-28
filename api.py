@@ -574,7 +574,7 @@ async def create_pair_endpoint(asset_id: str,
         return schemas.CreatePairResponse(
             success=resp['status'] == 'SUCCESS',
             message=json.dumps(resp),
-            coin_id=sb.coin_spends[-1].name().hex()
+            coin_id=sb.coin_spends[-1].coin.name().hex()
         )
     except Exception as e:
         traceback_message = traceback.format_exc()
