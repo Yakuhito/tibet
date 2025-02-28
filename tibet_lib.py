@@ -382,7 +382,6 @@ def get_spend_bundle_cost_and_fees(sb: SpendBundle):
     npc_result: NPCResult = get_name_puzzle_conditions(
         program,
         INFINITE_COST,
-        height=DEFAULT_CONSTANTS.SOFT_FORK2_HEIGHT,
         mempool_mode=True,
         constants=DEFAULT_CONSTANTS,
     )
