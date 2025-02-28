@@ -531,6 +531,62 @@ async def create_offer_endpoint(pair_id: str,
         pass
     return response
 
+@app.post("/pair/{asset_id}", response_model=schemas.CreatePairResponse)
+async def create_pair_endpoint(asset_id: str,
+                                offer: str = Body(...),
+                                xch_liquidity: int = Body(1),
+                                token_liquidity: int = Body(1),
+                                liquidity_destination_address: str = Body(""),
+                                db: Session = Depends(get_db)):
+
+    router_instance = await get_router(True)
+    pair = await get_pair(db, asset_id)
+    if pair is not None:
+        return schemas.CreatePairResponse(success=False, message="Pair for asset already exists", coin_id="")
+
+    try:
+        client = await get_client()
+
+        current_router_coin, latest_creation_spend, pairs = await sync_router(
+            client, bytes.fromhex(router_instance.current_id)
+        )
+
+        sb = await create_pair_with_liquidity(
+            bytes.fromhex(asset_id),
+            offer,
+            int(xch_liquidity),
+            int(token_liquidity),
+            liquidity_destination_address,
+            bytes.fromhex(router_instance.launcher_id),
+            current_router_coin,
+            latest_creation_spend
+        )
+
+        try:
+            resp = await client.push_tx(sb)
+        except Exception as e:
+            resp = {}
+            resp['status'] = 'FAILED'
+            resp['message'] = json.dumps({
+                "traceback": traceback.format_exc(),
+            })
+        
+        return schemas.CreatePairResponse(
+            success=resp['status'] == 'SUCCESS',
+            message=json.dumps(resp),
+            coin_id=sb.coin_spends[-1].name().hex()
+        )
+    except Exception as e:
+        traceback_message = traceback.format_exc()
+        
+        return schemas.CreatePairResponse(
+            success=False,
+            message=json.dumps({
+                "traceback": traceback_message
+            }),
+            coin_id=""
+        )
+
 
 @app.get("/")
 async def root():

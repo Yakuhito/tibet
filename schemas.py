@@ -52,6 +52,11 @@ class OfferResponse(BaseModel):
     message: str
     offer_id: str
 
+class CreatePairResponse(BaseModel):
+    success: bool
+    message: str
+    coin_id: str
+
 class ActionType(Enum):
     SWAP = "SWAP"
     ADD_LIQUIDITY = "ADD_LIQUIDITY"
