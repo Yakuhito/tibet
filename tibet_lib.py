@@ -6,6 +6,8 @@ import requests
 from pathlib import Path
 from secrets import token_bytes
 from typing import List
+import inspect
+from chia.util.condition_tools import pkm_pairs_for_conditions_dict
 from chia.util.keychain import bytes_to_mnemonic, mnemonic_to_seed
 from chia_rs import AugSchemeMPL, PrivateKey
 from cdv.cmds.rpc import get_client
@@ -70,7 +72,6 @@ from chia.wallet.puzzles.singleton_top_layer_v1_1 import \
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import puzzle_for_singleton
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import solution_for_singleton
 from chia.wallet.puzzles.tails import GenesisById
-from chia.wallet.sign_coin_spends import sign_coin_spends
 from chia.wallet.trading.offer import OFFER_MOD
 from chia.wallet.trading.offer import OFFER_MOD_HASH
 from chia.wallet.trading.offer import Offer

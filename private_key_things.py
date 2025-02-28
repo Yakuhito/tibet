@@ -2,9 +2,10 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import List
-
-from chia_rs import AugSchemeMPL, PrivateKey
+from typing import List, Any, Callable
+import inspect
+from chia.util.condition_tools import pkm_pairs_for_conditions_dict
+from chia_rs import AugSchemeMPL, PrivateKey, G1Element, G2Element
 from cdv.cmds.rpc import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
@@ -41,7 +42,6 @@ from chia.wallet.puzzles.singleton_top_layer_v1_1 import (
     launch_conditions_and_coinsol, lineage_proof_for_coinsol,
     pay_to_singleton_puzzle, puzzle_for_singleton, solution_for_singleton)
 from chia.wallet.puzzles.tails import GenesisById
-from chia.wallet.sign_coin_spends import sign_coin_spends
 from chia.wallet.trading.offer import OFFER_MOD, OFFER_MOD_HASH, Offer
 from chia.wallet.util.puzzle_compression import (
     compress_object_with_puzzles,
@@ -79,6 +79,43 @@ async def get_standard_coin_puzzle(wallet_client, std_coin):
 
     return None
 
+
+async def sign_coin_spends(
+    coin_spends: List[CoinSpend],
+    secret_key_for_public_key_f: Any,  # Potentially awaitable function from G1Element => Optional[PrivateKey]
+    secret_key_for_puzzle_hash: Any,  # Potentially awaitable function from bytes32 => Optional[PrivateKey]
+    additional_data: bytes,
+    max_cost: int,
+    potential_derivation_functions: List[Callable[[G1Element], bytes32]],
+) -> SpendBundle:
+    signatures: List[G2Element] = []
+    pk_list: List[G1Element] = []
+    msg_list: List[bytes] = []
+    for coin_spend in coin_spends:
+        conditions_dict = conditions_dict_for_solution(coin_spend.puzzle_reveal, coin_spend.solution, max_cost)
+        for pk_bytes, msg in pkm_pairs_for_conditions_dict(conditions_dict, coin_spend.coin, additional_data):
+            pk = G1Element.from_bytes(pk_bytes)
+            pk_list.append(pk)
+            msg_list.append(msg)
+            if inspect.iscoroutinefunction(secret_key_for_public_key_f):
+                secret_key = await secret_key_for_public_key_f(pk)
+            else:
+                secret_key = secret_key_for_public_key_f(pk)
+            if secret_key is None or secret_key.get_g1() != pk:
+                for derive in potential_derivation_functions:
+                    if inspect.iscoroutinefunction(secret_key_for_puzzle_hash):
+                        secret_key = await secret_key_for_puzzle_hash(derive(pk))
+                    else:
+                        secret_key = secret_key_for_puzzle_hash(derive(pk))
+                    if secret_key is not None and secret_key.get_g1() == pk:
+                        break
+                else:
+                    raise ValueError(f"no secret key for {pk}")
+            signature = AugSchemeMPL.sign(secret_key, msg)
+            signatures.append(signature)
+
+    aggsig = AugSchemeMPL.aggregate(signatures)
+    return SpendBundle(coin_spends, aggsig)
 
 async def sign_spend_bundle(wallet_client, sb, additional_data=DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA, no_max_keys=1):
     master_sk = await get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client)
