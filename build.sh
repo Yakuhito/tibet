@@ -9,6 +9,8 @@ puzzles=(
     "add_liquidity"
     "remove_liquidity"
     "swap"
+    "v2r_router"
+    "v2r_pair_inner_puzzle"
 )
 
 for puzzle in ${puzzles[@]}; do
