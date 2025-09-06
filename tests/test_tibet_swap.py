@@ -120,7 +120,6 @@ class TestTibetSwap:
             wallet_makers.append(wallet_maker)
         
             wallet_master_sk = wallet_node_maker.wallet_state_manager.get_master_private_key()
-            print('wallet master sk', wallet_master_sk) # todo: debug
             ph_maker = WalletTool(bt.constants, wallet_master_sk).get_new_puzzlehash()
             
             wallet_node_maker.config["trusted_peers"] = {
@@ -241,7 +240,6 @@ class TestTibetSwap:
         )
         await self.wait_for_wallet_sync(wallet_client)
         spendable_coins = await wallet_client.get_spendable_coins(1, coin_selection_config) # wallet id 1
-        print(spendable_coins) # todo: debug
         
         coin_puzzle = None
         index = 0
@@ -256,7 +254,6 @@ class TestTibetSwap:
             except:
                 await self.wait_for_wallet_sync(wallet_client)
                 spendable_coins = await wallet_client.get_spendable_coins(1, coin_selection_config) # wallet id 1
-                print(spendable_coins) # todo: debug
                 index = 0
                 retries += 1
                 if retries > 3:

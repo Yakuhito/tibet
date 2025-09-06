@@ -33,8 +33,9 @@ from chia.wallet.lineage_proof import LineageProof
 from chia.wallet.puzzles.load_clvm import load_clvm
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import (
-    DEFAULT_HIDDEN_PUZZLE_HASH, calculate_synthetic_secret_key, puzzle_for_pk,
-    puzzle_for_synthetic_public_key, solution_for_delegated_puzzle)
+    DEFAULT_HIDDEN_PUZZLE_HASH, calculate_synthetic_public_key, puzzle_for_pk,
+    puzzle_for_synthetic_public_key, solution_for_delegated_puzzle,
+    calculate_synthetic_secret_key)
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import (
     P2_SINGLETON_MOD, SINGLETON_LAUNCHER, SINGLETON_LAUNCHER_HASH,
     SINGLETON_MOD, SINGLETON_MOD_HASH, generate_launcher_coin,
@@ -55,29 +56,24 @@ async def get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client):
     fingerprint = await wallet_client.get_logged_in_fingerprint()
 
     sk_resp = await wallet_client.get_private_key(fingerprint)
-    print(sk_resp)
-    sk_hex = sk_resp['sk']
-    if sk_hex.startswith("0x"):
-        sk_hex = sk_hex[2:]
-    return PrivateKey.from_bytes(bytes.fromhex(sk_hex))
+    return sk_resp.private_key.sk
 
 
 async def get_standard_coin_puzzle(wallet_client, std_coin):
-    print("here but maybe cannot find it") # todo: debug
     master_sk = await get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client)
 
     i = 0
     while i < 10000:
-        wallet_sk = master_sk_to_wallet_sk(master_sk, i)
-        wallet_sk_unhardened = master_sk_to_wallet_sk_unhardened(master_sk, i)
-        possible_sks = [
-            wallet_sk,
-            calculate_synthetic_secret_key(wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH),
-            wallet_sk_unhardened,
-            calculate_synthetic_secret_key(wallet_sk_unhardened, DEFAULT_HIDDEN_PUZZLE_HASH),
+        wallet_pk = master_sk_to_wallet_sk(master_sk, i).get_g1()
+        wallet_pk_unhardened = master_sk_to_wallet_sk_unhardened(master_sk, i).get_g1()
+        possible_pks = [
+            wallet_pk,
+            calculate_synthetic_public_key(wallet_pk, DEFAULT_HIDDEN_PUZZLE_HASH),
+            wallet_pk_unhardened,
+            calculate_synthetic_public_key(wallet_pk_unhardened, DEFAULT_HIDDEN_PUZZLE_HASH),
         ]
-        for possible_sk in possible_sks:
-            puzzle = puzzle_for_synthetic_public_key(possible_sk.get_g1())
+        for possible_pk in possible_pks:
+            puzzle = puzzle_for_synthetic_public_key(possible_pk)
             puzzle_hash = puzzle.get_tree_hash()
             if puzzle_hash == std_coin.puzzle_hash:
                 return puzzle
@@ -100,8 +96,7 @@ async def sign_coin_spends(
     msg_list: List[bytes] = []
     for coin_spend in coin_spends:
         conditions_dict = conditions_dict_for_solution(coin_spend.puzzle_reveal, coin_spend.solution, max_cost)
-        for pk_bytes, msg in pkm_pairs_for_conditions_dict(conditions_dict, coin_spend.coin, additional_data):
-            pk = G1Element.from_bytes(pk_bytes)
+        for pk, msg in pkm_pairs_for_conditions_dict(conditions_dict, coin_spend.coin, additional_data):
             pk_list.append(pk)
             msg_list.append(msg)
             if inspect.iscoroutinefunction(secret_key_for_public_key_f):
@@ -131,7 +126,7 @@ async def sign_spend_bundle(wallet_client, sb, additional_data=DEFAULT_CONSTANTS
     keys_used = 0
     i = 0
     while i < 10000:
-        wallet_sk = master_sk_to_wallet_sk_unhardened(master_sk, i)
+        wallet_sk = master_sk_to_wallet_sk(master_sk, i)
         synth_secret_key = calculate_synthetic_secret_key(
             wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
         synth_key = synth_secret_key.get_g1()
