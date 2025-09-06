@@ -6,7 +6,7 @@ from typing import List, Any, Callable
 import inspect
 from chia.util.condition_tools import pkm_pairs_for_conditions_dict
 from chia_rs import AugSchemeMPL, PrivateKey, G1Element, G2Element
-from cdv.cmds.rpc import get_client
+from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
 from chia.rpc.wallet_rpc_client import WalletRpcClient

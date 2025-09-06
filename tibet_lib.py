@@ -10,7 +10,7 @@ import inspect
 from chia.util.condition_tools import pkm_pairs_for_conditions_dict
 from chia.util.keychain import bytes_to_mnemonic, mnemonic_to_seed
 from chia_rs import AugSchemeMPL, PrivateKey
-from cdv.cmds.rpc import get_client
+from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.rpc.full_node_rpc_client import FullNodeRpcClient
 from chia.rpc.wallet_rpc_client import WalletRpcClient
@@ -84,7 +84,7 @@ from clvm.casts import int_to_bytes
 from clvm import SExp
 
 from leaflet_client import LeafletFullNodeRpcClient
-from cic import build_merkle_tree
+from cic_replacement import build_merkle_tree
 from chia.full_node.bundle_tools import simple_solution_generator
 from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
 from private_key_things import sign_spend_bundle_with_specific_sk
