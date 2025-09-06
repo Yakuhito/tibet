@@ -85,7 +85,7 @@ from secrets import token_bytes
 class TestTibetSwap:
     async def wait_for_wallet_sync(self, wallet_client):
         sync_resp = await wallet_client.get_sync_status()
-        while not sync_resp.synced:
+        while not sync_resp.synced or sync_resp.syncing or not sync_resp.genesis_initialized:
             time.sleep(0.5)
             sync_resp = await wallet_client.get_sync_status()
 
@@ -231,7 +231,13 @@ class TestTibetSwap:
 
 
     async def select_standard_coin_and_puzzle(self, wallet_client, amount):
-        coin_selection_config = CoinSelectionConfig(amount, uint64.MAXIMUM, [], [])
+        coin_selection_config = CoinSelectionConfig(
+            min_coin_amount=amount - 1,
+            max_coin_amount=uint64.MAXIMUM,
+            excluded_coin_amounts=[amount - 1],
+            excluded_coin_ids=[]
+        )
+        await self.wait_for_wallet_sync(wallet_client)
         spendable_coins = await wallet_client.get_spendable_coins(1, coin_selection_config) # wallet id 1
         
         coin_puzzle = None
@@ -241,9 +247,11 @@ class TestTibetSwap:
         while coin_puzzle is None:
             try:
                 coin = spendable_coins[0][index].coin
+                await self.wait_for_wallet_sync(wallet_client)
                 coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
                 index += 1
             except:
+                await self.wait_for_wallet_sync(wallet_client)
                 spendable_coins = await wallet_client.get_spendable_coins(1, coin_selection_config) # wallet id 1
                 index = 0
                 retries += 1
