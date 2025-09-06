@@ -33,8 +33,7 @@ jobs:
         cache: 'pip'
 
     - name: Install other required libraries
-      run: python3 -m pip install -r requirements.txt
-      run: python3 -m pip install -r requirements-testing.txt
+      run: python3 -m pip install -r requirements.txt && python3 -m pip install -r requirements-testing.txt
 
     - name: Test code with pytest
       run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
