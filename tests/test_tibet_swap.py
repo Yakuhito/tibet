@@ -164,7 +164,7 @@ class TestTibetSwap:
                 lambda x: None,  # type: ignore
                 bt.root_path,
                 config,
-                config['wallet'],
+                config['full_node'],
                 connect_to_daemon=False,
             )
             rpc_server_makers.append(rpc_server_maker)
@@ -291,7 +291,7 @@ class TestTibetSwap:
         tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
-        await wallet_client.push_tx(signed_sb)
+        await wallet_client.push_tx(PushTX(signed_sb))
         await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(tail_hash)) # create wallet
 
         return bytes.fromhex(tail_hash)
@@ -367,6 +367,7 @@ class TestTibetSwap:
             wallet_id = await self.get_wallet_id_for_cat(wallet_client, tail_hash_or_none)
 
         resp = await wallet_client.get_wallet_balance(wallet_id)
+        print(resp) # todo: debug
         return resp["spendable_balance"]
 
 
@@ -469,7 +470,9 @@ class TestTibetSwap:
         
         await self.wait_for_wallet_sync(wallet_client)
         print("-4") # todo: debug
+        print(await full_node_client.get_blockchain_state()) # todo: debug
         token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, 0, token_total_supply)
+        print(await full_node_client.get_blockchain_state()) # todo: debug
         print("-3") # todo: debug
         assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash)) == 0
 
