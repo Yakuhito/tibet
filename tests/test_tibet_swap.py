@@ -293,8 +293,6 @@ class TestTibetSwap:
         assert((await full_node_client.push_tx(signed_sb))["success"])
         await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(tail_hash)) # create wallet
 
-        print("tail hash ser", tail_hash) # todo: debug
-
         return bytes.fromhex(tail_hash)
 
 
@@ -368,7 +366,6 @@ class TestTibetSwap:
             wallet_id = await self.get_wallet_id_for_cat(wallet_client, tail_hash_or_none)
 
         resp = await wallet_client.get_wallet_balance(wallet_id)
-        print(resp) # todo: debug
         return resp["spendable_balance"]
 
 
@@ -470,16 +467,10 @@ class TestTibetSwap:
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(pair_launcher_id).get_tree_hash()
         
         await self.wait_for_wallet_sync(wallet_client)
-        print("-4") # todo: debug
-        print(await full_node_client.get_blockchain_state()) # todo: debug
         token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, 0, token_total_supply)
-        print(await full_node_client.get_blockchain_state()) # todo: debug
-        print("-3") # todo: debug
         assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash)) == 0
 
-        print("-2") # todo: debug
         xch_balance_before_all_ops = xch_balance_before = await self.get_balance(wallet_client)
-        print("-1") # todo: debug
 
         # 1. Deposit liquidity: 1000 CAT mojos and 100000000 mojos
         # python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id] --push-tx
@@ -533,15 +524,11 @@ class TestTibetSwap:
         assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
-        print("1") # todo: debug
         xch_balance_now = await self.get_balance(wallet_client)
-        print("2") # todo: debug
         assert xch_balance_before - xch_balance_now == xch_amount + liquidity_token_amount
 
         token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_total_supply, -token_amount)
-        print("3") # todo: debug
         await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, 0, liquidity_token_amount)
-        print("4") # todo: debug
 
         # 2. Deposit moar liquidity (worth 4000 tokens, so 4000 token mojos and 100000000 mojos)
         # python3 tibet.py deposit-liquidity --token-amount 4000 --asset-id [asset_id] --push-tx
