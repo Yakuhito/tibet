@@ -121,7 +121,6 @@ class TestTibetSwap:
         
             wallet_master_sk = wallet_node_maker.wallet_state_manager.get_master_private_key()
             ph_maker = WalletTool(bt.constants, wallet_master_sk).get_new_puzzlehash()
-            await wallet_node_maker.wallet_state_manager.create_more_puzzle_hashes(num_additional_phs=1)
             
             wallet_node_maker.config["trusted_peers"] = {
                 full_node_api.full_node.server.node_id.hex(): full_node_api.full_node.server.node_id.hex()
@@ -172,6 +171,7 @@ class TestTibetSwap:
             client_maker: WalletRpcClient = await WalletRpcClient.create(
                 self_hostname, rpc_server_maker.listen_port, bt.root_path, config
             )
+            client_maker.get_next_address(1, True)
             client_makers.append(client_maker)
 
         client_node: SimulatorFullNodeRpcClient = await SimulatorFullNodeRpcClient.create(
@@ -240,6 +240,7 @@ class TestTibetSwap:
         )
         await self.wait_for_wallet_sync(wallet_client)
         spendable_coins = await wallet_client.get_spendable_coins(1, coin_selection_config) # wallet id 1
+        print(spendable_coins) # todo: debug
         
         coin_puzzle = None
         index = 0
@@ -254,6 +255,7 @@ class TestTibetSwap:
             except:
                 await self.wait_for_wallet_sync(wallet_client)
                 spendable_coins = await wallet_client.get_spendable_coins(1, coin_selection_config) # wallet id 1
+                print(spendable_coins) # todo: debug
                 index = 0
                 retries += 1
                 if retries > 3:

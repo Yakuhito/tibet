@@ -28,7 +28,7 @@ from chia.wallet.cat_wallet.cat_utils import (
     construct_cat_puzzle,
     unsigned_spend_bundle_for_spendable_cats,
 )
-from chia.wallet.derive_keys import master_sk_to_wallet_sk_unhardened
+from chia.wallet.derive_keys import master_sk_to_wallet_sk, master_sk_to_wallet_sk_unhardened
 from chia.wallet.lineage_proof import LineageProof
 from chia.wallet.puzzles.load_clvm import load_clvm
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
@@ -62,7 +62,20 @@ async def get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client):
 
 
 async def get_standard_coin_puzzle(wallet_client, std_coin):
+    print("here but maybe cannot find it") # todo: debug
     master_sk = await get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client)
+
+    i = 0
+    while i < 10000:
+        wallet_sk = master_sk_to_wallet_sk(master_sk, i)
+        synth_secret_key = calculate_synthetic_secret_key(
+            wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
+        synth_key = synth_secret_key.get_g1()
+        puzzle = puzzle_for_synthetic_public_key(synth_key)
+        puzzle_hash = puzzle.get_tree_hash()
+        if puzzle_hash == std_coin.puzzle_hash:
+            return puzzle
+        i += 1
 
     i = 0
     while i < 10000:
