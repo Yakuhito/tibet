@@ -33,7 +33,7 @@ from chia.util.hash import std_hash
 from chia_rs.sized_ints import uint16, uint32, uint64
 from chia.wallet.cat_wallet.cat_utils import SpendableCAT
 from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
-from chia.wallet.cat_wallet.cat_utils import get_innerpuzzle_from_puzzle
+from chia.wallet.cat_wallet.cat_utils import get_innerpuzzle_from_puzzle as actual_get_innerpuzzle_from_puzzle
 from chia.wallet.cat_wallet.cat_utils import \
     unsigned_spend_bundle_for_spendable_cats
 from chia.wallet.derive_keys import master_sk_to_wallet_sk_unhardened
@@ -642,8 +642,14 @@ async def sync_pair(full_node_client, last_synced_coin_id):
     if creation_spend.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH:
         return last_synced_coin, creation_spend, state, None, last_synced_coin.name()
 
-    old_state = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[
-        1].at("rrf")
+    old_state = None
+    try:
+        old_state = creation_spend.puzzle_reveal.uncurry()[1].at("rf").uncurry()[
+            1].at("rrf")
+    except:
+        old_state = Program.from_bytes(creation_spend.puzzle_reveal.to_bytes()).uncurry()[1].at("rf").uncurry()[
+            1].at("rrf")
+        
     p2_merkle_solution = creation_spend.solution.to_program().at("rrf")
     # p2_merkle_tree_modified -> parameters (which is a puzzle)
     new_state_puzzle = p2_merkle_solution.at("f")
@@ -758,6 +764,13 @@ def get_announcements_asserts_for_notarized_payments(not_payments, puzzle_hash=O
 
     return announcement_asserts
 
+
+# Yak fix
+def get_innerpuzzle_from_puzzle(puzzle):
+    try:
+        return actual_get_innerpuzzle_from_puzzle(puzzle)
+    except:
+        return actual_get_innerpuzzle_from_puzzle(Program.from_bytes(puzzle.to_bytes()))
 
 async def respond_to_deposit_liquidity_offer(
     pair_launcher_id,
@@ -889,8 +902,7 @@ async def respond_to_deposit_liquidity_offer(
             eph_token_coin_inner_solution,
             lineage_proof=LineageProof(
                 eph_token_coin_creation_spend.coin.parent_coin_info,
-                get_innerpuzzle_from_puzzle(
-                    eph_token_coin_creation_spend.puzzle_reveal).get_tree_hash(),
+                get_innerpuzzle_from_puzzle(eph_token_coin_creation_spend.puzzle_reveal).get_tree_hash(),
                 eph_token_coin_creation_spend.coin.amount
             )
         )
