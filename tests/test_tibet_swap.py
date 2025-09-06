@@ -179,7 +179,7 @@ class TestTibetSwap:
             client_maker: WalletRpcClient = await WalletRpcClient.create(
                 self_hostname, rpc_server_maker.listen_port, bt.root_path, config
             )
-            client_maker.get_next_address(1, True)
+            await client_maker.get_next_address(1, True)
             client_makers.append(client_maker)
 
         client_node: SimulatorFullNodeRpcClient = await SimulatorFullNodeRpcClient.create(

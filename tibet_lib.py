@@ -497,7 +497,12 @@ async def sync_router(full_node_client, last_router_id):
         )
 
         if coin_record.coin.puzzle_hash != SINGLETON_LAUNCHER_HASH:
-            solution_program = creation_spend.solution.to_program()
+            solution_program = None
+            try:
+                solution_program = creation_spend.solution.to_program()
+            except:
+                solution_program = Program.from_bytes(creation_spend.solution.to_bytes())
+
             tail_hash = [_ for _ in solution_program.as_iter()
                          ][-1].as_python()[-1]
 
@@ -650,7 +655,12 @@ async def sync_pair(full_node_client, last_synced_coin_id):
         old_state = Program.from_bytes(creation_spend.puzzle_reveal.to_bytes()).uncurry()[1].at("rf").uncurry()[
             1].at("rrf")
         
-    p2_merkle_solution = creation_spend.solution.to_program().at("rrf")
+    p2_merkle_solution = None
+    try:
+        p2_merkle_solution = creation_spend.solution.to_program().at("rrf")
+    except:
+        p2_merkle_solution = Program.from_bytes(creation_spend.solution.to_bytes()).at("rrf")
+
     # p2_merkle_tree_modified -> parameters (which is a puzzle)
     new_state_puzzle = p2_merkle_solution.at("f")
     params = p2_merkle_solution.at("rrf").at("r")
