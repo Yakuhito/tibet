@@ -14,6 +14,7 @@ from chia_rs import AugSchemeMPL, PrivateKey, Coin, SpendBundle
 from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.simulator.block_tools import test_constants
+from chia.simulator.wallet_tools import WalletTool
 from chia.full_node.full_node_rpc_client import FullNodeRpcClient
 from chia.wallet.wallet_rpc_client import WalletRpcClient
 from chia.simulator.simulator_full_node_rpc_client import \
@@ -117,7 +118,8 @@ class TestTibetSwap:
             wallet_maker: Wallet = wallet_node_maker.wallet_state_manager.main_wallet
             wallet_makers.append(wallet_maker)
         
-            ph_maker = await wallet_maker.get_new_puzzlehash()
+            wallet_master_sk = wallet_node_maker.wallet_state_manager.get_master_private_key()
+            ph_maker = WalletTool(test_constants, wallet_master_sk).get_new_puzzlehash()
             
             wallet_node_maker.config["trusted_peers"] = {
                 full_node_api.full_node.server.node_id.hex(): full_node_api.full_node.server.node_id.hex()
