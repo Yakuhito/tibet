@@ -1,2 +1,2 @@
-requests
-chia-blockchain
+requests==2.32.5
+chia-blockchain==2.5.5
