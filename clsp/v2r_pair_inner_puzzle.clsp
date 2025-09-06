@@ -1,8 +1,8 @@
-; the code that
+; V2 pair (rCAT version) inner puzzle
 ; author: yakuhito
 
 ; modeled after https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy
-;; structure: singleton_top_layer_v1_1 -> p2_merkle_tree -> this puzzle
+;; structure of a pair: singleton_top_layer_v1_1 -> p2_merkle_tree -> this puzzle
 
 (mod (
         ; curried in - these will not change with spends
@@ -11,6 +11,8 @@
             ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
         P2_SINGLETON_FLASHLOAN_MOD_HASH ; sha256tree of the p2_singleton_flashloan module (uncurried)
         CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
+        REVOCATION_LAYER_MOD_HASH ; sha256tree of the revocation_layer module (uncurried)
+        HIDDEN_PUZZLE_HASH ; sha256 of the hidden puzzle (uncurried)
         SETTLEMENT_PAYMENTS_MOD_HASH ; sha256 tree of settlement_payments.clvm (not that it has any curried arguments, but still)
 
         TAIL_HASH ; identifies the token this pair holds
@@ -76,7 +78,11 @@
         (list
             ASSERT_PUZZLE_ANNOUNCEMENT
             (sha256
-                (cat_puzzle_hash CAT_MOD_HASH TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH)
+                (curry_hashes_inline REVOCATION_LAYER_MOD_HASH
+                    (sha256tree REVOCATION_LAYER_MOD_HASH)
+                    (sha256tree HIDDEN_PUZZLE_HASH)
+                    (sha256tree (cat_puzzle_hash CAT_MOD_HASH TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH))
+                )
                 (settlement_cat_announcement
                     my_coin_id
                     amount
