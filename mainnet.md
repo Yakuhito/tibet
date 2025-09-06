@@ -1,13 +1,13 @@
 # CLI on mainnet
 
+Note: Currently, the CLI uses python3.10 as it needs the `chia-blockchain` package.
+
 Install the required packages:
 
 ```bash
 python3 -m venv venv
 . ./venv/bin/activate
 pip install -r requirements.txt
-pip install --extra-index-url https://pypi.chia.net/simple/ chia-internal-custody
-pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools
 ```
 
 Next, you'll have to ensure that you're on mainnet. If you're on testnet, here's how to switch back to mainnet:
