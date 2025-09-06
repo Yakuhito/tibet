@@ -23,6 +23,9 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
+    - name: Create 'test-plots' directory
+      run: mkdir -p ~/.chia/test-plots
+
     - name: Cache 'test-plots' Directory
       uses: actions/cache@v4
       with:
