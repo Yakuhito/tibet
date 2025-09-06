@@ -1,7 +1,5 @@
 # CLI on mainnet
 
-Note: Currently, the CLI uses python3.10 as it needs the `chia-blockchain` package.
-
 Install the required packages:
 
 ```bash

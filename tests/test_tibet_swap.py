@@ -13,15 +13,13 @@ from typing import List
 from chia_rs import AugSchemeMPL, PrivateKey, Coin, SpendBundle
 from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
+from chia.simulator.block_tools import test_constants
 from chia.full_node.full_node_rpc_client import FullNodeRpcClient
 from chia.wallet.wallet_rpc_client import WalletRpcClient
 from chia.simulator.simulator_full_node_rpc_client import \
     SimulatorFullNodeRpcClient
 from chia.types.blockchain_format.program import (INFINITE_COST, Program)
-try:
-    from chia.types.blockchain_format.serialized_program import SerializedProgram
-except:
-    from chia.types.blockchain_format.program import SerializedProgram
+from chia._tests.cmds.cmd_test_utils import TestWalletRpcClient
 from chia_rs.sized_bytes import bytes32
 from chia.types.coin_spend import CoinSpend
 from chia.types.condition_opcodes import ConditionOpcode
@@ -88,20 +86,18 @@ class TestTibetSwap:
         while not synced:
             time.sleep(0.5)
             synced = await wallet_client.get_synced()
-            
 
+    @pytest_asyncio.fixture(scope="function")
+    async def node_and_wallets(self):
+        async with setup_simulators_and_wallets(1, 2, test_constants) as sims:
+            yield sims
+    
     # thank you trepca for this function!
     @pytest_asyncio.fixture(scope="function")
-    async def node_and_wallet(self):
-        async with setup_simulators_and_wallets(1, 2, {}) as sims:
-            for _ in sims:
-                yield _
-
-
-    # thank you trepca for this function!
-    @pytest_asyncio.fixture(scope="function")
-    async def setup(self, node_and_wallet):
-        full_nodes, wallets, bt = node_and_wallet
+    async def setup(self, node_and_wallets):
+        full_nodes = node_and_wallets.simulators
+        wallets = node_and_wallets.wallets
+        bt = node_and_wallets.bt
         assert len(wallets) == 2
     
         full_node_api: FullNodeSimulator = full_nodes[0]
