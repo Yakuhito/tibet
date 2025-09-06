@@ -1,6 +1,5 @@
 ```bash
-# environment stuff
-# python3 -m venv venv + install
+# python3 -m venv venv
 . ./venv/bin/activate
 export CHIA_ROOT=~/.chia/simulator/main
 pip install -r requirements.txt
@@ -23,6 +22,8 @@ python3 tibet.py test-node-config
 
 python3 tibet.py launch-router
 python3 tibet.py launch-router --push-tx
+python3 tibet.py launch-rcat-router
+python3 tibet.py launch-rcat-router --push-tx
 
 python3 tibet.py launch-test-token # take note of asset_id
 python3 tibet.py launch-test-token --push-tx
@@ -31,6 +32,15 @@ python3 tibet.py create-pair --asset-id [asset_id]
 python3 tibet.py create-pair --push-tx --asset-id [asset_id]
 
 python3 tibet.py sync-pairs
+
+python3 tibet.py create-pair --asset-id [asset_id]
+python3 tibet.py create-pair --push-tx --asset-id [asset_id]
+
+python3 tibet.py launch-test-rcat-token --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 # take note of asset_id
+python3 tibet.py launch-test-rcat-token --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 --push-tx
+
+python3 tibet.py create-rcat-pair --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 --asset-id [asset_id]
+python3 tibet.py create-rcat-pair --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 --push-tx --asset-id [asset_id]
 
 # running one of the following commands will generate an offer
 # that is not cancelled even if --push-tx was not used
