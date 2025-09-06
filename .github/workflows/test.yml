@@ -23,8 +23,12 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    - name: Create 'test-plots' Directory
-      run: mkdir -p ~/.chia/test-plots
+    - name: Cache 'test-plots' Directory
+      uses: actions/cache@v4
+      with:
+        path: ~/.chia/test-plots
+        key: test-plots
+        restore-keys: test-plots
 
     - name: Setup python3.12
       uses: actions/setup-python@v6
