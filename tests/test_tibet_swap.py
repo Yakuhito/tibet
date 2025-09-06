@@ -121,6 +121,7 @@ class TestTibetSwap:
         
             wallet_master_sk = wallet_node_maker.wallet_state_manager.get_master_private_key()
             ph_maker = WalletTool(bt.constants, wallet_master_sk).get_new_puzzlehash()
+            await wallet_node_maker.wallet_state_manager.create_more_puzzle_hashes(num_additional_phs=1)
             
             wallet_node_maker.config["trusted_peers"] = {
                 full_node_api.full_node.server.node_id.hex(): full_node_api.full_node.server.node_id.hex()
