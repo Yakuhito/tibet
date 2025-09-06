@@ -83,10 +83,10 @@ from secrets import token_bytes
 
 class TestTibetSwap:
     async def wait_for_wallet_sync(self, wallet_client):
-        synced = await wallet_client.get_synced()
-        while not synced:
+        sync_resp = await wallet_client.get_sync_status()
+        while not sync_resp.synced:
             time.sleep(0.5)
-            synced = await wallet_client.get_synced()
+            sync_resp = await wallet_client.get_sync_status()
 
     @pytest_asyncio.fixture(scope="function")
     async def node_and_wallets(self):
