@@ -8,8 +8,8 @@ from chia.util.condition_tools import pkm_pairs_for_conditions_dict
 from chia_rs import AugSchemeMPL, PrivateKey, G1Element, G2Element
 from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
-from chia.rpc.full_node_rpc_client import FullNodeRpcClient
-from chia.rpc.wallet_rpc_client import WalletRpcClient
+from chia.full_node.full_node_rpc_client import FullNodeRpcClient
+from chia.wallet.wallet_rpc_client import WalletRpcClient
 from chia.simulator.simulator_full_node_rpc_client import \
     SimulatorFullNodeRpcClient
 from chia.types.blockchain_format.coin import Coin

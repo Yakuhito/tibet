@@ -12,8 +12,8 @@ from chia.util.keychain import bytes_to_mnemonic, mnemonic_to_seed
 from chia_rs import AugSchemeMPL, PrivateKey
 from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
-from chia.rpc.full_node_rpc_client import FullNodeRpcClient
-from chia.rpc.wallet_rpc_client import WalletRpcClient
+from chia.full_node.full_node_rpc_client import FullNodeRpcClient
+from chia.wallet.wallet_rpc_client import WalletRpcClient
 from chia.simulator.simulator_full_node_rpc_client import \
     SimulatorFullNodeRpcClient
 from chia.types.blockchain_format.coin import Coin

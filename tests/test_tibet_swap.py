@@ -11,11 +11,10 @@ from pathlib import Path
 from typing import List
 
 from chia_rs import AugSchemeMPL, PrivateKey
-from cdv.cmds.rpc import get_client
-from cdv.test import setup as setup_test
+from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
-from chia.rpc.full_node_rpc_client import FullNodeRpcClient
-from chia.rpc.wallet_rpc_client import WalletRpcClient
+from chia.full_node.full_node_rpc_client import FullNodeRpcClient
+from chia.wallet.wallet_rpc_client import WalletRpcClient
 from chia.simulator.simulator_full_node_rpc_client import \
     SimulatorFullNodeRpcClient
 from chia.types.blockchain_format.coin import Coin
@@ -302,7 +301,7 @@ class TestTibetSwap:
     ):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, ROUTER_MIN_FEE + 2)
 
-        pair_launcher_id, sbm _a, _b = await create_pair_from_coin(
+        pair_launcher_id, sbm, _a, _b = await create_pair_from_coin(
             coin,
             coin_puzzle,
             tail_hash,

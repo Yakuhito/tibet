@@ -1,6 +1,6 @@
 # special thanks to the Goby team for this!
 import aiohttp
-from chia.rpc.full_node_rpc_client import FullNodeRpcClient
+from chia.full_node.full_node_rpc_client import FullNodeRpcClient
 import time
 import json
 import random
