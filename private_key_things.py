@@ -55,6 +55,7 @@ async def get_private_key_DO_NOT_CALL_OUTSIDE_THIS_FILE(wallet_client):
     fingerprint = await wallet_client.get_logged_in_fingerprint()
 
     sk_resp = await wallet_client.get_private_key(fingerprint)
+    print(sk_resp)
     sk_hex = sk_resp['sk']
     if sk_hex.startswith("0x"):
         sk_hex = sk_hex[2:]
@@ -68,25 +69,19 @@ async def get_standard_coin_puzzle(wallet_client, std_coin):
     i = 0
     while i < 10000:
         wallet_sk = master_sk_to_wallet_sk(master_sk, i)
-        synth_secret_key = calculate_synthetic_secret_key(
-            wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
-        synth_key = synth_secret_key.get_g1()
-        puzzle = puzzle_for_synthetic_public_key(synth_key)
-        puzzle_hash = puzzle.get_tree_hash()
-        if puzzle_hash == std_coin.puzzle_hash:
-            return puzzle
-        i += 1
-
-    i = 0
-    while i < 10000:
-        wallet_sk = master_sk_to_wallet_sk_unhardened(master_sk, i)
-        synth_secret_key = calculate_synthetic_secret_key(
-            wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
-        synth_key = synth_secret_key.get_g1()
-        puzzle = puzzle_for_synthetic_public_key(synth_key)
-        puzzle_hash = puzzle.get_tree_hash()
-        if puzzle_hash == std_coin.puzzle_hash:
-            return puzzle
+        wallet_sk_unhardened = master_sk_to_wallet_sk_unhardened(master_sk, i)
+        possible_sks = [
+            wallet_sk,
+            calculate_synthetic_secret_key(wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH),
+            wallet_sk_unhardened,
+            calculate_synthetic_secret_key(wallet_sk_unhardened, DEFAULT_HIDDEN_PUZZLE_HASH),
+        ]
+        for possible_sk in possible_sks:
+            puzzle = puzzle_for_synthetic_public_key(possible_sk.get_g1())
+            puzzle_hash = puzzle.get_tree_hash()
+            if puzzle_hash == std_coin.puzzle_hash:
+                return puzzle
+        
         i += 1
 
     return None

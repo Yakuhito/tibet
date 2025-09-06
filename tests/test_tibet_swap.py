@@ -120,6 +120,7 @@ class TestTibetSwap:
             wallet_makers.append(wallet_maker)
         
             wallet_master_sk = wallet_node_maker.wallet_state_manager.get_master_private_key()
+            print('wallet master sk', wallet_master_sk) # todo: debug
             ph_maker = WalletTool(bt.constants, wallet_master_sk).get_new_puzzlehash()
             
             wallet_node_maker.config["trusted_peers"] = {
