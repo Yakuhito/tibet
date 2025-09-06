@@ -80,7 +80,15 @@ from clvm import SExp
 from private_key_things import *
 from tibet_lib import *
 from secrets import token_bytes
+from chia.wallet.util.tx_config import TXConfig
 
+tx_config = TXConfig(
+    min_coin_amount=1,
+    max_coin_amount=1337 * 10 ** 15,
+    excluded_coin_amounts=[],
+    excluded_coin_ids=[],
+    reuse_puzhash=True
+)
 
 class TestTibetSwap:
     async def wait_for_wallet_sync(self, wallet_client):
@@ -485,8 +493,8 @@ class TestTibetSwap:
         offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
         offer_dict[token_wallet_id] = -token_amount
         offer_dict[liquidity_wallet_id] = liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         # get pair state, even though it's 0 - we need to test teh func-tion!
@@ -544,8 +552,8 @@ class TestTibetSwap:
         offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
         offer_dict[token_wallet_id] = -token_amount
         offer_dict[liquidity_wallet_id] = liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
@@ -601,8 +609,8 @@ class TestTibetSwap:
         offer_dict[1] = xch_amount + liquidity_token_amount # also ask for xch from liquidity cat burn
         offer_dict[token_wallet_id] = token_amount
         offer_dict[liquidity_wallet_id] = -liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
@@ -672,8 +680,8 @@ class TestTibetSwap:
         offer_dict = {}
         offer_dict[1] = -xch_amount # offer XCH
         offer_dict[token_wallet_id] = token_amount # ask for token
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         sb = await respond_to_swap_offer(
@@ -729,8 +737,8 @@ class TestTibetSwap:
         offer_dict = {}
         offer_dict[1] = xch_amount # ask for XCH
         offer_dict[token_wallet_id] = -token_amount # offer token
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         sb = await respond_to_swap_offer(
@@ -774,8 +782,8 @@ class TestTibetSwap:
         offer_dict[1] = xch_amount + liquidity_token_amount # also ask for xch from liquidity cat burn
         offer_dict[token_wallet_id] = token_amount
         offer_dict[liquidity_wallet_id] = -liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
@@ -852,8 +860,8 @@ class TestTibetSwap:
         offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
         offer_dict[token_wallet_id] = -token_amount
         offer_dict[liquidity_wallet_id] = liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         # get pair state, even though it's 0 - we need to test teh func-tion!
@@ -926,8 +934,8 @@ class TestTibetSwap:
         offer_dict = {}
         offer_dict[1] = -(xch_amount + xch_donation_amount) # offer XCH
         offer_dict[token_wallet_id] = token_amount # ask for token
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         first_donation_ph = b"\xd1" * 32
@@ -995,8 +1003,8 @@ class TestTibetSwap:
         offer_dict = {}
         offer_dict[1] = xch_amount - xch_donation_amount # ask for XCH
         offer_dict[token_wallet_id] = - token_amount # offer token
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict)
-        offer = offer_resp[0]
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
         offer_str = offer.to_bech32()
 
         third_donation_ph = b"\xd3" * 32
