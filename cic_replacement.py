@@ -1,11 +1,7 @@
-try:
-    from chia.types.blockchain_format.serialized_program import SerializedProgram
-except:
-    from chia.types.blockchain_format.program import SerializedProgram
 import hashlib
 from typing import List
 from chia.types.blockchain_format.program import Program
-from chia.types.blockchain_format.sized_bytes import bytes32
+from chia_rs.sized_bytes import bytes32
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import \
     SINGLETON_LAUNCHER_HASH
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import SINGLETON_MOD_HASH

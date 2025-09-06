@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 from typing import List, Any, Callable
 import inspect
-from chia.util.condition_tools import pkm_pairs_for_conditions_dict
-from chia_rs import AugSchemeMPL, PrivateKey, G1Element, G2Element
+from chia.consensus.condition_tools import pkm_pairs_for_conditions_dict
+from chia_rs import AugSchemeMPL, PrivateKey, G1Element, G2Element, SpendBundle
 from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.full_node.full_node_rpc_client import FullNodeRpcClient
@@ -14,16 +14,15 @@ from chia.simulator.simulator_full_node_rpc_client import \
     SimulatorFullNodeRpcClient
 from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import INFINITE_COST, Program
-from chia.types.blockchain_format.sized_bytes import bytes32
+from chia_rs.sized_bytes import bytes32
 from chia.types.coin_spend import CoinSpend, make_spend
 from chia.types.condition_opcodes import ConditionOpcode
-from chia.types.spend_bundle import SpendBundle
 from chia.util.bech32m import (bech32_decode, bech32_encode, convertbits,
                                decode_puzzle_hash, encode_puzzle_hash)
-from chia.util.condition_tools import conditions_dict_for_solution
+from chia.consensus.condition_tools import conditions_dict_for_solution
 from chia.util.config import load_config
 from chia.util.hash import std_hash
-from chia.util.ints import uint16, uint32, uint64
+from chia_rs.sized_ints import uint16, uint32, uint64
 from chia.wallet.cat_wallet.cat_utils import (
     SpendableCAT,
     construct_cat_puzzle,

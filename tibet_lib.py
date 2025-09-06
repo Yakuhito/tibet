@@ -7,38 +7,30 @@ from pathlib import Path
 from secrets import token_bytes
 from typing import List
 import inspect
-from chia.util.condition_tools import pkm_pairs_for_conditions_dict
+from chia.consensus.condition_tools import pkm_pairs_for_conditions_dict
 from chia.util.keychain import bytes_to_mnemonic, mnemonic_to_seed
-from chia_rs import AugSchemeMPL, PrivateKey
+from chia_rs import AugSchemeMPL, PrivateKey, Coin, SpendBundle
 from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.full_node.full_node_rpc_client import FullNodeRpcClient
 from chia.wallet.wallet_rpc_client import WalletRpcClient
 from chia.simulator.simulator_full_node_rpc_client import \
     SimulatorFullNodeRpcClient
-from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import INFINITE_COST
 from chia.types.blockchain_format.program import Program
-try:
-    from chia.types.blockchain_format.serialized_program import SerializedProgram
-except:
-    from chia.types.blockchain_format.program import SerializedProgram
-from chia.types.blockchain_format.sized_bytes import bytes32
+from chia_rs.sized_bytes import bytes32
 from chia.types.coin_spend import make_spend
 from chia.types.condition_opcodes import ConditionOpcode
-from chia.types.spend_bundle import SpendBundle
 from chia.util.bech32m import bech32_decode
 from chia.util.bech32m import bech32_encode
 from chia.util.bech32m import convertbits
 from chia.util.bech32m import decode_puzzle_hash
 from chia.util.bech32m import encode_puzzle_hash
-from chia.util.condition_tools import conditions_dict_for_solution
-from chia.util.condition_tools import conditions_for_solution
+from chia.consensus.condition_tools import conditions_dict_for_solution
+from chia.consensus.condition_tools import conditions_for_solution
 from chia.util.config import load_config
 from chia.util.hash import std_hash
-from chia.util.ints import uint16
-from chia.util.ints import uint32
-from chia.util.ints import uint64
+from chia_rs.sized_ints import uint16, uint32, uint64
 from chia.wallet.cat_wallet.cat_utils import SpendableCAT
 from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
 from chia.wallet.cat_wallet.cat_utils import get_innerpuzzle_from_puzzle
@@ -46,8 +38,7 @@ from chia.wallet.cat_wallet.cat_utils import \
     unsigned_spend_bundle_for_spendable_cats
 from chia.wallet.derive_keys import master_sk_to_wallet_sk_unhardened
 from chia.wallet.lineage_proof import LineageProof
-from chia.wallet.cat_wallet.cat_utils import CAT_MOD
-from chia.wallet.cat_wallet.cat_wallet import CAT_MOD_HASH
+from chia.wallet.cat_wallet.cat_utils import CAT_MOD, CAT_MOD_HASH
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
 from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import \
     DEFAULT_HIDDEN_PUZZLE_HASH
@@ -86,7 +77,7 @@ from clvm import SExp
 from leaflet_client import LeafletFullNodeRpcClient
 from cic_replacement import build_merkle_tree
 from chia.full_node.bundle_tools import simple_solution_generator
-from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
+from chia._tests.util.get_name_puzzle_conditions import get_name_puzzle_conditions
 from private_key_things import sign_spend_bundle_with_specific_sk
 
 MEMPOOL_MIN_FEE_INCREASE = uint64(10000000)
@@ -95,7 +86,7 @@ DEV_DEPLOYMENT_FEE = 420000000000
 
 
 def program_from_hex(h: str) -> Program:
-    return SerializedProgram.from_bytes(bytes.fromhex(h)).to_program()
+    return Program.from_bytes(bytes.fromhex(h))
 
 
 def load_clvm_hex(

@@ -10,36 +10,33 @@ import asyncio
 from pathlib import Path
 from typing import List
 
-from chia_rs import AugSchemeMPL, PrivateKey
+from chia_rs import AugSchemeMPL, PrivateKey, Coin, SpendBundle
 from cdv_replacement import get_client
 from chia.consensus.default_constants import DEFAULT_CONSTANTS
 from chia.full_node.full_node_rpc_client import FullNodeRpcClient
 from chia.wallet.wallet_rpc_client import WalletRpcClient
 from chia.simulator.simulator_full_node_rpc_client import \
     SimulatorFullNodeRpcClient
-from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import (INFINITE_COST, Program)
 try:
     from chia.types.blockchain_format.serialized_program import SerializedProgram
 except:
     from chia.types.blockchain_format.program import SerializedProgram
-from chia.types.blockchain_format.sized_bytes import bytes32
+from chia_rs.sized_bytes import bytes32
 from chia.types.coin_spend import CoinSpend
 from chia.types.condition_opcodes import ConditionOpcode
-from chia.types.spend_bundle import SpendBundle
 from chia.util.bech32m import (decode_puzzle_hash, encode_puzzle_hash)
-from chia.util.condition_tools import conditions_dict_for_solution
+from chia.consensus.condition_tools import conditions_dict_for_solution
 from chia.util.config import load_config
 from chia.util.hash import std_hash
-from chia.util.ints import uint16, uint32, uint64
+from chia_rs.sized_ints import uint16, uint32, uint64
 from chia.wallet.cat_wallet.cat_utils import (
     SpendableCAT,
     construct_cat_puzzle,
     get_innerpuzzle_from_puzzle,
     unsigned_spend_bundle_for_spendable_cats,
 )
-from chia.wallet.cat_wallet.cat_utils import CAT_MOD
-from chia.wallet.cat_wallet.cat_wallet import CAT_MOD_HASH
+from chia.wallet.cat_wallet.cat_utils import CAT_MOD, CAT_MOD_HASH
 from chia.wallet.derive_keys import master_sk_to_wallet_sk_unhardened
 from chia.wallet.lineage_proof import LineageProof
 from chia.wallet.puzzles.p2_conditions import puzzle_for_conditions
@@ -62,7 +59,6 @@ from chia.wallet.puzzles.singleton_top_layer_v1_1 import (
     solution_for_singleton,
 )
 from chia.wallet.puzzles.tails import GenesisById
-from chia.wallet.sign_coin_spends import sign_coin_spends
 from chia.wallet.trading.offer import OFFER_MOD, OFFER_MOD_HASH, Offer
 from chia.wallet.util.puzzle_compression import (
     compress_object_with_puzzles,
@@ -72,10 +68,11 @@ from chia.wallet.util.puzzle_compression import (
 from chia.wallet.util.wallet_types import WalletType
 from chia_rs import run_chia_program
 from clvm.casts import int_to_bytes
-from chia.simulator.setup_nodes import setup_simulators_and_wallets
+# from chia.simulator.setup_nodes import setup_simulators_and_wallets
+from chia._tests.util.setup_nodes import setup_simulators_and_wallets
 from chia.types.peer_info import PeerInfo
 from chia.simulator.simulator_protocol import FarmNewBlockProtocol
-from chia.rpc.wallet_rpc_api import WalletRpcApi
+from chia.wallet.wallet_rpc_api import WalletRpcApi
 from chia.simulator.simulator_full_node_rpc_api import SimulatorFullNodeRpcApi
 from chia.rpc.rpc_server import start_rpc_server
 
@@ -96,9 +93,9 @@ class TestTibetSwap:
     # thank you trepca for this function!
     @pytest_asyncio.fixture(scope="function")
     async def node_and_wallet(self):
-        sims = setup_simulators_and_wallets(1, 2, {})
-        async for _ in sims:
-            yield _
+        async with setup_simulators_and_wallets(1, 2, {}) as sims:
+            for _ in sims:
+                yield _
 
 
     # thank you trepca for this function!
