@@ -27,6 +27,7 @@ from chia.types.condition_opcodes import ConditionOpcode
 from chia.util.bech32m import (decode_puzzle_hash, encode_puzzle_hash)
 from chia.consensus.condition_tools import conditions_dict_for_solution
 from chia.util.config import load_config
+from chia.wallet.util.tx_config import CoinSelectionConfig
 from chia.util.hash import std_hash
 from chia_rs.sized_ints import uint16, uint32, uint64
 from chia.wallet.cat_wallet.cat_utils import (
@@ -230,7 +231,8 @@ class TestTibetSwap:
 
 
     async def select_standard_coin_and_puzzle(self, wallet_client, amount):
-        spendable_coins = await wallet_client.get_spendable_coins(1, min_coin_amount=amount) # wallet id 1, amount amount
+        coin_selection_config = CoinSelectionConfig(amount, uint64.MAXIMUM, [], [])
+        spendable_coins = await wallet_client.get_spendable_coins(1, coin_selection_config) # wallet id 1
         
         coin_puzzle = None
         index = 0
@@ -242,7 +244,7 @@ class TestTibetSwap:
                 coin_puzzle = await get_standard_coin_puzzle(wallet_client, coin)
                 index += 1
             except:
-                spendable_coins = await wallet_client.get_spendable_coins(1, min_coin_amount=amount) # wallet id 1, amount amount
+                spendable_coins = await wallet_client.get_spendable_coins(1, coin_selection_config) # wallet id 1
                 index = 0
                 retries += 1
                 if retries > 3:
