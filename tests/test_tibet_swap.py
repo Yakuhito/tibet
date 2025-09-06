@@ -119,7 +119,7 @@ class TestTibetSwap:
             wallet_makers.append(wallet_maker)
         
             wallet_master_sk = wallet_node_maker.wallet_state_manager.get_master_private_key()
-            ph_maker = WalletTool(test_constants, wallet_master_sk).get_new_puzzlehash()
+            ph_maker = WalletTool(bt.constants, wallet_master_sk).get_new_puzzlehash()
             
             wallet_node_maker.config["trusted_peers"] = {
                 full_node_api.full_node.server.node_id.hex(): full_node_api.full_node.server.node_id.hex()
@@ -147,6 +147,7 @@ class TestTibetSwap:
             stop_node_cb,
             bt.root_path,
             config,
+            config['full_node'],
             connect_to_daemon=False,
         )
 
@@ -161,6 +162,7 @@ class TestTibetSwap:
                 lambda x: None,  # type: ignore
                 bt.root_path,
                 config,
+                config['wallet'],
                 connect_to_daemon=False,
             )
             rpc_server_makers.append(rpc_server_maker)
