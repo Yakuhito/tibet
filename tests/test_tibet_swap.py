@@ -92,7 +92,6 @@ class TestTibetSwap:
         async with setup_simulators_and_wallets(1, 2, test_constants) as sims:
             yield sims
     
-    # thank you trepca for this function!
     @pytest_asyncio.fixture(scope="function")
     async def setup(self, node_and_wallets):
         full_nodes = node_and_wallets.simulators
@@ -100,93 +99,7 @@ class TestTibetSwap:
         bt = node_and_wallets.bt
         assert len(wallets) == 2
     
-        full_node_api: FullNodeSimulator = full_nodes[0]
-        full_node_server = full_node_api.server
-
-        wallet_node_makers = []
-        servers = []
-        wallet_makers = []
-        api_makers = []
-        for wallet_node_maker, server in wallets:
-            wallet_node_makers.append(wallet_node_maker)
-            servers.append(server)
-
-            wallet_maker: Wallet = wallet_node_maker.wallet_state_manager.main_wallet
-            wallet_makers.append(wallet_maker)
-        
-            ph_maker = await wallet_maker.get_new_puzzlehash()
-            
-            wallet_node_maker.config["trusted_peers"] = {
-                full_node_api.full_node.server.node_id.hex(): full_node_api.full_node.server.node_id.hex()
-            }
-
-            await server.start_client(PeerInfo("127.0.0.1", uint16(full_node_server._port)), None)
-
-            await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_maker))
-
-            api_makers.append(WalletRpcApi(wallet_node_maker))
-
-        config = bt.config
-        daemon_port = config["daemon_port"]
-        self_hostname = config["self_hostname"]
-        def stop_node_cb() -> None:
-            pass
-
-        full_node_rpc_api = SimulatorFullNodeRpcApi(full_node_api.full_node)
-
-        rpc_server_node = await start_rpc_server(
-            full_node_rpc_api,
-            self_hostname,
-            daemon_port,
-            uint16(0),
-            stop_node_cb,
-            bt.root_path,
-            config,
-            connect_to_daemon=False,
-        )
-
-        rpc_server_makers = []
-        client_makers = []
-        for api_maker in api_makers:
-            rpc_server_maker = await start_rpc_server(
-                api_maker,
-                self_hostname,
-                daemon_port,
-                uint16(0),
-                lambda x: None,  # type: ignore
-                bt.root_path,
-                config,
-                connect_to_daemon=False,
-            )
-            rpc_server_makers.append(rpc_server_maker)
-
-            client_maker: WalletRpcClient = await WalletRpcClient.create(
-                self_hostname, rpc_server_maker.listen_port, bt.root_path, config
-            )
-            client_makers.append(client_maker)
-
-        client_node: SimulatorFullNodeRpcClient = await SimulatorFullNodeRpcClient.create(
-            self_hostname, rpc_server_node.listen_port, bt.root_path, config
-        )
-        await client_node.set_auto_farming(True)
-
-        for client_maker in client_makers:
-            await self.wait_for_wallet_sync(client_maker)
-
-        yield client_node, client_makers[0], client_makers[1]
-
-        for client_maker in client_makers:
-            client_maker.close()
-        client_node.close()
-        for rpc_server_maker in rpc_server_makers:
-            rpc_server_maker.close()
-        rpc_server_node.close()
-        for client_maker in client_makers:
-            await client_maker.await_closed()
-        await client_node.await_closed()
-        for rpc_server_maker in rpc_server_makers:
-            await rpc_server_maker.await_closed()
-        await rpc_server_node.await_closed()
+        return full_nodes[0].peer_api, wallets[0].rpc_client, wallets[1].rpc_client
 
 
     @pytest.mark.asyncio
