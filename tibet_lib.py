@@ -280,6 +280,7 @@ async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0):
                 ConditionOpcode.CREATE_COIN,
                 parent_coin.puzzle_hash,
                 parent_coin.amount - 1 - fee,
+                [parent_coin.puzzle_hash]
             ]
         )
     if fee > 0:
@@ -317,9 +318,11 @@ async def create_test_cat(token_amount, coin, coin_puzzle):
         coin,
         cat_inner_puzzle,  # same as this coin's puzzle
         solution_for_delegated_puzzle(Program.to((1, [
-            [ConditionOpcode.CREATE_COIN, cat_puzzle_hash, token_amount * 1000],
+            [ConditionOpcode.CREATE_COIN, cat_puzzle_hash, token_amount * 1000, [coin.puzzle_hash]],
             [ConditionOpcode.CREATE_COIN, coin.puzzle_hash,
-                coin.amount - token_amount * 1000],
+                coin.amount - token_amount * 1000,
+                [coin.puzzle_hash]
+            ],
         ])), [])
     )
 
@@ -333,7 +336,7 @@ async def create_test_cat(token_amount, coin, coin_puzzle):
         Program.to((1, [
             [ConditionOpcode.CREATE_COIN, 0, -113, tail, []],
             [ConditionOpcode.CREATE_COIN, cat_inner_puzzle.get_tree_hash(),
-             cat_coin.amount]
+             cat_coin.amount, [cat_inner_puzzle.get_tree_hash()]]
         ])), []
     )
 

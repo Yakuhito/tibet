@@ -27,7 +27,6 @@ from chia.types.condition_opcodes import ConditionOpcode
 from chia.util.bech32m import (decode_puzzle_hash, encode_puzzle_hash)
 from chia.consensus.condition_tools import conditions_dict_for_solution
 from chia.util.config import load_config
-from chia.wallet.wallet_request_types import PushTX
 from chia.wallet.util.tx_config import CoinSelectionConfig
 from chia.util.hash import std_hash
 from chia_rs.sized_ints import uint16, uint32, uint64
@@ -272,7 +271,7 @@ class TestTibetSwap:
         launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle)
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
-        await wallet_client.push_tx(PushTX(signed_sb))
+        assert((await full_node_client.push_tx(signed_sb))["success"])
 
         router_launch_coin_spend = None
         router_current_coin = None
@@ -285,14 +284,16 @@ class TestTibetSwap:
         return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
 
 
-    async def create_test_cat(self, wallet_client: WalletRpcClient, token_amount=1000000):
+    async def create_test_cat(self, wallet_client: WalletRpcClient, full_node_client, token_amount=1000000):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
         
         tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
-        await wallet_client.push_tx(PushTX(signed_sb))
+        assert((await full_node_client.push_tx(signed_sb))["success"])
         await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(tail_hash)) # create wallet
+
+        print("tail hash ser", tail_hash) # todo: debug
 
         return bytes.fromhex(tail_hash)
 
@@ -318,7 +319,7 @@ class TestTibetSwap:
         )
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
-        await wallet_client.push_tx(PushTX(signed_sb))
+        assert((await full_node_client.push_tx(signed_sb))["success"])
 
         pair_coin = None
         pair_coin_creation_spend = None
@@ -389,7 +390,7 @@ class TestTibetSwap:
             wallet_client, full_node_client
         )
             
-        tail_hash = await self.create_test_cat(wallet_client)
+        tail_hash = await self.create_test_cat(wallet_client, full_node_client)
 
         pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
             wallet_client,
@@ -404,7 +405,7 @@ class TestTibetSwap:
         assert cr.spent
 
         # another pair, just to be sure
-        tail_hash2 = await self.create_test_cat(bob_wallet_client)
+        tail_hash2 = await self.create_test_cat(bob_wallet_client, full_node_client)
 
         pair2_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
             bob_wallet_client,
@@ -453,7 +454,7 @@ class TestTibetSwap:
             
         token_total_supply = 1000000 * 1000 # in mojos
         token_tail_hash = await self.create_test_cat(
-            wallet_client, token_amount=token_total_supply // 1000
+            wallet_client, full_node_client, token_amount=token_total_supply // 1000
         )
         await self.wait_for_wallet_sync(wallet_client)
             
@@ -529,7 +530,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
         print("1") # todo: debug
@@ -590,7 +591,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
         xch_balance_now = await self.get_balance(wallet_client)
@@ -647,7 +648,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
         xch_balance_now = await self.get_balance(wallet_client)
@@ -702,7 +703,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
         xch_balance_now = await self.get_balance(wallet_client)
@@ -759,7 +760,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
         xch_balance_now = await self.get_balance(wallet_client)
@@ -813,7 +814,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
         xch_balance_now = await self.get_balance(wallet_client)
@@ -831,7 +832,7 @@ class TestTibetSwap:
             
         token_total_supply = 1000000 * 1000 # in mojos
         token_tail_hash = await self.create_test_cat(
-            wallet_client, token_amount=token_total_supply // 1000
+            wallet_client, full_node_client, token_amount=token_total_supply // 1000
         )
         await self.wait_for_wallet_sync(wallet_client)
             
@@ -900,7 +901,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
 
         await self.wait_for_wallet_sync(wallet_client)
         xch_balance_now = await self.get_balance(wallet_client)
@@ -963,7 +964,7 @@ class TestTibetSwap:
             donation_weights=[2, 1]
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
         xch_balance_now = await self.get_balance(wallet_client)
@@ -1030,7 +1031,7 @@ class TestTibetSwap:
             donation_weights=[1]
         )
 
-        await wallet_client.push_tx(PushTX(sb))
+        assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
         xch_balance_now = await self.get_balance(wallet_client)
