@@ -564,17 +564,19 @@ async def create_pair_from_coin(
     return pair_launcher_id.hex(), sb, current_pair_coin, pair_launcher_spend
 
 
-async def sync_router(full_node_client, last_router_id):
+async def sync_router(full_node_client, last_router_id, rcat=False):
     new_pairs = []
     coin_record = await full_node_client.get_coin_record_by_name(last_router_id)
     if not coin_record.spent:
         # hack
-        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info)
+        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info, rcat=rcat)
         return current_router_coin, creation_spend, []
 
-    router_puzzle_hash = get_router_puzzle().get_tree_hash()
+    router_puzzle_hash = get_router_puzzle(rcat).get_tree_hash()
 
     while coin_record.spent:
+        tail_hash, hidden_puzzle_hash = None, None
+
         creation_spend = await full_node_client.get_puzzle_and_solution(last_router_id, coin_record.spent_block_index)
         conditions_dict = conditions_dict_for_solution(
             creation_spend.puzzle_reveal,
@@ -589,8 +591,14 @@ async def sync_router(full_node_client, last_router_id):
             except:
                 solution_program = Program.from_bytes(creation_spend.solution.to_bytes())
 
-            tail_hash = [_ for _ in solution_program.as_iter()
-                         ][-1].as_python()[-1]
+            if rcat:
+                tail_hash = [_ for _ in solution_program.as_iter()
+                             ][-1].as_python()[-2]
+                hidden_puzzle_hash = [_ for _ in solution_program.as_iter()
+                             ][-1].as_python()[-1]
+            else:
+                tail_hash = [_ for _ in solution_program.as_iter()
+                             ][-1].as_python()[-1]
 
         for cwa in conditions_dict[ConditionOpcode.CREATE_COIN]:
             new_puzzle_hash = cwa.vars[0]
@@ -607,7 +615,10 @@ async def sync_router(full_node_client, last_router_id):
                     creation_spend.coin.name(), new_puzzle_hash, 2)
                 pair_launcher_id = pair_launcher_coin.name()
 
-                new_pairs.append((tail_hash.hex(), pair_launcher_id.hex()))
+                if hidden_puzzle_hash:
+                    new_pairs.append((tail_hash.hex(), hidden_puzzle_hash.hex(), pair_launcher_id.hex()))
+                else:
+                    new_pairs.append((tail_hash.hex(), pair_launcher_id.hex()))
             else:
                 print(
                     "Someone did something extremely weird with the router - time to call the cops.")
