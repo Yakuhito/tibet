@@ -787,42 +787,42 @@ async def sync_pair(full_node_client, last_synced_coin_id):
 
 def get_cat_inner_puzzle(
     hidden_puzzle_hash,
-    inner_puzzle,
+    custody_puzzle,
 ):
     if hidden_puzzle_hash is not None:
-        return create_revocation_layer(hidden_puzzle_hash, inner_puzzle.get_tree_hash())
+        return create_revocation_layer(hidden_puzzle_hash, custody_puzzle.get_tree_hash())
 
-    return inner_puzzle
+    return custody_puzzle
 
 def get_cat_puzzle(
     tail_hash,
     hidden_puzzle_hash,
-    inner_puzzle,
+    custody_puzzle,
 ):
     return construct_cat_puzzle(
         CAT_MOD,
         tail_hash,
         get_cat_inner_puzzle(
             hidden_puzzle_hash,
-            inner_puzzle
+            custody_puzzle
         )
     )
 
 def get_cat_inner_solution(
     is_rcat,
-    inner_puzzle,
-    inner_solution,
+    custody_puzzle,
+    custody_solution,
 ):
     if is_rcat:
         return Program.to(
             [
                 False,
-                inner_puzzle,
-                inner_solution,
+                custody_puzzle,
+                custody_solution,
             ]
         )
     
-    return inner_puzzle
+    return custody_puzzle
 
 async def get_pair_reserve_info(
     full_node_client,
@@ -908,6 +908,7 @@ async def respond_to_deposit_liquidity_offer(
     current_pair_coin,
     creation_spend,
     token_tail_hash,
+    token_hidden_puzzle_hash,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
@@ -916,7 +917,6 @@ async def respond_to_deposit_liquidity_offer(
     last_token_reserve_coin,
     # coin_parent_coin_info, inner_puzzle_hash, amount
     last_token_reserve_lineage_proof,
-    token_hidden_puzzle_hash = None,
 ):
     # 1. Detect ephemeral coins (those created by the offer that we're allowed to use)
     offer = Offer.from_bech32(offer_str)
@@ -1022,7 +1022,8 @@ async def respond_to_deposit_liquidity_offer(
             f"You provided {eph_token_coin.amount - deposited_token_amount} too many token mojos.")
         
     eph_token_coin_inner_solution = get_cat_inner_solution(
-        token_hidden_puzzle_hash,
+        token_hidden_puzzle_hash is not None,
+        OFFER_MOD,
         Program.to(eph_token_coin_notarized_payments)
     )
 
@@ -1056,7 +1057,8 @@ async def respond_to_deposit_liquidity_offer(
                 token_tail_hash,
                 get_cat_inner_puzzle(token_hidden_puzzle_hash, p2_singleton_puzzle),
                 get_cat_inner_solution(
-                    token_hidden_puzzle_hash,
+                    token_hidden_puzzle_hash is not None,
+                    p2_singleton_puzzle,
                     solution_for_p2_singleton_flashloan(
                         last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
                     )
@@ -1264,6 +1266,7 @@ async def respond_to_remove_liquidity_offer(
     current_pair_coin,
     creation_spend,
     token_tail_hash,
+    token_hidden_puzzle_hash,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
@@ -1339,7 +1342,8 @@ async def respond_to_remove_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     pair_singleton_puzzle_hash = pair_singleton_puzzle.get_tree_hash()
     pair_singleton_inner_puzzle = get_pair_inner_puzzle(
@@ -1347,7 +1351,8 @@ async def respond_to_remove_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     pair_singleton_inner_puzzle_hash = pair_singleton_inner_puzzle.get_tree_hash()
 
@@ -1433,7 +1438,8 @@ async def respond_to_remove_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     inner_inner_sol = Program.to((
         (
@@ -1474,6 +1480,7 @@ async def respond_to_remove_liquidity_offer(
         ]
     ]
 
+    # todo: from here
     last_token_reserve_coin_inner_solution = solution_for_p2_singleton_flashloan(
         last_token_reserve_coin,
         pair_singleton_inner_puzzle.get_tree_hash(),
