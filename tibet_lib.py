@@ -785,23 +785,27 @@ async def sync_pair(full_node_client, last_synced_coin_id):
 
     return last_synced_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain
 
+def get_cat_inner_puzzle(
+    hidden_puzzle_hash,
+    inner_puzzle,
+):
+    if hidden_puzzle_hash is not None:
+        return create_revocation_layer(hidden_puzzle_hash, inner_puzzle.get_tree_hash())
+
+    return inner_puzzle
+
 def get_cat_puzzle(
     tail_hash,
     hidden_puzzle_hash,
     inner_puzzle,
 ):
-    if hidden_puzzle_hash is not None:
-        return construct_cat_puzzle(
-            CAT_MOD,
-            tail_hash,
-            inner_puzzle,
-            create_revocation_layer(hidden_puzzle_hash, inner_puzzle.get_tree_hash())
-        )
-
     return construct_cat_puzzle(
         CAT_MOD,
         tail_hash,
-        inner_puzzle
+        get_cat_inner_puzzle(
+            hidden_puzzle_hash,
+            inner_puzzle
+        )
     )
 
 def get_cat_inner_solution(
@@ -843,8 +847,11 @@ async def get_pair_reserve_info(
 
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_hash = p2_singleton_puzzle.get_tree_hash()
-    p2_singleton_cat_puzzle = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, p2_singleton_puzzle)
+    p2_singleton_cat_puzzle = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        p2_singleton_puzzle
+    )
     p2_singleton_cat_puzzle_hash = p2_singleton_cat_puzzle.get_tree_hash()
 
     spends = []
@@ -881,30 +888,12 @@ async def get_pair_reserve_info(
                         spend.coin.name(), p2_singleton_cat_puzzle_hash, amount)
                     token_reserve_lineage_proof = [
                         spend.coin.parent_coin_info,
-                        OFFER_MOD_HASH,
+                        get_cat_inner_puzzle(token_hidden_puzzle_hash, OFFER_MOD).get_tree_hash(),
                         spend.coin.amount
                     ]
                 break
 
     return xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof
-
-
-def get_announcements_asserts_for_notarized_payments(not_payments, puzzle_hash=OFFER_MOD_HASH):
-    conditions_dict = conditions_dict_for_solution(
-        OFFER_MOD,
-        not_payments,
-        INFINITE_COST
-    )
-
-    announcement_asserts = []
-    # cwa = condition with args
-    for cwa in conditions_dict.get(ConditionOpcode.CREATE_PUZZLE_ANNOUNCEMENT, []):
-        announcement_asserts.append([
-            ConditionOpcode.ASSERT_PUZZLE_ANNOUNCEMENT,
-            std_hash(puzzle_hash + cwa.vars[0])
-        ])
-
-    return announcement_asserts
 
 
 # Yak fix
@@ -1024,14 +1013,7 @@ async def respond_to_deposit_liquidity_offer(
     if eph_token_coin.amount > deposited_token_amount:
         raise Exception(
             f"You provided {eph_token_coin.amount - deposited_token_amount} too many token mojos.")
-        # not_payment = Program.to([
-        #     current_pair_coin.name(),
-        #     [decode_puzzle_hash(return_address), eph_token_coin.amount - deposited_token_amount]
-        # ])
-        # eph_token_coin_notarized_payments.append(not_payment)
-        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
-        #     announcement_asserts.append(ann_assert)
-
+        
     eph_token_coin_inner_solution = Program.to(
         eph_token_coin_notarized_payments)
 
@@ -1111,15 +1093,7 @@ async def respond_to_deposit_liquidity_offer(
     if eph_xch_coin.amount > deposited_xch_amount + new_liquidity_token_amount:
         raise Exception(
             f"You provided {eph_xch_coin.amount - deposited_xch_amount - new_liquidity_token_amount} too many mojos.")
-        # not_payment = Program.to([
-        #     current_pair_coin.name(),
-        #     [decode_puzzle_hash(return_address), eph_xch_coin.amount - deposited_xch_amount - new_liquidity_token_amount]
-        # ])
-        # eph_xch_coin_settlement_things.append(not_payment)
-
-        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment]):
-        #     announcement_asserts.append(ann_assert)
-
+        
     eph_xch_coin_solution = Program.to(eph_xch_coin_settlement_things)
     eph_xch_coin_spend = make_spend(
         eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
@@ -1533,15 +1507,7 @@ async def respond_to_remove_liquidity_offer(
     if last_token_reserve_coin.amount > removed_token_amount + new_token_reserve_amount:
         raise Exception(
             f"You asked for too few tokens - your offer is {token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount} token mojos short.")
-        # not_payment = [
-        #     current_pair_coin.name(),
-        #     [decode_puzzle_hash(return_address), token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount]
-        # ]
-        # eph_token_coin_notarized_payments.append(not_payment)
-
-        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
-        #     announcement_asserts.append(ann_assert)
-
+        
     eph_token_coin_inner_solution = Program.to(
         eph_token_coin_notarized_payments)
     eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
@@ -1567,14 +1533,7 @@ async def respond_to_remove_liquidity_offer(
     if last_xch_reserve_coin.amount > removed_xch_amount + new_xch_reserve_amount:
         raise Exception(
             f"Your offer asks for too few XCH - you're {xch_reserve_coin.amount - removed_xch_amount - new_xch_reserve_amount} mojos short.")
-        # xch_eph_coin_extra_payment = [
-        #     current_pair_coin.name(),
-        #     [decode_puzzle_hash(return_address), xch_reserve_coin.amount - removed_xch_amount - new_xch_reserve_amount]
-        # ]
-
-        # for ann_assert in get_announcements_asserts_for_notarized_payments([xch_eph_coin_extra_payment]):
-        #     announcement_asserts.append(ann_assert)
-
+        
     last_xch_reserve_coin_extra_conditions = [
         [
             ConditionOpcode.CREATE_COIN,
