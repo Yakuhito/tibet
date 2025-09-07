@@ -273,10 +273,10 @@ class TestTibetSwap:
         return coin, coin_puzzle
 
 
-    async def launch_router(self, wallet_client, full_node_client):
+    async def launch_router(self, wallet_client, full_node_client, rcat):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, 2)
 
-        launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle)
+        launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle, rcat)
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
         assert((await full_node_client.push_tx(signed_sb))["success"])
@@ -292,10 +292,10 @@ class TestTibetSwap:
         return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
 
 
-    async def create_test_cat(self, wallet_client: WalletRpcClient, full_node_client, token_amount=1000000):
+    async def create_test_cat(self, wallet_client: WalletRpcClient, full_node_client, hidden_puzzle_hash, token_amount=1000000):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
         
-        tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
+        tail_hash, sb = await create_test_cat(hidden_puzzle_hash, token_amount, coin, coin_puzzle)
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
         assert((await full_node_client.push_tx(signed_sb))["success"])
@@ -381,7 +381,7 @@ class TestTibetSwap:
     async def test_router_launch(self, setup):
         full_node_client, wallet_client, bob_wallet_client = setup
         
-        launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client)
+        launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client, None)
 
         cr = await full_node_client.get_coin_record_by_name(launcher_id)
         assert cr is not None
@@ -392,10 +392,10 @@ class TestTibetSwap:
     async def test_pair_creation(self, setup):
         full_node_client, wallet_client, bob_wallet_client = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
-            wallet_client, full_node_client
+            wallet_client, full_node_client, None
         )
             
-        tail_hash = await self.create_test_cat(wallet_client, full_node_client)
+        tail_hash = await self.create_test_cat(wallet_client, full_node_client, None)
 
         pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
             wallet_client,
@@ -410,7 +410,7 @@ class TestTibetSwap:
         assert cr.spent
 
         # another pair, just to be sure
-        tail_hash2 = await self.create_test_cat(bob_wallet_client, full_node_client)
+        tail_hash2 = await self.create_test_cat(bob_wallet_client, full_node_client, None)
 
         pair2_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
             bob_wallet_client,
@@ -454,12 +454,12 @@ class TestTibetSwap:
     async def test_pair_operations(self, setup):
         full_node_client, wallet_client, bob_wallet_client = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
-            wallet_client, full_node_client
+            wallet_client, full_node_client, None
         )
             
         token_total_supply = 1000000 * 1000 # in mojos
         token_tail_hash = await self.create_test_cat(
-            wallet_client, full_node_client, token_amount=token_total_supply // 1000
+            wallet_client, full_node_client, None, token_amount=token_total_supply // 1000
         )
         await self.wait_for_wallet_sync(wallet_client)
             
@@ -822,12 +822,12 @@ class TestTibetSwap:
     async def test_donations(self, setup):
         full_node_client, wallet_client, bob_wallet_client = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
-            wallet_client, full_node_client
+            wallet_client, full_node_client, None
         )
             
         token_total_supply = 1000000 * 1000 # in mojos
         token_tail_hash = await self.create_test_cat(
-            wallet_client, full_node_client, token_amount=token_total_supply // 1000
+            wallet_client, full_node_client, None, token_amount=token_total_supply // 1000
         )
         await self.wait_for_wallet_sync(wallet_client)
             
