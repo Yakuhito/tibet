@@ -915,7 +915,8 @@ async def respond_to_deposit_liquidity_offer(
     last_xch_reserve_coin,
     last_token_reserve_coin,
     # coin_parent_coin_info, inner_puzzle_hash, amount
-    last_token_reserve_lineage_proof
+    last_token_reserve_lineage_proof,
+    token_hidden_puzzle_hash = None,
 ):
     # 1. Detect ephemeral coins (those created by the offer that we're allowed to use)
     offer = Offer.from_bech32(offer_str)
@@ -929,8 +930,11 @@ async def respond_to_deposit_liquidity_offer(
     eph_token_coin_creation_spend = None
     announcement_asserts = []  # assert everything when the liquidity cat is minted
 
-    ephemeral_token_coin_puzzle = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, OFFER_MOD)
+    ephemeral_token_coin_puzzle = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        OFFER_MOD
+    )
     ephemeral_token_coin_puzzle_hash = ephemeral_token_coin_puzzle.get_tree_hash()
 
     # all valid coin spends (i.e., not 'hints' for offered assets or coins)
@@ -997,8 +1001,11 @@ async def respond_to_deposit_liquidity_offer(
 
     # 3. spend the token ephemeral coin to create the token reserve coin
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
-    p2_singleton_puzzle_cat = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, p2_singleton_puzzle)
+    p2_singleton_puzzle_cat = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        p2_singleton_puzzle
+    )
 
     eph_token_coin_notarized_payments = []
     eph_token_coin_notarized_payments.append(
@@ -1014,15 +1021,17 @@ async def respond_to_deposit_liquidity_offer(
         raise Exception(
             f"You provided {eph_token_coin.amount - deposited_token_amount} too many token mojos.")
         
-    eph_token_coin_inner_solution = Program.to(
-        eph_token_coin_notarized_payments)
+    eph_token_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash,
+        Program.to(eph_token_coin_notarized_payments)
+    )
 
     spendable_cats_for_token_reserve = []
     spendable_cats_for_token_reserve.append(
         SpendableCAT(
             eph_token_coin,
             token_tail_hash,
-            OFFER_MOD,
+            get_cat_inner_puzzle(token_hidden_puzzle_hash, OFFER_MOD),
             eph_token_coin_inner_solution,
             lineage_proof=LineageProof(
                 eph_token_coin_creation_spend.coin.parent_coin_info,
@@ -1037,16 +1046,20 @@ async def respond_to_deposit_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     if last_token_reserve_coin is not None:
         spendable_cats_for_token_reserve.append(
             SpendableCAT(
                 last_token_reserve_coin,
                 token_tail_hash,
-                p2_singleton_puzzle,
-                solution_for_p2_singleton_flashloan(
-                    last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
+                get_cat_inner_puzzle(token_hidden_puzzle_hash, p2_singleton_puzzle),
+                get_cat_inner_solution(
+                    token_hidden_puzzle_hash,
+                    solution_for_p2_singleton_flashloan(
+                        last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
+                    )
                 ),
                 lineage_proof=LineageProof(
                     last_token_reserve_lineage_proof[0],
@@ -1104,7 +1117,8 @@ async def respond_to_deposit_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     inner_inner_sol = Program.to((
         (
