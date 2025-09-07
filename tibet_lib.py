@@ -381,19 +381,19 @@ async def launch_router_from_coin(parent_coin, parent_coin_puzzle, rcat, fee=0):
     return launcher_id, sb
 
 
-async def create_test_cat(token_amount, coin, coin_puzzle):
+async def create_test_cat(hidden_puzzle_hash, token_amount, coin, coin_puzzle):
     coin_id = coin.name()
 
     tail = GenesisById.construct([coin_id])
     tail_hash = tail.get_tree_hash()
-    cat_inner_puzzle = coin_puzzle
+    cat_inner_puzzle = get_cat_inner_puzzle(hidden_puzzle_hash, coin_puzzle)
 
-    cat_puzzle = construct_cat_puzzle(CAT_MOD, tail_hash, cat_inner_puzzle)
+    cat_puzzle = get_cat_puzzle(tail_hash, hidden_puzzle_hash, coin_puzzle)
     cat_puzzle_hash = cat_puzzle.get_tree_hash()
 
     cat_creation_tx = make_spend(
         coin,
-        cat_inner_puzzle,  # same as this coin's puzzle
+        coin_puzzle,
         solution_for_delegated_puzzle(Program.to((1, [
             [ConditionOpcode.CREATE_COIN, cat_puzzle_hash, token_amount * 1000, [coin.puzzle_hash]],
             [ConditionOpcode.CREATE_COIN, coin.puzzle_hash,
@@ -409,12 +409,16 @@ async def create_test_cat(token_amount, coin, coin_puzzle):
         token_amount * 1000
     )
 
-    cat_inner_solution = solution_for_delegated_puzzle(
-        Program.to((1, [
-            [ConditionOpcode.CREATE_COIN, 0, -113, tail, []],
-            [ConditionOpcode.CREATE_COIN, cat_inner_puzzle.get_tree_hash(),
-             cat_coin.amount, [cat_inner_puzzle.get_tree_hash()]]
-        ])), []
+    cat_inner_solution = get_cat_inner_solution(
+        hidden_puzzle_hash is not None,
+        coin_puzzle,
+        solution_for_delegated_puzzle(
+            Program.to((1, [
+                [ConditionOpcode.CREATE_COIN, 0, -113, tail, []],
+                [ConditionOpcode.CREATE_COIN, coin_puzzle.get_tree_hash(),
+                cat_coin.amount, [coin_puzzle.get_tree_hash()]]
+            ])), []
+        )
     )
 
     cat_eve_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
