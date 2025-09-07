@@ -80,6 +80,8 @@ from chia.full_node.bundle_tools import simple_solution_generator
 from chia._tests.util.get_name_puzzle_conditions import get_name_puzzle_conditions
 from private_key_things import sign_spend_bundle_with_specific_sk
 
+from chia.wallet.vc_wallet.vc_drivers import REVOCATION_LAYER_HASH
+
 MEMPOOL_MIN_FEE_INCREASE = uint64(10000000)
 ROUTER_MIN_FEE = 42000000000
 DEV_DEPLOYMENT_FEE = 420000000000
@@ -148,8 +150,38 @@ MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
     SECRET_PUZZLE_HASH
 ])
 
+# XCH-rCAT puzzles
+RCAT_ROUTER_MOD: Program = load_clvm_hex("clvm/v2r_router.clvm.hex")
+RCAT_PAIR_INNER_PUZZLE_MOD: Program = load_clvm_hex(
+    "clvm/v2r_pair_inner_puzzle.clvm.hex")
 
-def get_router_puzzle():
+RCAT_SWAP_PUZZLE = SWAP_MOD.curry(999)
+RCAT_SWAP_PUZZLE_HASH = RCAT_SWAP_PUZZLE.get_tree_hash()
+
+RCAT_MERKLE_ROOT, RCAT_MERKLE_PROOFS = build_merkle_tree([
+    ADD_LIQUIDITY_PUZZLE_HASH,
+    REMOVE_LIQUIDITY_PUZZLE_HASH,
+    RCAT_SWAP_PUZZLE_HASH,
+    SECRET_PUZZLE_HASH
+])
+# end XCH-rCAT puzzles
+
+
+def get_router_puzzle(rcat=False):
+    if rcat:
+        return RCAT_ROUTER_MOD.curry(
+            RCAT_PAIR_INNER_PUZZLE_MOD_HASH,
+            SINGLETON_MOD_HASH,
+            P2_MERKLE_TREE_MODIFIED_MOD_HASH,
+            P2_SINGLETON_FLASHLOAN_MOD_HASH,
+            CAT_MOD_HASH,
+            REVOCATION_LAYER_HASH,
+            OFFER_MOD_HASH,
+            RCAT_MERKLE_ROOT,
+            SINGLETON_LAUNCHER_HASH,
+            RCAT_ROUTER_MOD_HASH
+        )
+    
     return ROUTER_MOD.curry(
         PAIR_INNER_PUZZLE_MOD_HASH,
         SINGLETON_MOD_HASH,
@@ -163,7 +195,23 @@ def get_router_puzzle():
     )
 
 
-def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
+def get_pair_inner_inner_puzzle(
+    singleton_launcher_id,
+    tail_hash,
+    hidden_puzzle_hash=None
+):
+    if hidden_puzzle_hash is not None:
+        return RCAT_PAIR_INNER_PUZZLE_MOD.curry(
+            P2_MERKLE_TREE_MODIFIED_MOD_HASH,
+            (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
+            P2_SINGLETON_FLASHLOAN_MOD_HASH,
+            CAT_MOD_HASH,
+            REVOCATION_LAYER_HASH,
+            hidden_puzzle_hash,
+            OFFER_MOD_HASH,
+            tail_hash
+        )
+
     return PAIR_INNER_PUZZLE_MOD.curry(
         P2_MERKLE_TREE_MODIFIED_MOD_HASH,
         (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
@@ -174,7 +222,21 @@ def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
     )
 
 
-def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
+def get_pair_inner_puzzle(
+    singleton_launcher_id,
+    tail_hash,
+    liquidity,
+    xch_reserve,
+    token_reserve,
+    hidden_puzzle_hash=None
+):
+    if hidden_puzzle_hash is not None:
+        return P2_MERKLE_TREE_MODIFIED_MOD.curry(
+            get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash, hidden_puzzle_hash),
+            RCAT_MERKLE_ROOT,
+            (liquidity, (xch_reserve, token_reserve))
+        )
+
     return P2_MERKLE_TREE_MODIFIED_MOD.curry(
         get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash),
         MERKLE_ROOT,
@@ -182,11 +244,24 @@ def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reser
     )
 
 
-def get_pair_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
+def get_pair_puzzle(
+    singleton_launcher_id,
+    tail_hash,
+    liquidity,
+    xch_reserve,
+    token_reserve,
+    hidden_puzzle_hash=None
+):
     return puzzle_for_singleton(
         singleton_launcher_id,
-        get_pair_inner_puzzle(singleton_launcher_id,
-                              tail_hash, liquidity, xch_reserve, token_reserve)
+        get_pair_inner_puzzle(
+            singleton_launcher_id,
+            tail_hash,
+            liquidity,
+            xch_reserve,
+            token_reserve,
+            hidden_puzzle_hash
+        )
     )
 
 
@@ -270,10 +345,12 @@ async def get_wallet_client(
     return wallet_client
 
 
-async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0):
+async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0, rcat=False):
     comment: List[Tuple[str, str]] = [("tibet", "v2")]
+    if rcat:
+        comment = [("tibet", "v2r")]
     conds, launcher_coin_spend = launch_conditions_and_coinsol(
-        parent_coin, get_router_puzzle(), comment, 1)
+        parent_coin, get_router_puzzle(rcat), comment, 1)
     if parent_coin.amount > fee + 1:
         conds.append(
             [
@@ -400,7 +477,8 @@ async def create_pair_from_coin(
     router_launcher_id,
     current_router_coin,
     current_router_coin_creation_spend,
-    fee=ROUTER_MIN_FEE
+    fee=ROUTER_MIN_FEE,
+    hidden_puzzle_hash=None
 ):
     if fee < ROUTER_MIN_FEE:
         raise Exception(
@@ -409,7 +487,7 @@ async def create_pair_from_coin(
     lineage_proof = lineage_proof_for_coinsol(
         current_router_coin_creation_spend)
 
-    router_inner_puzzle = get_router_puzzle()
+    router_inner_puzzle = get_router_puzzle(hidden_puzzle_hash is not None)
     router_singleton_puzzle = puzzle_for_singleton(
         router_launcher_id, router_inner_puzzle)
 
@@ -417,6 +495,13 @@ async def create_pair_from_coin(
         current_router_coin.name(),
         tail_hash
     ])
+    if hidden_puzzle_hash is not None:
+        router_inner_solution = Program.to([
+            current_router_coin.name(),
+            tail_hash,
+            hidden_puzzle_hash
+        ])
+
     router_singleton_solution = solution_for_singleton(
         lineage_proof, current_router_coin.amount, router_inner_solution)
     router_singleton_spend = make_spend(
@@ -427,7 +512,8 @@ async def create_pair_from_coin(
     pair_puzzle = get_pair_puzzle(
         pair_launcher_coin.name(),
         tail_hash,
-        0, 0, 0
+        0, 0, 0,
+        hidden_puzzle_hash=hidden_puzzle_hash
     )
 
     comment: List[Tuple[str, str]] = []
