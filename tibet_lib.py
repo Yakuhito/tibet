@@ -785,6 +785,40 @@ async def sync_pair(full_node_client, last_synced_coin_id):
 
     return last_synced_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain
 
+def get_cat_puzzle(
+    tail_hash,
+    hidden_puzzle_hash,
+    inner_puzzle,
+):
+    if hidden_puzzle_hash is not None:
+        return construct_cat_puzzle(
+            CAT_MOD,
+            tail_hash,
+            inner_puzzle,
+            create_revocation_layer(hidden_puzzle_hash, inner_puzzle.get_tree_hash())
+        )
+
+    return construct_cat_puzzle(
+        CAT_MOD,
+        tail_hash,
+        inner_puzzle
+    )
+
+def get_cat_inner_solution(
+    is_rcat,
+    inner_puzzle,
+    inner_solution,
+):
+    if is_rcat:
+        return Program.to(
+            [
+                False,
+                inner_puzzle,
+                inner_solution,
+            ]
+        )
+    
+    return inner_puzzle
 
 async def get_pair_reserve_info(
     full_node_client,
@@ -792,7 +826,8 @@ async def get_pair_reserve_info(
     pair_coin,
     token_tail_hash,
     creation_spend,
-    cached_sb
+    cached_sb,
+    token_hidden_puzzle_hash=None
 ):
     puzzle_announcements_asserts = []
     conditions_dict = conditions_dict_for_solution(
