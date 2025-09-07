@@ -1464,11 +1464,14 @@ async def respond_to_remove_liquidity_offer(
         ]
     ]
 
-    # todo: from here
-    last_token_reserve_coin_inner_solution = solution_for_p2_singleton_flashloan(
-        last_token_reserve_coin,
-        pair_singleton_inner_puzzle.get_tree_hash(),
-        extra_conditions=last_token_reserve_coin_extra_conditions
+    last_token_reserve_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        p2_singleton_puzzle,
+        solution_for_p2_singleton_flashloan(
+            last_token_reserve_coin,
+            pair_singleton_inner_puzzle.get_tree_hash(),
+            extra_conditions=last_token_reserve_coin_extra_conditions
+        )
     )
     last_token_reserve_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
         CAT_MOD,
@@ -1476,7 +1479,10 @@ async def respond_to_remove_liquidity_offer(
             SpendableCAT(
                 last_token_reserve_coin,
                 token_tail_hash,
-                p2_singleton_puzzle,
+                get_cat_inner_puzzle(
+                    token_hidden_puzzle_hash,
+                    p2_singleton_puzzle
+                ),
                 last_token_reserve_coin_inner_solution,
                 lineage_proof=LineageProof(
                     last_token_reserve_lineage_proof[0],
@@ -1491,8 +1497,11 @@ async def respond_to_remove_liquidity_offer(
     # 7. spend ephemeral token coin to create new token reserve, resp. to offer
     eph_token_coin = Coin(
         last_token_reserve_coin.name(),
-        construct_cat_puzzle(CAT_MOD, token_tail_hash,
-                             OFFER_MOD).get_tree_hash(),
+        get_cat_puzzle(
+            token_tail_hash,
+            token_hidden_puzzle_hash,
+            OFFER_MOD
+        ).get_tree_hash(),
         last_token_reserve_coin.amount
     )
     notarized_payments = offer.get_requested_payments()
@@ -1513,19 +1522,30 @@ async def respond_to_remove_liquidity_offer(
         raise Exception(
             f"You asked for too few tokens - your offer is {token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount} token mojos short.")
         
-    eph_token_coin_inner_solution = Program.to(
-        eph_token_coin_notarized_payments)
+    eph_token_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        OFFER_MOD,
+        Program.to(
+            eph_token_coin_notarized_payments
+        )
+    )
     eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
         CAT_MOD,
         [
             SpendableCAT(
                 eph_token_coin,
                 token_tail_hash,
-                OFFER_MOD,
+                get_cat_inner_puzzle(
+                    token_hidden_puzzle_hash,
+                    OFFER_MOD
+                ),
                 eph_token_coin_inner_solution,
                 lineage_proof=LineageProof(
                     last_token_reserve_coin.parent_coin_info,
-                    p2_singleton_puzzle_hash,
+                    get_cat_inner_puzzle(
+                        token_hidden_puzzle_hash,
+                        OFFER_MOD
+                    ).get_tree_hash(),
                     last_token_reserve_coin.amount
                 )
             )
