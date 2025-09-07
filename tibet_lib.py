@@ -2075,6 +2075,7 @@ DEV_DEPLOYMENT_FEE - sent to tibetswap dev
 """
 async def create_pair_with_liquidity(
     tail_hash, # bytes
+    hidden_puzzle_hash, # bytes
     offer_str, # str
     initial_xch_liquidity,
     initial_cat_liquidity,
@@ -2095,8 +2096,11 @@ async def create_pair_with_liquidity(
     eph_token_coin_creation_spend = None
     announcement_asserts = []  # assert everything when the liquidity cat is minted
 
-    ephemeral_token_coin_puzzle = construct_cat_puzzle(
-        CAT_MOD, tail_hash, OFFER_MOD)
+    ephemeral_token_coin_puzzle = get_cat_puzzle(
+        tail_hash,
+        hidden_puzzle_hash,
+        OFFER_MOD
+    )
     ephemeral_token_coin_puzzle_hash = ephemeral_token_coin_puzzle.get_tree_hash()
 
     # all valid coin spends (i.e., not 'hints' for offered assets or coins)
@@ -2229,6 +2233,7 @@ async def create_pair_with_liquidity(
         current_pair_coin,
         pair_launcher_spend,
         tail_hash,
+        hidden_puzzle_hash,
         0, 0, 0, # no liquidity
         liquidity_offer_str,
         None, None, None # no previous reserves since pool was just added
