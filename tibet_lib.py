@@ -167,7 +167,7 @@ RCAT_MERKLE_ROOT, RCAT_MERKLE_PROOFS = build_merkle_tree([
 # end XCH-rCAT puzzles
 
 
-def get_router_puzzle(rcat=False):
+def get_router_puzzle(rcat):
     if rcat:
         return RCAT_ROUTER_MOD.curry(
             RCAT_PAIR_INNER_PUZZLE_MOD_HASH,
@@ -198,7 +198,7 @@ def get_router_puzzle(rcat=False):
 def get_pair_inner_inner_puzzle(
     singleton_launcher_id,
     tail_hash,
-    hidden_puzzle_hash=None
+    hidden_puzzle_hash
 ):
     if hidden_puzzle_hash is not None:
         return RCAT_PAIR_INNER_PUZZLE_MOD.curry(
@@ -228,7 +228,7 @@ def get_pair_inner_puzzle(
     liquidity,
     xch_reserve,
     token_reserve,
-    hidden_puzzle_hash=None
+    hidden_puzzle_hash
 ):
     if hidden_puzzle_hash is not None:
         return P2_MERKLE_TREE_MODIFIED_MOD.curry(
@@ -250,7 +250,7 @@ def get_pair_puzzle(
     liquidity,
     xch_reserve,
     token_reserve,
-    hidden_puzzle_hash=None
+    hidden_puzzle_hash
 ):
     return puzzle_for_singleton(
         singleton_launcher_id,
@@ -345,7 +345,7 @@ async def get_wallet_client(
     return wallet_client
 
 
-async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0, rcat=False):
+async def launch_router_from_coin(parent_coin, parent_coin_puzzle, rcat, fee=0):
     comment: List[Tuple[str, str]] = [("tibet", "v2")]
     if rcat:
         comment = [("tibet", "v2r")]
@@ -474,11 +474,11 @@ async def create_pair_from_coin(
     coin,
     coin_puzzle,
     tail_hash,
+    hidden_puzzle_hash,
     router_launcher_id,
     current_router_coin,
     current_router_coin_creation_spend,
     fee=ROUTER_MIN_FEE,
-    hidden_puzzle_hash=None
 ):
     if fee < ROUTER_MIN_FEE:
         raise Exception(
@@ -564,12 +564,12 @@ async def create_pair_from_coin(
     return pair_launcher_id.hex(), sb, current_pair_coin, pair_launcher_spend
 
 
-async def sync_router(full_node_client, last_router_id, rcat=False):
+async def sync_router(full_node_client, last_router_id, rcat):
     new_pairs = []
     coin_record = await full_node_client.get_coin_record_by_name(last_router_id)
     if not coin_record.spent:
         # hack
-        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info, rcat=rcat)
+        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info, rcat)
         return current_router_coin, creation_spend, []
 
     router_puzzle_hash = get_router_puzzle(rcat).get_tree_hash()
@@ -630,23 +630,6 @@ async def sync_router(full_node_client, last_router_id, rcat=False):
 
 
 async def get_spend_bundle_in_mempool(full_node_client, coin):
-    # try:
-    #     parent_id_hex = "0x" + coin.parent_coin_info.hex()
-    #     r = requests.post("http://localhost:1337/get_mempool_item_by_parent_coin_info", json={
-    #         "request_url": full_node_client.leaflet_url + "get_all_mempool_items",
-    #         "parent_coin_info": parent_id_hex
-    #     })
-
-    #     j = r.json()
-    #     if j["item"] is None:
-    #         return None
-
-    #     return SpendBundle.from_json_dict(j["item"])
-    # except:
-    return await get_spend_bundle_in_mempool_full_node(full_node_client, coin.name())
-
-
-async def get_spend_bundle_in_mempool_full_node(full_node_client: FullNodeRpcClient, coin_id: bytes32):
     items = await full_node_client.fetch("get_mempool_items_by_coin_name", {"coin_name": coin_id.hex()})
 
     for sb_json in items["mempool_items"]:
@@ -829,9 +812,9 @@ async def get_pair_reserve_info(
     pair_launcher_id,
     pair_coin,
     token_tail_hash,
+    token_hidden_puzzle_hash,
     creation_spend,
     cached_sb,
-    token_hidden_puzzle_hash=None
 ):
     puzzle_announcements_asserts = []
     conditions_dict = conditions_dict_for_solution(
@@ -902,6 +885,7 @@ def get_innerpuzzle_from_puzzle(puzzle):
         return actual_get_innerpuzzle_from_puzzle(puzzle)
     except:
         return actual_get_innerpuzzle_from_puzzle(Program.from_bytes(puzzle.to_bytes()))
+
 
 async def respond_to_deposit_liquidity_offer(
     pair_launcher_id,
@@ -2150,7 +2134,7 @@ async def create_pair_with_liquidity(
         ])
     ])
 
-    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
+    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, hidden_puzzle_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
     for cs in router_launch_sb.coin_spends:
         cs_to_aggregate.append(cs)
 
