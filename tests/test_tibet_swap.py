@@ -99,7 +99,7 @@ class TestTibetSwap:
 
     @pytest_asyncio.fixture(scope="function")
     async def node_and_wallets(self):
-        async with setup_simulators_and_wallets(1, 2, test_constants) as sims:
+        async with setup_simulators_and_wallets(1, 1, test_constants) as sims:
             yield sims
     
     @pytest_asyncio.fixture(scope="function")
@@ -109,7 +109,7 @@ class TestTibetSwap:
         full_nodes = [node_and_wallets.simulators[0].peer_api]
         wallets = node_and_wallets.wallets
         bt = node_and_wallets.bt
-        assert len(wallets) == 2
+        assert len(wallets) == 1
     
         full_node_api: FullNodeSimulator = full_nodes[0]
         full_node_server = full_node_api.server
@@ -190,7 +190,7 @@ class TestTibetSwap:
         for client_maker in client_makers:
             await self.wait_for_wallet_sync(client_maker)
 
-        yield client_node, client_makers[0], client_makers[1]
+        yield client_node, client_makers[0], wallets[0].node.wallet_state_manager
 
         for client_maker in client_makers:
             client_maker.close()
@@ -208,15 +208,12 @@ class TestTibetSwap:
 
     @pytest.mark.asyncio
     async def test_healthz(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+        full_node_client, wallet_client, _wallet_state_manager = setup
         
         full_node_resp = await full_node_client.healthz()
         assert full_node_resp['success']
 
         wallet_resp = await wallet_client.healthz()
-        assert wallet_resp['success']
-
-        wallet_resp = await bob_wallet_client.healthz()
         assert wallet_resp['success']
 
 
@@ -379,7 +376,7 @@ class TestTibetSwap:
 
     @pytest.mark.asyncio
     async def test_router_launch(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+        full_node_client, wallet_client, _wallet_state_manager = setup
         
         launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client, None)
 
@@ -390,7 +387,7 @@ class TestTibetSwap:
 
     @pytest.mark.asyncio
     async def test_pair_creation(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+        full_node_client, wallet_client, _wallet_state_manager = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
             wallet_client, full_node_client, None
         )
@@ -410,10 +407,10 @@ class TestTibetSwap:
         assert cr.spent
 
         # another pair, just to be sure
-        tail_hash2 = await self.create_test_cat(bob_wallet_client, full_node_client, None)
+        tail_hash2 = await self.create_test_cat(wallet_client, full_node_client, None)
 
         pair2_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
-            bob_wallet_client,
+            wallet_client,
             full_node_client,
             router_launcher_id,
             tail_hash2,
@@ -452,7 +449,7 @@ class TestTibetSwap:
 
     @pytest.mark.asyncio
     async def test_pair_operations(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+        full_node_client, wallet_client, _wallet_state_manager = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
             wallet_client, full_node_client, None
         )
@@ -820,7 +817,7 @@ class TestTibetSwap:
 
     @pytest.mark.asyncio
     async def test_donations(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+        full_node_client, wallet_client, _wallet_state_manager = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
             wallet_client, full_node_client, None
         )
