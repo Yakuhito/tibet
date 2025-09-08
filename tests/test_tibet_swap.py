@@ -508,7 +508,7 @@ class TestTibetSwap:
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(pair_launcher_id).get_tree_hash()
         
         await self.wait_for_wallet_sync(wallet_client)
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, 0, token_total_supply)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, 0, token_total_supply)
         assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash, None)) == 0
 
         xch_balance_before_all_ops = xch_balance_before = await self.get_balance(wallet_client)
@@ -564,6 +564,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
+        import json; open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict())) # todo: debug
         assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
