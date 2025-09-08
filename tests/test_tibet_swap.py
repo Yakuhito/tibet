@@ -864,9 +864,13 @@ class TestTibetSwap:
         await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, token_total_supply - token_balance_before)
         await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, liquidity_balance_before, -liquidity_balance_before)
 
+    @pytest.mark.parametrize(
+        "hidden_puzzle_hash",
+        [None, bytes32(b"\x00" * 32)],
+        ids=["CAT", "rCAT"]
+    )
     @pytest.mark.asyncio
-    async def test_donations(self, setup):
-        hidden_puzzle_hash = None
+    async def test_donations(self, setup, hidden_puzzle_hash):
         full_node_client, wallet_client = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
             wallet_client, full_node_client, hidden_puzzle_hash is not None
@@ -886,7 +890,7 @@ class TestTibetSwap:
             full_node_client,
             router_launcher_id,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             current_router_coin,
             router_creation_spend
         )
@@ -901,7 +905,7 @@ class TestTibetSwap:
         # 1. Deposit liquidity: 1000 CAT mojos and 100000000 mojos
         # python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id] --push-tx
         token_wallet_id = await self.get_wallet_id_for_cat(wallet_client, token_tail_hash, hidden_puzzle_hash is not None)
-        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash)
+        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash, False)
 
         xch_amount = 100000000
         token_amount = 1000
@@ -929,7 +933,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -939,7 +943,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -976,13 +980,14 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
 
         xch_amount = 100000000
         xch_donation_amount = 10000
+        inverse_fee = 993 if hidden_puzzle_hash is None else 999
         token_amount = pair_state["token_reserve"] * xch_amount * inverse_fee // (1000 * pair_state["xch_reserve"] + inverse_fee * xch_amount)
 
         offer_dict = {}
@@ -1001,7 +1006,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -1038,16 +1043,21 @@ class TestTibetSwap:
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
             full_node_client, current_pair_coin.name()
         )
-        assert pair_state["xch_reserve"] == 200000000
-        assert pair_state["token_reserve"] == 502
-        assert pair_state["liquidity"] == 1000
+        if hidden_puzzle_hash is None:
+            assert pair_state["xch_reserve"] == 200000000
+            assert pair_state["token_reserve"] == 502
+            assert pair_state["liquidity"] == 1000
+        else:
+            assert pair_state["xch_reserve"] == 200000000
+            assert pair_state["token_reserve"] == 501
+            assert pair_state["liquidity"] == 1000
 
         xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
             full_node_client,
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -1070,7 +1080,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
