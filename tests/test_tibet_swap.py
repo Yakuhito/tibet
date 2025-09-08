@@ -520,6 +520,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -529,6 +530,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -577,6 +579,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -586,6 +589,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -634,6 +638,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -643,6 +648,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -679,6 +685,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -698,6 +705,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -736,6 +744,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -755,6 +764,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -800,6 +810,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -809,6 +820,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -888,6 +900,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -897,6 +910,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -933,6 +947,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -957,6 +972,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -1002,6 +1018,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            None,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -1024,6 +1041,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            None,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
