@@ -294,7 +294,6 @@ class TestTibetSwap:
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
         
         tail_hash, sb = await create_test_cat(hidden_puzzle_hash, token_amount, coin, coin_puzzle)
-        open("spend_bundle.json", "w").write(json.dumps(sb.to_json())) # todo: debug
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
         assert((await full_node_client.push_tx(signed_sb))["success"])

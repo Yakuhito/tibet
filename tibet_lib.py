@@ -809,7 +809,7 @@ def get_cat_inner_solution(
             ]
         )
     
-    return custody_puzzle
+    return custody_solution
 
 async def get_pair_reserve_info(
     full_node_client,
