@@ -658,6 +658,7 @@ class TestTibetSwap:
             token_reserve_lineage_proof
         )
 
+        import json; open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4)) # todo: debug
         assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 

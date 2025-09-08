@@ -1552,7 +1552,7 @@ async def respond_to_remove_liquidity_offer(
                     last_token_reserve_coin.parent_coin_info,
                     get_cat_inner_puzzle(
                         token_hidden_puzzle_hash,
-                        OFFER_MOD
+                        p2_singleton_puzzle
                     ).get_tree_hash(),
                     last_token_reserve_coin.amount
                 )
