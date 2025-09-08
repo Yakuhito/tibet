@@ -80,6 +80,8 @@ from chia.full_node.bundle_tools import simple_solution_generator
 from chia._tests.util.get_name_puzzle_conditions import get_name_puzzle_conditions
 from private_key_things import sign_spend_bundle_with_specific_sk
 
+from chia.wallet.vc_wallet.vc_drivers import REVOCATION_LAYER_HASH, create_revocation_layer
+
 MEMPOOL_MIN_FEE_INCREASE = uint64(10000000)
 ROUTER_MIN_FEE = 42000000000
 DEV_DEPLOYMENT_FEE = 420000000000
@@ -148,8 +150,41 @@ MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
     SECRET_PUZZLE_HASH
 ])
 
+# XCH-rCAT puzzles
+RCAT_ROUTER_MOD: Program = load_clvm_hex("clvm/v2r_router.clvm.hex")
+RCAT_ROUTER_MOD_HASH = RCAT_ROUTER_MOD.get_tree_hash()
 
-def get_router_puzzle():
+RCAT_PAIR_INNER_PUZZLE_MOD: Program = load_clvm_hex(
+    "clvm/v2r_pair_inner_puzzle.clvm.hex")
+RCAT_PAIR_INNER_PUZZLE_MOD_HASH = RCAT_PAIR_INNER_PUZZLE_MOD.get_tree_hash()
+
+RCAT_SWAP_PUZZLE = SWAP_MOD.curry(999)
+RCAT_SWAP_PUZZLE_HASH = RCAT_SWAP_PUZZLE.get_tree_hash()
+
+RCAT_MERKLE_ROOT, RCAT_MERKLE_PROOFS = build_merkle_tree([
+    ADD_LIQUIDITY_PUZZLE_HASH,
+    REMOVE_LIQUIDITY_PUZZLE_HASH,
+    RCAT_SWAP_PUZZLE_HASH,
+    SECRET_PUZZLE_HASH
+])
+# end XCH-rCAT puzzles
+
+
+def get_router_puzzle(rcat):
+    if rcat:
+        return RCAT_ROUTER_MOD.curry(
+            RCAT_PAIR_INNER_PUZZLE_MOD_HASH,
+            SINGLETON_MOD_HASH,
+            P2_MERKLE_TREE_MODIFIED_MOD_HASH,
+            P2_SINGLETON_FLASHLOAN_MOD_HASH,
+            CAT_MOD_HASH,
+            REVOCATION_LAYER_HASH,
+            OFFER_MOD_HASH,
+            RCAT_MERKLE_ROOT,
+            SINGLETON_LAUNCHER_HASH,
+            RCAT_ROUTER_MOD_HASH
+        )
+    
     return ROUTER_MOD.curry(
         PAIR_INNER_PUZZLE_MOD_HASH,
         SINGLETON_MOD_HASH,
@@ -163,7 +198,23 @@ def get_router_puzzle():
     )
 
 
-def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
+def get_pair_inner_inner_puzzle(
+    singleton_launcher_id,
+    tail_hash,
+    hidden_puzzle_hash
+):
+    if hidden_puzzle_hash is not None:
+        return RCAT_PAIR_INNER_PUZZLE_MOD.curry(
+            P2_MERKLE_TREE_MODIFIED_MOD_HASH,
+            (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
+            P2_SINGLETON_FLASHLOAN_MOD_HASH,
+            CAT_MOD_HASH,
+            REVOCATION_LAYER_HASH,
+            hidden_puzzle_hash,
+            OFFER_MOD_HASH,
+            tail_hash
+        )
+
     return PAIR_INNER_PUZZLE_MOD.curry(
         P2_MERKLE_TREE_MODIFIED_MOD_HASH,
         (SINGLETON_MOD_HASH, (singleton_launcher_id, SINGLETON_LAUNCHER_HASH)),
@@ -174,19 +225,46 @@ def get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash):
     )
 
 
-def get_pair_inner_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
+def get_pair_inner_puzzle(
+    singleton_launcher_id,
+    tail_hash,
+    liquidity,
+    xch_reserve,
+    token_reserve,
+    hidden_puzzle_hash
+):
+    if hidden_puzzle_hash is not None:
+        return P2_MERKLE_TREE_MODIFIED_MOD.curry(
+            get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash, hidden_puzzle_hash),
+            RCAT_MERKLE_ROOT,
+            (liquidity, (xch_reserve, token_reserve))
+        )
+
     return P2_MERKLE_TREE_MODIFIED_MOD.curry(
-        get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash),
+        get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash, None),
         MERKLE_ROOT,
         (liquidity, (xch_reserve, token_reserve))
     )
 
 
-def get_pair_puzzle(singleton_launcher_id, tail_hash, liquidity, xch_reserve, token_reserve):
+def get_pair_puzzle(
+    singleton_launcher_id,
+    tail_hash,
+    liquidity,
+    xch_reserve,
+    token_reserve,
+    hidden_puzzle_hash
+):
     return puzzle_for_singleton(
         singleton_launcher_id,
-        get_pair_inner_puzzle(singleton_launcher_id,
-                              tail_hash, liquidity, xch_reserve, token_reserve)
+        get_pair_inner_puzzle(
+            singleton_launcher_id,
+            tail_hash,
+            liquidity,
+            xch_reserve,
+            token_reserve,
+            hidden_puzzle_hash
+        )
     )
 
 
@@ -270,10 +348,12 @@ async def get_wallet_client(
     return wallet_client
 
 
-async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0):
+async def launch_router_from_coin(parent_coin, parent_coin_puzzle, rcat, fee=0):
     comment: List[Tuple[str, str]] = [("tibet", "v2")]
+    if rcat:
+        comment = [("tibet", "v2r")]
     conds, launcher_coin_spend = launch_conditions_and_coinsol(
-        parent_coin, get_router_puzzle(), comment, 1)
+        parent_coin, get_router_puzzle(rcat), comment, 1)
     if parent_coin.amount > fee + 1:
         conds.append(
             [
@@ -304,19 +384,19 @@ async def launch_router_from_coin(parent_coin, parent_coin_puzzle, fee=0):
     return launcher_id, sb
 
 
-async def create_test_cat(token_amount, coin, coin_puzzle):
+async def create_test_cat(hidden_puzzle_hash, token_amount, coin, coin_puzzle):
     coin_id = coin.name()
 
     tail = GenesisById.construct([coin_id])
     tail_hash = tail.get_tree_hash()
-    cat_inner_puzzle = coin_puzzle
+    cat_inner_puzzle = get_cat_inner_puzzle(hidden_puzzle_hash, coin_puzzle)
 
-    cat_puzzle = construct_cat_puzzle(CAT_MOD, tail_hash, cat_inner_puzzle)
+    cat_puzzle = get_cat_puzzle(tail_hash, hidden_puzzle_hash, coin_puzzle)
     cat_puzzle_hash = cat_puzzle.get_tree_hash()
 
     cat_creation_tx = make_spend(
         coin,
-        cat_inner_puzzle,  # same as this coin's puzzle
+        coin_puzzle,
         solution_for_delegated_puzzle(Program.to((1, [
             [ConditionOpcode.CREATE_COIN, cat_puzzle_hash, token_amount * 1000, [coin.puzzle_hash]],
             [ConditionOpcode.CREATE_COIN, coin.puzzle_hash,
@@ -332,12 +412,16 @@ async def create_test_cat(token_amount, coin, coin_puzzle):
         token_amount * 1000
     )
 
-    cat_inner_solution = solution_for_delegated_puzzle(
-        Program.to((1, [
-            [ConditionOpcode.CREATE_COIN, 0, -113, tail, []],
-            [ConditionOpcode.CREATE_COIN, cat_inner_puzzle.get_tree_hash(),
-             cat_coin.amount, [cat_inner_puzzle.get_tree_hash()]]
-        ])), []
+    cat_inner_solution = get_cat_inner_solution(
+        hidden_puzzle_hash is not None,
+        coin_puzzle,
+        solution_for_delegated_puzzle(
+            Program.to((1, [
+                [ConditionOpcode.CREATE_COIN, 0, -113, tail, []],
+                [ConditionOpcode.CREATE_COIN, coin_puzzle.get_tree_hash(),
+                cat_coin.amount, [coin_puzzle.get_tree_hash()]]
+            ])), []
+        )
     )
 
     cat_eve_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
@@ -397,10 +481,11 @@ async def create_pair_from_coin(
     coin,
     coin_puzzle,
     tail_hash,
+    hidden_puzzle_hash,
     router_launcher_id,
     current_router_coin,
     current_router_coin_creation_spend,
-    fee=ROUTER_MIN_FEE
+    fee=ROUTER_MIN_FEE,
 ):
     if fee < ROUTER_MIN_FEE:
         raise Exception(
@@ -409,7 +494,7 @@ async def create_pair_from_coin(
     lineage_proof = lineage_proof_for_coinsol(
         current_router_coin_creation_spend)
 
-    router_inner_puzzle = get_router_puzzle()
+    router_inner_puzzle = get_router_puzzle(hidden_puzzle_hash is not None)
     router_singleton_puzzle = puzzle_for_singleton(
         router_launcher_id, router_inner_puzzle)
 
@@ -417,6 +502,13 @@ async def create_pair_from_coin(
         current_router_coin.name(),
         tail_hash
     ])
+    if hidden_puzzle_hash is not None:
+        router_inner_solution = Program.to([
+            current_router_coin.name(),
+            tail_hash,
+            hidden_puzzle_hash
+        ])
+
     router_singleton_solution = solution_for_singleton(
         lineage_proof, current_router_coin.amount, router_inner_solution)
     router_singleton_spend = make_spend(
@@ -427,7 +519,8 @@ async def create_pair_from_coin(
     pair_puzzle = get_pair_puzzle(
         pair_launcher_coin.name(),
         tail_hash,
-        0, 0, 0
+        0, 0, 0,
+        hidden_puzzle_hash
     )
 
     comment: List[Tuple[str, str]] = []
@@ -478,17 +571,19 @@ async def create_pair_from_coin(
     return pair_launcher_id.hex(), sb, current_pair_coin, pair_launcher_spend
 
 
-async def sync_router(full_node_client, last_router_id):
+async def sync_router(full_node_client, last_router_id, rcat):
     new_pairs = []
     coin_record = await full_node_client.get_coin_record_by_name(last_router_id)
     if not coin_record.spent:
         # hack
-        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info)
+        current_router_coin, creation_spend, _ = await sync_router(full_node_client, coin_record.coin.parent_coin_info, rcat)
         return current_router_coin, creation_spend, []
 
-    router_puzzle_hash = get_router_puzzle().get_tree_hash()
+    router_puzzle_hash = get_router_puzzle(rcat).get_tree_hash()
 
     while coin_record.spent:
+        tail_hash, hidden_puzzle_hash = None, None
+
         creation_spend = await full_node_client.get_puzzle_and_solution(last_router_id, coin_record.spent_block_index)
         conditions_dict = conditions_dict_for_solution(
             creation_spend.puzzle_reveal,
@@ -503,8 +598,14 @@ async def sync_router(full_node_client, last_router_id):
             except:
                 solution_program = Program.from_bytes(creation_spend.solution.to_bytes())
 
-            tail_hash = [_ for _ in solution_program.as_iter()
-                         ][-1].as_python()[-1]
+            if rcat:
+                tail_hash = [_ for _ in solution_program.as_iter()
+                             ][-1].as_python()[-2]
+                hidden_puzzle_hash = [_ for _ in solution_program.as_iter()
+                             ][-1].as_python()[-1]
+            else:
+                tail_hash = [_ for _ in solution_program.as_iter()
+                             ][-1].as_python()[-1]
 
         for cwa in conditions_dict[ConditionOpcode.CREATE_COIN]:
             new_puzzle_hash = cwa.vars[0]
@@ -521,7 +622,10 @@ async def sync_router(full_node_client, last_router_id):
                     creation_spend.coin.name(), new_puzzle_hash, 2)
                 pair_launcher_id = pair_launcher_coin.name()
 
-                new_pairs.append((tail_hash.hex(), pair_launcher_id.hex()))
+                if hidden_puzzle_hash:
+                    new_pairs.append((tail_hash.hex(), hidden_puzzle_hash.hex(), pair_launcher_id.hex()))
+                else:
+                    new_pairs.append((tail_hash.hex(), pair_launcher_id.hex()))
             else:
                 print(
                     "Someone did something extremely weird with the router - time to call the cops.")
@@ -533,24 +637,7 @@ async def sync_router(full_node_client, last_router_id):
 
 
 async def get_spend_bundle_in_mempool(full_node_client, coin):
-    # try:
-    #     parent_id_hex = "0x" + coin.parent_coin_info.hex()
-    #     r = requests.post("http://localhost:1337/get_mempool_item_by_parent_coin_info", json={
-    #         "request_url": full_node_client.leaflet_url + "get_all_mempool_items",
-    #         "parent_coin_info": parent_id_hex
-    #     })
-
-    #     j = r.json()
-    #     if j["item"] is None:
-    #         return None
-
-    #     return SpendBundle.from_json_dict(j["item"])
-    # except:
-    return await get_spend_bundle_in_mempool_full_node(full_node_client, coin.name())
-
-
-async def get_spend_bundle_in_mempool_full_node(full_node_client: FullNodeRpcClient, coin_id: bytes32):
-    items = await full_node_client.fetch("get_mempool_items_by_coin_name", {"coin_name": coin_id.hex()})
+    items = await full_node_client.fetch("get_mempool_items_by_coin_name", {"coin_name": coin.name().hex()})
 
     for sb_json in items["mempool_items"]:
         sb = SpendBundle.from_json_dict(sb_json["spend_bundle"])
@@ -688,14 +775,53 @@ async def sync_pair(full_node_client, last_synced_coin_id):
 
     return last_synced_coin, creation_spend, state, sb_to_aggregate, last_synced_pair_id_on_blockchain
 
+def get_cat_inner_puzzle(
+    hidden_puzzle_hash,
+    custody_puzzle,
+):
+    if hidden_puzzle_hash is not None:
+        return create_revocation_layer(hidden_puzzle_hash, custody_puzzle.get_tree_hash())
+
+    return custody_puzzle
+
+def get_cat_puzzle(
+    tail_hash,
+    hidden_puzzle_hash,
+    custody_puzzle,
+):
+    return construct_cat_puzzle(
+        CAT_MOD,
+        tail_hash,
+        get_cat_inner_puzzle(
+            hidden_puzzle_hash,
+            custody_puzzle
+        )
+    )
+
+def get_cat_inner_solution(
+    is_rcat,
+    custody_puzzle,
+    custody_solution,
+):
+    if is_rcat:
+        return Program.to(
+            [
+                False,
+                custody_puzzle,
+                custody_solution,
+            ]
+        )
+    
+    return custody_solution
 
 async def get_pair_reserve_info(
     full_node_client,
     pair_launcher_id,
     pair_coin,
     token_tail_hash,
+    token_hidden_puzzle_hash,
     creation_spend,
-    cached_sb
+    cached_sb,
 ):
     puzzle_announcements_asserts = []
     conditions_dict = conditions_dict_for_solution(
@@ -711,8 +837,11 @@ async def get_pair_reserve_info(
 
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_hash = p2_singleton_puzzle.get_tree_hash()
-    p2_singleton_cat_puzzle = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, p2_singleton_puzzle)
+    p2_singleton_cat_puzzle = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        p2_singleton_puzzle
+    )
     p2_singleton_cat_puzzle_hash = p2_singleton_cat_puzzle.get_tree_hash()
 
     spends = []
@@ -749,30 +878,12 @@ async def get_pair_reserve_info(
                         spend.coin.name(), p2_singleton_cat_puzzle_hash, amount)
                     token_reserve_lineage_proof = [
                         spend.coin.parent_coin_info,
-                        OFFER_MOD_HASH,
+                        get_cat_inner_puzzle(token_hidden_puzzle_hash, OFFER_MOD).get_tree_hash(),
                         spend.coin.amount
                     ]
                 break
 
     return xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof
-
-
-def get_announcements_asserts_for_notarized_payments(not_payments, puzzle_hash=OFFER_MOD_HASH):
-    conditions_dict = conditions_dict_for_solution(
-        OFFER_MOD,
-        not_payments,
-        INFINITE_COST
-    )
-
-    announcement_asserts = []
-    # cwa = condition with args
-    for cwa in conditions_dict.get(ConditionOpcode.CREATE_PUZZLE_ANNOUNCEMENT, []):
-        announcement_asserts.append([
-            ConditionOpcode.ASSERT_PUZZLE_ANNOUNCEMENT,
-            std_hash(puzzle_hash + cwa.vars[0])
-        ])
-
-    return announcement_asserts
 
 
 # Yak fix
@@ -782,11 +893,13 @@ def get_innerpuzzle_from_puzzle(puzzle):
     except:
         return actual_get_innerpuzzle_from_puzzle(Program.from_bytes(puzzle.to_bytes()))
 
+
 async def respond_to_deposit_liquidity_offer(
     pair_launcher_id,
     current_pair_coin,
     creation_spend,
     token_tail_hash,
+    token_hidden_puzzle_hash,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
@@ -794,7 +907,7 @@ async def respond_to_deposit_liquidity_offer(
     last_xch_reserve_coin,
     last_token_reserve_coin,
     # coin_parent_coin_info, inner_puzzle_hash, amount
-    last_token_reserve_lineage_proof
+    last_token_reserve_lineage_proof,
 ):
     # 1. Detect ephemeral coins (those created by the offer that we're allowed to use)
     offer = Offer.from_bech32(offer_str)
@@ -808,8 +921,11 @@ async def respond_to_deposit_liquidity_offer(
     eph_token_coin_creation_spend = None
     announcement_asserts = []  # assert everything when the liquidity cat is minted
 
-    ephemeral_token_coin_puzzle = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, OFFER_MOD)
+    ephemeral_token_coin_puzzle = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        OFFER_MOD
+    )
     ephemeral_token_coin_puzzle_hash = ephemeral_token_coin_puzzle.get_tree_hash()
 
     # all valid coin spends (i.e., not 'hints' for offered assets or coins)
@@ -876,8 +992,11 @@ async def respond_to_deposit_liquidity_offer(
 
     # 3. spend the token ephemeral coin to create the token reserve coin
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
-    p2_singleton_puzzle_cat = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, p2_singleton_puzzle)
+    p2_singleton_puzzle_cat = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        p2_singleton_puzzle
+    )
 
     eph_token_coin_notarized_payments = []
     eph_token_coin_notarized_payments.append(
@@ -892,23 +1011,19 @@ async def respond_to_deposit_liquidity_offer(
     if eph_token_coin.amount > deposited_token_amount:
         raise Exception(
             f"You provided {eph_token_coin.amount - deposited_token_amount} too many token mojos.")
-        # not_payment = Program.to([
-        #     current_pair_coin.name(),
-        #     [decode_puzzle_hash(return_address), eph_token_coin.amount - deposited_token_amount]
-        # ])
-        # eph_token_coin_notarized_payments.append(not_payment)
-        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
-        #     announcement_asserts.append(ann_assert)
-
-    eph_token_coin_inner_solution = Program.to(
-        eph_token_coin_notarized_payments)
+        
+    eph_token_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        OFFER_MOD,
+        Program.to(eph_token_coin_notarized_payments)
+    )
 
     spendable_cats_for_token_reserve = []
     spendable_cats_for_token_reserve.append(
         SpendableCAT(
             eph_token_coin,
             token_tail_hash,
-            OFFER_MOD,
+            get_cat_inner_puzzle(token_hidden_puzzle_hash, OFFER_MOD),
             eph_token_coin_inner_solution,
             lineage_proof=LineageProof(
                 eph_token_coin_creation_spend.coin.parent_coin_info,
@@ -923,16 +1038,21 @@ async def respond_to_deposit_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     if last_token_reserve_coin is not None:
         spendable_cats_for_token_reserve.append(
             SpendableCAT(
                 last_token_reserve_coin,
                 token_tail_hash,
-                p2_singleton_puzzle,
-                solution_for_p2_singleton_flashloan(
-                    last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
+                get_cat_inner_puzzle(token_hidden_puzzle_hash, p2_singleton_puzzle),
+                get_cat_inner_solution(
+                    token_hidden_puzzle_hash is not None,
+                    p2_singleton_puzzle,
+                    solution_for_p2_singleton_flashloan(
+                        last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
+                    )
                 ),
                 lineage_proof=LineageProof(
                     last_token_reserve_lineage_proof[0],
@@ -979,15 +1099,7 @@ async def respond_to_deposit_liquidity_offer(
     if eph_xch_coin.amount > deposited_xch_amount + new_liquidity_token_amount:
         raise Exception(
             f"You provided {eph_xch_coin.amount - deposited_xch_amount - new_liquidity_token_amount} too many mojos.")
-        # not_payment = Program.to([
-        #     current_pair_coin.name(),
-        #     [decode_puzzle_hash(return_address), eph_xch_coin.amount - deposited_xch_amount - new_liquidity_token_amount]
-        # ])
-        # eph_xch_coin_settlement_things.append(not_payment)
-
-        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment]):
-        #     announcement_asserts.append(ann_assert)
-
+        
     eph_xch_coin_solution = Program.to(eph_xch_coin_settlement_things)
     eph_xch_coin_spend = make_spend(
         eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
@@ -998,7 +1110,8 @@ async def respond_to_deposit_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     inner_inner_sol = Program.to((
         (
@@ -1017,7 +1130,9 @@ async def respond_to_deposit_liquidity_offer(
     ))
     pair_singleton_inner_solution = Program.to([
         ADD_LIQUIDITY_PUZZLE,
-        Program.to(MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH]),
+        Program.to(
+            MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else RCAT_MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH]
+        ),
         inner_inner_sol
     ])
 
@@ -1144,6 +1259,7 @@ async def respond_to_remove_liquidity_offer(
     current_pair_coin,
     creation_spend,
     token_tail_hash,
+    token_hidden_puzzle_hash,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
@@ -1219,7 +1335,8 @@ async def respond_to_remove_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     pair_singleton_puzzle_hash = pair_singleton_puzzle.get_tree_hash()
     pair_singleton_inner_puzzle = get_pair_inner_puzzle(
@@ -1227,7 +1344,8 @@ async def respond_to_remove_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     pair_singleton_inner_puzzle_hash = pair_singleton_inner_puzzle.get_tree_hash()
 
@@ -1313,7 +1431,8 @@ async def respond_to_remove_liquidity_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     inner_inner_sol = Program.to((
         (
@@ -1331,7 +1450,9 @@ async def respond_to_remove_liquidity_offer(
     ))
     pair_singleton_inner_solution = Program.to([
         REMOVE_LIQUIDITY_PUZZLE,
-        Program.to(MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH]),
+        Program.to(
+            MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else RCAT_MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH]
+        ),
         inner_inner_sol
     ])
 
@@ -1354,10 +1475,14 @@ async def respond_to_remove_liquidity_offer(
         ]
     ]
 
-    last_token_reserve_coin_inner_solution = solution_for_p2_singleton_flashloan(
-        last_token_reserve_coin,
-        pair_singleton_inner_puzzle.get_tree_hash(),
-        extra_conditions=last_token_reserve_coin_extra_conditions
+    last_token_reserve_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        p2_singleton_puzzle,
+        solution_for_p2_singleton_flashloan(
+            last_token_reserve_coin,
+            pair_singleton_inner_puzzle.get_tree_hash(),
+            extra_conditions=last_token_reserve_coin_extra_conditions
+        )
     )
     last_token_reserve_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
         CAT_MOD,
@@ -1365,7 +1490,10 @@ async def respond_to_remove_liquidity_offer(
             SpendableCAT(
                 last_token_reserve_coin,
                 token_tail_hash,
-                p2_singleton_puzzle,
+                get_cat_inner_puzzle(
+                    token_hidden_puzzle_hash,
+                    p2_singleton_puzzle
+                ),
                 last_token_reserve_coin_inner_solution,
                 lineage_proof=LineageProof(
                     last_token_reserve_lineage_proof[0],
@@ -1380,8 +1508,11 @@ async def respond_to_remove_liquidity_offer(
     # 7. spend ephemeral token coin to create new token reserve, resp. to offer
     eph_token_coin = Coin(
         last_token_reserve_coin.name(),
-        construct_cat_puzzle(CAT_MOD, token_tail_hash,
-                             OFFER_MOD).get_tree_hash(),
+        get_cat_puzzle(
+            token_tail_hash,
+            token_hidden_puzzle_hash,
+            OFFER_MOD
+        ).get_tree_hash(),
         last_token_reserve_coin.amount
     )
     notarized_payments = offer.get_requested_payments()
@@ -1401,28 +1532,31 @@ async def respond_to_remove_liquidity_offer(
     if last_token_reserve_coin.amount > removed_token_amount + new_token_reserve_amount:
         raise Exception(
             f"You asked for too few tokens - your offer is {token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount} token mojos short.")
-        # not_payment = [
-        #     current_pair_coin.name(),
-        #     [decode_puzzle_hash(return_address), token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount]
-        # ]
-        # eph_token_coin_notarized_payments.append(not_payment)
-
-        # for ann_assert in get_announcements_asserts_for_notarized_payments([not_payment], eph_token_coin.puzzle_hash):
-        #     announcement_asserts.append(ann_assert)
-
-    eph_token_coin_inner_solution = Program.to(
-        eph_token_coin_notarized_payments)
+        
+    eph_token_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        OFFER_MOD,
+        Program.to(
+            eph_token_coin_notarized_payments
+        )
+    )
     eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
         CAT_MOD,
         [
             SpendableCAT(
                 eph_token_coin,
                 token_tail_hash,
-                OFFER_MOD,
+                get_cat_inner_puzzle(
+                    token_hidden_puzzle_hash,
+                    OFFER_MOD
+                ),
                 eph_token_coin_inner_solution,
                 lineage_proof=LineageProof(
                     last_token_reserve_coin.parent_coin_info,
-                    p2_singleton_puzzle_hash,
+                    get_cat_inner_puzzle(
+                        token_hidden_puzzle_hash,
+                        p2_singleton_puzzle
+                    ).get_tree_hash(),
                     last_token_reserve_coin.amount
                 )
             )
@@ -1435,14 +1569,7 @@ async def respond_to_remove_liquidity_offer(
     if last_xch_reserve_coin.amount > removed_xch_amount + new_xch_reserve_amount:
         raise Exception(
             f"Your offer asks for too few XCH - you're {xch_reserve_coin.amount - removed_xch_amount - new_xch_reserve_amount} mojos short.")
-        # xch_eph_coin_extra_payment = [
-        #     current_pair_coin.name(),
-        #     [decode_puzzle_hash(return_address), xch_reserve_coin.amount - removed_xch_amount - new_xch_reserve_amount]
-        # ]
-
-        # for ann_assert in get_announcements_asserts_for_notarized_payments([xch_eph_coin_extra_payment]):
-        #     announcement_asserts.append(ann_assert)
-
+        
     last_xch_reserve_coin_extra_conditions = [
         [
             ConditionOpcode.CREATE_COIN,
@@ -1514,6 +1641,7 @@ async def respond_to_swap_offer(
     current_pair_coin,
     creation_spend,
     token_tail_hash,
+    token_hidden_puzzle_hash,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
@@ -1540,8 +1668,11 @@ async def respond_to_swap_offer(
 
     announcement_asserts = []  # assert everything when the old  XCH reserve is spent
 
-    eph_token_coin_puzzle = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, OFFER_MOD)
+    eph_token_coin_puzzle = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        OFFER_MOD
+    )
     eph_token_coin_puzzle_hash = eph_token_coin_puzzle.get_tree_hash()
 
     asked_for_amount = 0
@@ -1582,16 +1713,17 @@ async def respond_to_swap_offer(
     new_xch_reserve_amount = pair_xch_reserve
     new_token_reserve_amount = pair_token_reserve
 
+    inverse_fee = 993 if token_hidden_puzzle_hash is None else 999
     if eph_coin_is_cat:  # token offered, so swap is token -> XCH
         token_amount = eph_coin.amount
-        new_xch_reserve_amount -= 993 * token_amount * \
+        new_xch_reserve_amount -= inverse_fee * token_amount * \
             pair_xch_reserve // (1000 * pair_token_reserve +
-                                 993 * token_amount)
+                                 inverse_fee * token_amount)
         new_token_reserve_amount += token_amount
     else:
         xch_amount = eph_coin.amount - total_donation_amount
-        new_token_reserve_amount -= 993 * xch_amount * \
-            pair_token_reserve // (1000 * pair_xch_reserve + 993 * xch_amount)
+        new_token_reserve_amount -= inverse_fee * xch_amount * \
+            pair_token_reserve // (1000 * pair_xch_reserve + inverse_fee * xch_amount)
         new_xch_reserve_amount += xch_amount
 
     # 3. spend singleton
@@ -1600,14 +1732,16 @@ async def respond_to_swap_offer(
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
     pair_singleton_inner_puzzle = get_pair_inner_puzzle(
         pair_launcher_id,
         token_tail_hash,
         pair_liquidity,
         pair_xch_reserve,
-        pair_token_reserve
+        pair_token_reserve,
+        token_hidden_puzzle_hash
     )
 
     inner_inner_sol = Program.to((
@@ -1624,8 +1758,10 @@ async def respond_to_swap_offer(
         ]
     ))
     pair_singleton_inner_solution = Program.to([
-        SWAP_PUZZLE,
-        Program.to(MERKLE_PROOFS[SWAP_PUZZLE_HASH]),
+        SWAP_PUZZLE if token_hidden_puzzle_hash is None else RCAT_SWAP_PUZZLE,
+        Program.to(
+            MERKLE_PROOFS[SWAP_PUZZLE_HASH] if token_hidden_puzzle_hash is None else RCAT_MERKLE_PROOFS[RCAT_SWAP_PUZZLE_HASH]
+        ),
         inner_inner_sol
     ])
 
@@ -1658,22 +1794,25 @@ async def respond_to_swap_offer(
     if total_token_amount > new_token_reserve_amount:
         raise Exception(
             f"You offered an extra {total_token_amount - new_token_reserve_amount} tokens - please use the exact amounts shown.")
-        # last_token_reserve_coin_extra_conditions.append([
-        #     ConditionOpcode.CREATE_COIN,
-        #     decode_puzzle_hash(return_address),
-        #     total_token_amount - new_token_reserve_amount
-        # ])
 
-    last_token_reserve_coin_inner_solution = solution_for_p2_singleton_flashloan(
-        last_token_reserve_coin,
-        pair_singleton_inner_puzzle.get_tree_hash(),
-        extra_conditions=last_token_reserve_coin_extra_conditions
+
+    last_token_reserve_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        p2_singleton_puzzle,
+        solution_for_p2_singleton_flashloan(
+            last_token_reserve_coin,
+            pair_singleton_inner_puzzle.get_tree_hash(),
+            extra_conditions=last_token_reserve_coin_extra_conditions
+        )
     )
     reserve_spendable_cats = [
         SpendableCAT(
             last_token_reserve_coin,
             token_tail_hash,
-            p2_singleton_puzzle,
+            get_cat_inner_puzzle(
+                token_hidden_puzzle_hash,
+                p2_singleton_puzzle
+            ),
             last_token_reserve_coin_inner_solution,
             lineage_proof=LineageProof(
                 last_token_reserve_lineage_proof[0],
@@ -1688,8 +1827,15 @@ async def respond_to_swap_offer(
             SpendableCAT(
                 eph_coin,
                 token_tail_hash,
-                OFFER_MOD,
-                Program.to([]),
+                get_cat_inner_puzzle(
+                    token_hidden_puzzle_hash,
+                    OFFER_MOD
+                ),
+                get_cat_inner_solution(
+                    token_hidden_puzzle_hash is not None,
+                    OFFER_MOD,
+                    Program.to([])
+                ),
                 lineage_proof=LineageProof(
                     eph_coin_creation_spend.coin.parent_coin_info,
                     get_innerpuzzle_from_puzzle(
@@ -1706,15 +1852,21 @@ async def respond_to_swap_offer(
     intermediary_token_reserve_coin_amount = new_token_reserve_amount if eph_coin_is_cat else pair_token_reserve
     intermediary_token_reserve_coin = Coin(
         last_token_reserve_coin.name(),
-        construct_cat_puzzle(CAT_MOD, token_tail_hash,
-                             OFFER_MOD).get_tree_hash(),
+        get_cat_puzzle(
+            token_tail_hash,
+            token_hidden_puzzle_hash,
+            OFFER_MOD
+        ).get_tree_hash(),
         intermediary_token_reserve_coin_amount
     )
 
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_hash = p2_singleton_puzzle.get_tree_hash()
-    p2_singleton_cat_puzzle = construct_cat_puzzle(
-        CAT_MOD, token_tail_hash, p2_singleton_puzzle)
+    p2_singleton_cat_puzzle = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        p2_singleton_puzzle
+    )
     p2_singleton_cat_puzzle_hash = p2_singleton_cat_puzzle.get_tree_hash()
 
     intermediary_token_reserve_notarized_payments = [
@@ -1733,18 +1885,29 @@ async def respond_to_swap_offer(
             ]
         )
 
-    intermediary_token_reserve_coin_inner_solution = Program.to(
-        intermediary_token_reserve_notarized_payments)
+    intermediary_token_reserve_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        OFFER_MOD,
+        Program.to(
+            intermediary_token_reserve_notarized_payments
+        )
+    )
 
     intermediary_token_spend_bundle = unsigned_spend_bundle_for_spendable_cats(CAT_MOD, [
         SpendableCAT(
             intermediary_token_reserve_coin,
             token_tail_hash,
-            OFFER_MOD,
+            get_cat_inner_puzzle(
+                token_hidden_puzzle_hash,
+                OFFER_MOD
+            ),
             intermediary_token_reserve_coin_inner_solution,
             lineage_proof=LineageProof(
                 last_token_reserve_coin.parent_coin_info,
-                p2_singleton_puzzle_hash,
+                get_cat_inner_puzzle(
+                    token_hidden_puzzle_hash,
+                    p2_singleton_puzzle
+                ).get_tree_hash(),
                 last_token_reserve_coin.amount
             )
         )
@@ -1918,6 +2081,7 @@ DEV_DEPLOYMENT_FEE - sent to tibetswap dev
 """
 async def create_pair_with_liquidity(
     tail_hash, # bytes
+    hidden_puzzle_hash, # bytes
     offer_str, # str
     initial_xch_liquidity,
     initial_cat_liquidity,
@@ -1938,8 +2102,11 @@ async def create_pair_with_liquidity(
     eph_token_coin_creation_spend = None
     announcement_asserts = []  # assert everything when the liquidity cat is minted
 
-    ephemeral_token_coin_puzzle = construct_cat_puzzle(
-        CAT_MOD, tail_hash, OFFER_MOD)
+    ephemeral_token_coin_puzzle = get_cat_puzzle(
+        tail_hash,
+        hidden_puzzle_hash,
+        OFFER_MOD
+    )
     ephemeral_token_coin_puzzle_hash = ephemeral_token_coin_puzzle.get_tree_hash()
 
     # all valid coin spends (i.e., not 'hints' for offered assets or coins)
@@ -2038,7 +2205,7 @@ async def create_pair_with_liquidity(
         ])
     ])
 
-    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
+    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, hidden_puzzle_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
     for cs in router_launch_sb.coin_spends:
         cs_to_aggregate.append(cs)
 
@@ -2072,6 +2239,7 @@ async def create_pair_with_liquidity(
         current_pair_coin,
         pair_launcher_spend,
         tail_hash,
+        hidden_puzzle_hash,
         0, 0, 0, # no liquidity
         liquidity_offer_str,
         None, None, None # no previous reserves since pool was just added

@@ -99,7 +99,7 @@ class TestTibetSwap:
 
     @pytest_asyncio.fixture(scope="function")
     async def node_and_wallets(self):
-        async with setup_simulators_and_wallets(1, 2, test_constants) as sims:
+        async with setup_simulators_and_wallets(1, 1, test_constants) as sims:
             yield sims
     
     @pytest_asyncio.fixture(scope="function")
@@ -109,7 +109,7 @@ class TestTibetSwap:
         full_nodes = [node_and_wallets.simulators[0].peer_api]
         wallets = node_and_wallets.wallets
         bt = node_and_wallets.bt
-        assert len(wallets) == 2
+        assert len(wallets) == 1
     
         full_node_api: FullNodeSimulator = full_nodes[0]
         full_node_server = full_node_api.server
@@ -136,6 +136,7 @@ class TestTibetSwap:
 
             await server.start_client(PeerInfo("127.0.0.1", uint16(full_node_server._port)), None)
 
+            await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_maker))
             await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_maker))
 
             api_makers.append(WalletRpcApi(wallet_node_maker))
@@ -190,7 +191,7 @@ class TestTibetSwap:
         for client_maker in client_makers:
             await self.wait_for_wallet_sync(client_maker)
 
-        yield client_node, client_makers[0], client_makers[1]
+        yield client_node, client_makers[0]
 
         for client_maker in client_makers:
             client_maker.close()
@@ -208,15 +209,12 @@ class TestTibetSwap:
 
     @pytest.mark.asyncio
     async def test_healthz(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+        full_node_client, wallet_client = setup
         
         full_node_resp = await full_node_client.healthz()
         assert full_node_resp['success']
 
         wallet_resp = await wallet_client.healthz()
-        assert wallet_resp['success']
-
-        wallet_resp = await bob_wallet_client.healthz()
         assert wallet_resp['success']
 
 
@@ -268,15 +266,15 @@ class TestTibetSwap:
                     print("ok, won't find a coin any time soon :(")
                     spendable_coins[0][31337][":("]
                 else:
-                    time.sleep(2)
+                    time.sleep(4)
 
         return coin, coin_puzzle
 
 
-    async def launch_router(self, wallet_client, full_node_client):
+    async def launch_router(self, wallet_client, full_node_client, rcat):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, 2)
 
-        launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle)
+        launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle, rcat)
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
         assert((await full_node_client.push_tx(signed_sb))["success"])
@@ -292,14 +290,24 @@ class TestTibetSwap:
         return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
 
 
-    async def create_test_cat(self, wallet_client: WalletRpcClient, full_node_client, token_amount=1000000):
+    async def create_test_cat_with_clients(
+        self,
+        wallet_client: WalletRpcClient,
+        full_node_client,
+        hidden_puzzle_hash,
+        token_amount=1000000
+    ):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
         
-        tail_hash, sb = await create_test_cat(token_amount, coin, coin_puzzle)
+        tail_hash, sb = await create_test_cat(hidden_puzzle_hash, token_amount, coin, coin_puzzle)
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
         assert((await full_node_client.push_tx(signed_sb))["success"])
-        await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(tail_hash)) # create wallet
+
+        # create wallet
+        # Note: Existing CAT wallets that receive rCATs as their first coin are automatically
+        #  converted to rCAT wallets by the wallet state manager.
+        await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(tail_hash))
 
         return bytes.fromhex(tail_hash)
 
@@ -310,6 +318,7 @@ class TestTibetSwap:
         full_node_client,
         router_launcher_id,
         tail_hash,
+        hidden_puzzle_hash,
         current_router_coin,
         current_router_coin_creation_spend
     ):
@@ -319,6 +328,7 @@ class TestTibetSwap:
             coin,
             coin_puzzle,
             tail_hash,
+            hidden_puzzle_hash,
             router_launcher_id,
             current_router_coin,
             current_router_coin_creation_spend
@@ -347,8 +357,9 @@ class TestTibetSwap:
         return bytes.fromhex(pair_launcher_id), pair_coin, pair_coin_creation_spend, router_new_coin, router_new_coin_creation_spend
 
 
-    async def get_wallet_id_for_cat(self, wallet_client, tail_hash):
-        wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
+    async def get_wallet_id_for_cat(self, wallet_client, tail_hash, rcat):
+        wallet_type = WalletType.CAT if not rcat else WalletType.RCAT
+        wallets = await wallet_client.get_wallets(wallet_type=wallet_type)
         wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(tail_hash.hex())), None)
 
         if wallet_id is None:
@@ -357,7 +368,7 @@ class TestTibetSwap:
             while wallet_id is None:
                 time.sleep(0.5) # I don't have any other solution, ok?!
 
-                wallets = await wallet_client.get_wallets(wallet_type = WalletType.CAT)
+                wallets = await wallet_client.get_wallets(wallet_type=wallet_type)
                 wallet_id = next((_['id'] for _ in wallets if _['data'].startswith(tail_hash.hex())), None)
 
             await self.wait_for_wallet_sync(wallet_client)
@@ -366,42 +377,53 @@ class TestTibetSwap:
         return int(wallet_id)
             
 
-    async def get_balance(self, wallet_client, tail_hash_or_none = None):
+    async def get_balance(self, wallet_client, tail_hash_or_none = None, rcat_if_cat = False):
         await self.wait_for_wallet_sync(wallet_client)
 
         wallet_id = 1 # XCH
         if tail_hash_or_none is not None:
-            wallet_id = await self.get_wallet_id_for_cat(wallet_client, tail_hash_or_none)
+            wallet_id = await self.get_wallet_id_for_cat(wallet_client, tail_hash_or_none, rcat_if_cat)
 
         resp = await wallet_client.get_wallet_balance(wallet_id)
         return resp["spendable_balance"]
 
 
+    @pytest.mark.parametrize(
+        "hidden_puzzle_hash",
+        [None, bytes32(b"\x00" * 32)],
+        ids=["CAT", "rCAT"]
+    )
     @pytest.mark.asyncio
-    async def test_router_launch(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+    async def test_router_launch(self, setup, hidden_puzzle_hash):
+        full_node_client, wallet_client = setup
         
-        launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client)
+        launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client, hidden_puzzle_hash is not None)
 
         cr = await full_node_client.get_coin_record_by_name(launcher_id)
         assert cr is not None
         assert cr.spent
 
 
+    @pytest.mark.parametrize(
+        "hidden_puzzle_hash",
+        [None, bytes32(b"\x00" * 32)],
+        ids=["CAT", "rCAT"]
+    )
     @pytest.mark.asyncio
-    async def test_pair_creation(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+    async def test_pair_creation(self, setup, hidden_puzzle_hash):
+        full_node_client, wallet_client = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
-            wallet_client, full_node_client
+            wallet_client, full_node_client, hidden_puzzle_hash is not None
         )
             
-        tail_hash = await self.create_test_cat(wallet_client, full_node_client)
+        tail_hash = await self.create_test_cat_with_clients(wallet_client, full_node_client, hidden_puzzle_hash)
 
         pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
             wallet_client,
             full_node_client,
             router_launcher_id,
             tail_hash,
+            hidden_puzzle_hash,
             current_router_coin,
             router_creation_spend
         )
@@ -410,13 +432,14 @@ class TestTibetSwap:
         assert cr.spent
 
         # another pair, just to be sure
-        tail_hash2 = await self.create_test_cat(bob_wallet_client, full_node_client)
+        tail_hash2 = await self.create_test_cat_with_clients(wallet_client, full_node_client, hidden_puzzle_hash)
 
         pair2_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
-            bob_wallet_client,
+            wallet_client,
             full_node_client,
             router_launcher_id,
             tail_hash2,
+            hidden_puzzle_hash,
             current_router_coin,
             router_creation_spend
         )
@@ -429,13 +452,14 @@ class TestTibetSwap:
         self,
         wallet_client,
         token_tail_hash,
+        hidden_puzzle_hash,
         initial_amount,
         delta,
         max_retries = 120,
         time_to_sleep = 1
     ):
         retries = 0
-        balance = await self.get_balance(wallet_client, token_tail_hash)
+        balance = await self.get_balance(wallet_client, token_tail_hash, hidden_puzzle_hash is not None)
         while balance == initial_amount:
             print("balance", balance, "initial_amount", initial_amount, "delta", delta)
 
@@ -443,23 +467,31 @@ class TestTibetSwap:
             assert retries <= max_retries
 
             time.sleep(1)
-            balance = await self.get_balance(wallet_client, token_tail_hash)
+            balance = await self.get_balance(wallet_client, token_tail_hash, hidden_puzzle_hash is not None)
 
         assert balance - initial_amount == delta
 
         return balance
 
 
+    @pytest.mark.parametrize(
+        "hidden_puzzle_hash",
+        [None, bytes32(b"\x00" * 32)],
+        ids=["CAT", "rCAT"]
+    )
     @pytest.mark.asyncio
-    async def test_pair_operations(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+    async def test_pair_operations(self, setup, hidden_puzzle_hash):
+        full_node_client, wallet_client = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
-            wallet_client, full_node_client
+            wallet_client, full_node_client, hidden_puzzle_hash is not None
         )
             
         token_total_supply = 1000000 * 1000 # in mojos
-        token_tail_hash = await self.create_test_cat(
-            wallet_client, full_node_client, token_amount=token_total_supply // 1000
+        token_tail_hash = await self.create_test_cat_with_clients(
+            wallet_client,
+            full_node_client,
+            hidden_puzzle_hash,
+            token_amount=token_total_supply // 1000
         )
         await self.wait_for_wallet_sync(wallet_client)
             
@@ -468,6 +500,7 @@ class TestTibetSwap:
             full_node_client,
             router_launcher_id,
             token_tail_hash,
+            hidden_puzzle_hash,
             current_router_coin,
             router_creation_spend
         )
@@ -475,15 +508,15 @@ class TestTibetSwap:
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(pair_launcher_id).get_tree_hash()
         
         await self.wait_for_wallet_sync(wallet_client)
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, 0, token_total_supply)
-        assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash)) == 0
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, 0, token_total_supply)
+        assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash, None)) == 0
 
         xch_balance_before_all_ops = xch_balance_before = await self.get_balance(wallet_client)
 
         # 1. Deposit liquidity: 1000 CAT mojos and 100000000 mojos
         # python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id] --push-tx
-        token_wallet_id = await self.get_wallet_id_for_cat(wallet_client, token_tail_hash)
-        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash)
+        token_wallet_id = await self.get_wallet_id_for_cat(wallet_client, token_tail_hash, hidden_puzzle_hash is not None)
+        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash, False)
 
         xch_amount = 100000000
         token_amount = 1000
@@ -511,6 +544,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -520,6 +554,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -535,8 +570,8 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_before - xch_balance_now == xch_amount + liquidity_token_amount
 
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_total_supply, -token_amount)
-        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, 0, liquidity_token_amount)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_total_supply, -token_amount)
+        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, 0, liquidity_token_amount)
 
         # 2. Deposit moar liquidity (worth 4000 tokens, so 4000 token mojos and 100000000 mojos)
         # python3 tibet.py deposit-liquidity --token-amount 4000 --asset-id [asset_id] --push-tx
@@ -568,6 +603,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -577,6 +613,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -592,8 +629,8 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_before - xch_balance_now == xch_amount + liquidity_token_amount
 
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, -token_amount)
-        liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, liquidity_balance_before, liquidity_token_amount)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, -token_amount)
+        liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, liquidity_balance_before, liquidity_token_amount)
 
         # 3. Withdraw 800 liquidity tokens
         # python3 tibet.py remove-liquidity --liquidity-token-amount 800 --asset-id [asset_id] --push-tx
@@ -625,6 +662,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -634,6 +672,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -649,8 +688,8 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_now - xch_balance_before == xch_amount + liquidity_token_amount
 
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_amount)
-        liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, liquidity_balance_before, -liquidity_token_amount)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, token_amount)
+        liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, liquidity_balance_before, -liquidity_token_amount)
 
         # 4. Change 100000000 XCH to tokens
         # python3 tibet.py xch-to-token --xch-amount 100000000 --asset-id [asset_id] --push-tx
@@ -670,12 +709,14 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
 
         xch_amount = 100000000
-        token_amount = pair_state["token_reserve"] * xch_amount * 993 // (1000 * pair_state["xch_reserve"] + 993 * xch_amount)
+        inverse_fee = 993 if hidden_puzzle_hash is None else 999
+        token_amount = pair_state["token_reserve"] * xch_amount * inverse_fee // (1000 * pair_state["xch_reserve"] + inverse_fee * xch_amount)
 
         offer_dict = {}
         offer_dict[1] = -xch_amount # offer XCH
@@ -689,6 +730,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -704,9 +746,9 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_before - xch_balance_now == xch_amount
 
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_amount)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, token_amount)
         
-        liquidity_balance_now = await self.get_balance(wallet_client, pair_liquidity_tail_hash)
+        liquidity_balance_now = await self.get_balance(wallet_client, pair_liquidity_tail_hash, None)
         assert liquidity_balance_before == liquidity_balance_now
 
         # 5. Change 1000 tokens to XCH
@@ -727,12 +769,13 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
 
         token_amount = 1000
-        xch_amount = pair_state["xch_reserve"] * token_amount * 993 // (1000 * pair_state["token_reserve"] + 993 * token_amount)
+        xch_amount = pair_state["xch_reserve"] * token_amount * inverse_fee // (1000 * pair_state["token_reserve"] + inverse_fee * token_amount)
 
         offer_dict = {}
         offer_dict[1] = xch_amount # ask for XCH
@@ -746,6 +789,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -761,7 +805,7 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_now - xch_balance_before == xch_amount
 
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, -token_amount)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, -token_amount)
 
         # 6. Remove remaining liquidity and call it a day
         # python3 tibet.py remove-liquidity --liquidity-token-amount 4200 --asset-id [asset_id] --push-tx
@@ -791,6 +835,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -800,6 +845,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -815,19 +861,27 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_now == xch_balance_before_all_ops
 
-        await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_total_supply - token_balance_before)
-        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, liquidity_balance_before, -liquidity_balance_before)
+        await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, token_total_supply - token_balance_before)
+        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, liquidity_balance_before, -liquidity_balance_before)
 
+    @pytest.mark.parametrize(
+        "hidden_puzzle_hash",
+        [None, bytes32(b"\x00" * 32)],
+        ids=["CAT", "rCAT"]
+    )
     @pytest.mark.asyncio
-    async def test_donations(self, setup):
-        full_node_client, wallet_client, bob_wallet_client = setup
+    async def test_donations(self, setup, hidden_puzzle_hash):
+        full_node_client, wallet_client = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
-            wallet_client, full_node_client
+            wallet_client, full_node_client, hidden_puzzle_hash is not None
         )
             
         token_total_supply = 1000000 * 1000 # in mojos
-        token_tail_hash = await self.create_test_cat(
-            wallet_client, full_node_client, token_amount=token_total_supply // 1000
+        token_tail_hash = await self.create_test_cat_with_clients(
+            wallet_client,
+            full_node_client,
+            hidden_puzzle_hash,
+            token_amount=token_total_supply // 1000
         )
         await self.wait_for_wallet_sync(wallet_client)
             
@@ -836,21 +890,22 @@ class TestTibetSwap:
             full_node_client,
             router_launcher_id,
             token_tail_hash,
+            hidden_puzzle_hash,
             current_router_coin,
             router_creation_spend
         )
             
         pair_liquidity_tail_hash = pair_liquidity_tail_puzzle(pair_launcher_id).get_tree_hash()
         
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, 0, token_total_supply)
-        assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash)) == 0
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, 0, token_total_supply)
+        assert (await self.get_balance(wallet_client, pair_liquidity_tail_hash, None)) == 0
 
         xch_balance_before_all_ops = xch_balance_before = await self.get_balance(wallet_client)
 
         # 1. Deposit liquidity: 1000 CAT mojos and 100000000 mojos
         # python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id] --push-tx
-        token_wallet_id = await self.get_wallet_id_for_cat(wallet_client, token_tail_hash)
-        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash)
+        token_wallet_id = await self.get_wallet_id_for_cat(wallet_client, token_tail_hash, hidden_puzzle_hash is not None)
+        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash, False)
 
         xch_amount = 100000000
         token_amount = 1000
@@ -878,6 +933,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -887,6 +943,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -902,8 +959,8 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_before - xch_balance_now == xch_amount + liquidity_token_amount
 
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_total_supply, -token_amount)
-        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, 0, liquidity_token_amount)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_total_supply, -token_amount)
+        await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, 0, liquidity_token_amount)
 
         # Change 100000000 XCH to tokens
         # BUT leave 10000 mojos as a tip
@@ -923,13 +980,15 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
 
         xch_amount = 100000000
         xch_donation_amount = 10000
-        token_amount = pair_state["token_reserve"] * xch_amount * 993 // (1000 * pair_state["xch_reserve"] + 993 * xch_amount)
+        inverse_fee = 993 if hidden_puzzle_hash is None else 999
+        token_amount = pair_state["token_reserve"] * xch_amount * inverse_fee // (1000 * pair_state["xch_reserve"] + inverse_fee * xch_amount)
 
         offer_dict = {}
         offer_dict[1] = -(xch_amount + xch_donation_amount) # offer XCH
@@ -947,6 +1006,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -965,7 +1025,7 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_before - xch_balance_now == xch_amount + xch_donation_amount
 
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, token_amount)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, token_amount)
 
         first_donation_address_coins = await full_node_client.get_coin_records_by_puzzle_hash(first_donation_ph)
         assert len(first_donation_address_coins) == 1
@@ -983,22 +1043,28 @@ class TestTibetSwap:
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
             full_node_client, current_pair_coin.name()
         )
-        assert pair_state["xch_reserve"] == 200000000
-        assert pair_state["token_reserve"] == 502
-        assert pair_state["liquidity"] == 1000
+        if hidden_puzzle_hash is None:
+            assert pair_state["xch_reserve"] == 200000000
+            assert pair_state["token_reserve"] == 502
+            assert pair_state["liquidity"] == 1000
+        else:
+            assert pair_state["xch_reserve"] == 200000000
+            assert pair_state["token_reserve"] == 501
+            assert pair_state["liquidity"] == 1000
 
         xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
             full_node_client,
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
 
         token_amount = 1000
         xch_donation_amount = 100000
-        xch_amount = pair_state["xch_reserve"] * token_amount * 993 // (1000 * pair_state["token_reserve"] + 993 * token_amount) - xch_donation_amount
+        xch_amount = pair_state["xch_reserve"] * token_amount * inverse_fee // (1000 * pair_state["token_reserve"] + inverse_fee * token_amount) - xch_donation_amount
 
         offer_dict = {}
         offer_dict[1] = xch_amount - xch_donation_amount # ask for XCH
@@ -1014,6 +1080,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -1032,7 +1099,7 @@ class TestTibetSwap:
         xch_balance_now = await self.get_balance(wallet_client)
         assert xch_balance_now - xch_balance_before == xch_amount - xch_donation_amount
 
-        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, token_balance_before, -token_amount)
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, -token_amount)
 
         third_donation_address_coins = await full_node_client.get_coin_records_by_puzzle_hash(third_donation_ph)
         assert len(third_donation_address_coins) == 1

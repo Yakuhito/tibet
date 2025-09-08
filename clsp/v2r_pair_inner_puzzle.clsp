@@ -78,10 +78,14 @@
         (list
             ASSERT_PUZZLE_ANNOUNCEMENT
             (sha256
-                (curry_hashes_inline REVOCATION_LAYER_MOD_HASH
-                    (sha256tree REVOCATION_LAYER_MOD_HASH)
-                    (sha256tree HIDDEN_PUZZLE_HASH)
-                    (sha256tree (cat_puzzle_hash CAT_MOD_HASH TAIL_HASH SETTLEMENT_PAYMENTS_MOD_HASH))
+                (cat_puzzle_hash
+                    CAT_MOD_HASH
+                    TAIL_HASH
+                    (curry_hashes_inline REVOCATION_LAYER_MOD_HASH
+                        (sha256tree REVOCATION_LAYER_MOD_HASH)
+                        (sha256tree HIDDEN_PUZZLE_HASH)
+                        (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
+                    )
                 )
                 (settlement_cat_announcement
                     my_coin_id
