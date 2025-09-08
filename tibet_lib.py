@@ -152,8 +152,11 @@ MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
 
 # XCH-rCAT puzzles
 RCAT_ROUTER_MOD: Program = load_clvm_hex("clvm/v2r_router.clvm.hex")
+RCAT_ROUTER_MOD_HASH = RCAT_ROUTER_MOD.get_tree_hash()
+
 RCAT_PAIR_INNER_PUZZLE_MOD: Program = load_clvm_hex(
     "clvm/v2r_pair_inner_puzzle.clvm.hex")
+RCAT_PAIR_INNER_PUZZLE_MOD_HASH = RCAT_PAIR_INNER_PUZZLE_MOD.get_tree_hash()
 
 RCAT_SWAP_PUZZLE = SWAP_MOD.curry(999)
 RCAT_SWAP_PUZZLE_HASH = RCAT_SWAP_PUZZLE.get_tree_hash()

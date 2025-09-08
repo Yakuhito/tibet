@@ -383,11 +383,16 @@ class TestTibetSwap:
         return resp["spendable_balance"]
 
 
+    @pytest.mark.parametrize(
+        "hidden_puzzle_hash",
+        [None, bytes32(b"\x00" * 32)],
+        ids=["CAT", "rCAT"]
+    )
     @pytest.mark.asyncio
-    async def test_router_launch(self, setup):
+    async def test_router_launch(self, setup, hidden_puzzle_hash):
         full_node_client, wallet_client, _wallet_state_manager = setup
         
-        launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client, None)
+        launcher_id, _, __ = await self.launch_router(wallet_client, full_node_client, hidden_puzzle_hash)
 
         cr = await full_node_client.get_coin_record_by_name(launcher_id)
         assert cr is not None
