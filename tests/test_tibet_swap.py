@@ -137,6 +137,7 @@ class TestTibetSwap:
             await server.start_client(PeerInfo("127.0.0.1", uint16(full_node_server._port)), None)
 
             await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_maker))
+            await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(ph_maker))
 
             api_makers.append(WalletRpcApi(wallet_node_maker))
 
@@ -265,7 +266,7 @@ class TestTibetSwap:
                     print("ok, won't find a coin any time soon :(")
                     spendable_coins[0][31337][":("]
                 else:
-                    time.sleep(2)
+                    time.sleep(4)
 
         return coin, coin_puzzle
 
@@ -289,10 +290,11 @@ class TestTibetSwap:
         return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
 
 
-    async def create_test_cat(self, wallet_client: WalletRpcClient, full_node_client, hidden_puzzle_hash, token_amount=1000000):
+    async def create_test_cat_with_clients(self, wallet_client: WalletRpcClient, full_node_client, hidden_puzzle_hash, token_amount=1000000):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
         
         tail_hash, sb = await create_test_cat(hidden_puzzle_hash, token_amount, coin, coin_puzzle)
+        open("spend_bundle.json", "w").write(json.dumps(sb.to_json())) # todo: debug
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
         assert((await full_node_client.push_tx(signed_sb))["success"])
@@ -392,7 +394,7 @@ class TestTibetSwap:
             wallet_client, full_node_client, None
         )
             
-        tail_hash = await self.create_test_cat(wallet_client, full_node_client, None)
+        tail_hash = await self.create_test_cat_with_clients(wallet_client, full_node_client, None)
 
         pair_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
             wallet_client,
@@ -407,7 +409,7 @@ class TestTibetSwap:
         assert cr.spent
 
         # another pair, just to be sure
-        tail_hash2 = await self.create_test_cat(wallet_client, full_node_client, None)
+        tail_hash2 = await self.create_test_cat_with_clients(wallet_client, full_node_client, None)
 
         pair2_launcher_id, current_pair_coin, pair_creation_spend, current_router_coin, router_creation_spend = await self.create_pair(
             wallet_client,
@@ -455,7 +457,7 @@ class TestTibetSwap:
         )
             
         token_total_supply = 1000000 * 1000 # in mojos
-        token_tail_hash = await self.create_test_cat(
+        token_tail_hash = await self.create_test_cat_with_clients(
             wallet_client, full_node_client, None, token_amount=token_total_supply // 1000
         )
         await self.wait_for_wallet_sync(wallet_client)
@@ -823,7 +825,7 @@ class TestTibetSwap:
         )
             
         token_total_supply = 1000000 * 1000 # in mojos
-        token_tail_hash = await self.create_test_cat(
+        token_tail_hash = await self.create_test_cat_with_clients(
             wallet_client, full_node_client, None, token_amount=token_total_supply // 1000
         )
         await self.wait_for_wallet_sync(wallet_client)
