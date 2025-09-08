@@ -290,7 +290,13 @@ class TestTibetSwap:
         return bytes.fromhex(launcher_id), router_current_coin, router_launch_coin_spend
 
 
-    async def create_test_cat_with_clients(self, wallet_client: WalletRpcClient, full_node_client, hidden_puzzle_hash, token_amount=1000000):
+    async def create_test_cat_with_clients(
+        self,
+        wallet_client: WalletRpcClient,
+        full_node_client,
+        hidden_puzzle_hash,
+        token_amount=1000000
+    ):
         coin, coin_puzzle = await self.select_standard_coin_and_puzzle(wallet_client, token_amount)
         
         tail_hash, sb = await create_test_cat(hidden_puzzle_hash, token_amount, coin, coin_puzzle)
@@ -308,6 +314,7 @@ class TestTibetSwap:
         full_node_client,
         router_launcher_id,
         tail_hash,
+        hidden_puzzle_hash,
         current_router_coin,
         current_router_coin_creation_spend
     ):
@@ -317,6 +324,7 @@ class TestTibetSwap:
             coin,
             coin_puzzle,
             tail_hash,
+            hidden_puzzle_hash,
             router_launcher_id,
             current_router_coin,
             current_router_coin_creation_spend
@@ -400,6 +408,7 @@ class TestTibetSwap:
             full_node_client,
             router_launcher_id,
             tail_hash,
+            None,
             current_router_coin,
             router_creation_spend
         )
@@ -415,6 +424,7 @@ class TestTibetSwap:
             full_node_client,
             router_launcher_id,
             tail_hash2,
+            None,
             current_router_coin,
             router_creation_spend
         )
@@ -466,6 +476,7 @@ class TestTibetSwap:
             full_node_client,
             router_launcher_id,
             token_tail_hash,
+            None,
             current_router_coin,
             router_creation_spend
         )
@@ -834,6 +845,7 @@ class TestTibetSwap:
             full_node_client,
             router_launcher_id,
             token_tail_hash,
+            None,
             current_router_coin,
             router_creation_spend
         )

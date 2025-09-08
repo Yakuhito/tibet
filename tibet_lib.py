@@ -238,7 +238,7 @@ def get_pair_inner_puzzle(
         )
 
     return P2_MERKLE_TREE_MODIFIED_MOD.curry(
-        get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash),
+        get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash, None),
         MERKLE_ROOT,
         (liquidity, (xch_reserve, token_reserve))
     )
@@ -634,7 +634,7 @@ async def sync_router(full_node_client, last_router_id, rcat):
 
 
 async def get_spend_bundle_in_mempool(full_node_client, coin):
-    items = await full_node_client.fetch("get_mempool_items_by_coin_name", {"coin_name": coin_id.hex()})
+    items = await full_node_client.fetch("get_mempool_items_by_coin_name", {"coin_name": coin.name().hex()})
 
     for sb_json in items["mempool_items"]:
         sb = SpendBundle.from_json_dict(sb_json["spend_bundle"])
