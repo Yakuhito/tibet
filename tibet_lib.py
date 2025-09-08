@@ -80,7 +80,7 @@ from chia.full_node.bundle_tools import simple_solution_generator
 from chia._tests.util.get_name_puzzle_conditions import get_name_puzzle_conditions
 from private_key_things import sign_spend_bundle_with_specific_sk
 
-from chia.wallet.vc_wallet.vc_drivers import REVOCATION_LAYER_HASH
+from chia.wallet.vc_wallet.vc_drivers import REVOCATION_LAYER_HASH, create_revocation_layer
 
 MEMPOOL_MIN_FEE_INCREASE = uint64(10000000)
 ROUTER_MIN_FEE = 42000000000

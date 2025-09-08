@@ -304,7 +304,9 @@ class TestTibetSwap:
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
         assert((await full_node_client.push_tx(signed_sb))["success"])
-        await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(tail_hash)) # create wallet
+
+        # create wallet
+        await wallet_client.create_wallet_for_existing_cat(bytes.fromhex(tail_hash))
 
         return bytes.fromhex(tail_hash)
 
