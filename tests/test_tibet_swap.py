@@ -516,7 +516,7 @@ class TestTibetSwap:
         # 1. Deposit liquidity: 1000 CAT mojos and 100000000 mojos
         # python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id] --push-tx
         token_wallet_id = await self.get_wallet_id_for_cat(wallet_client, token_tail_hash, hidden_puzzle_hash is not None)
-        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash, None)
+        liquidity_wallet_id = await self.get_wallet_id_for_cat(wallet_client, pair_liquidity_tail_hash, False)
 
         xch_amount = 100000000
         token_amount = 1000
@@ -544,7 +544,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -554,7 +554,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -603,7 +603,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -613,7 +613,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -662,7 +662,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -672,7 +672,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -709,13 +709,14 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
 
         xch_amount = 100000000
-        token_amount = pair_state["token_reserve"] * xch_amount * 993 // (1000 * pair_state["xch_reserve"] + 993 * xch_amount)
+        inverse_fee = 993 if hidden_puzzle_hash is None else 999
+        token_amount = pair_state["token_reserve"] * xch_amount * inverse_fee // (1000 * pair_state["xch_reserve"] + inverse_fee * xch_amount)
 
         offer_dict = {}
         offer_dict[1] = -xch_amount # offer XCH
@@ -729,7 +730,7 @@ class TestTibetSwap:
            current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -768,13 +769,13 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
 
         token_amount = 1000
-        xch_amount = pair_state["xch_reserve"] * token_amount * 993 // (1000 * pair_state["token_reserve"] + 993 * token_amount)
+        xch_amount = pair_state["xch_reserve"] * token_amount * inverse_fee // (1000 * pair_state["token_reserve"] + inverse_fee * token_amount)
 
         offer_dict = {}
         offer_dict[1] = xch_amount # ask for XCH
@@ -788,7 +789,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -834,7 +835,7 @@ class TestTibetSwap:
             pair_launcher_id,
             current_pair_coin,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_creation_spend,
             sb_to_aggregate
         )
@@ -844,7 +845,7 @@ class TestTibetSwap:
             current_pair_coin,
             pair_creation_spend,
             token_tail_hash,
-            None,
+            hidden_puzzle_hash,
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
@@ -983,7 +984,7 @@ class TestTibetSwap:
 
         xch_amount = 100000000
         xch_donation_amount = 10000
-        token_amount = pair_state["token_reserve"] * xch_amount * 993 // (1000 * pair_state["xch_reserve"] + 993 * xch_amount)
+        token_amount = pair_state["token_reserve"] * xch_amount * inverse_fee // (1000 * pair_state["xch_reserve"] + inverse_fee * xch_amount)
 
         offer_dict = {}
         offer_dict[1] = -(xch_amount + xch_donation_amount) # offer XCH
@@ -1054,7 +1055,7 @@ class TestTibetSwap:
 
         token_amount = 1000
         xch_donation_amount = 100000
-        xch_amount = pair_state["xch_reserve"] * token_amount * 993 // (1000 * pair_state["token_reserve"] + 993 * token_amount) - xch_donation_amount
+        xch_amount = pair_state["xch_reserve"] * token_amount * inverse_fee // (1000 * pair_state["token_reserve"] + inverse_fee * token_amount) - xch_donation_amount
 
         offer_dict = {}
         offer_dict[1] = xch_amount - xch_donation_amount # ask for XCH
