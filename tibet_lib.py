@@ -1835,10 +1835,8 @@ async def respond_to_swap_offer(
                 ),
                 lineage_proof=LineageProof(
                     eph_coin_creation_spend.coin.parent_coin_info,
-                    get_cat_inner_puzzle(
-                        token_hidden_puzzle_hash,
-                        p2_singleton_puzzle
-                    ).get_tree_hash(),
+                    get_innerpuzzle_from_puzzle(
+                        eph_coin_creation_spend.puzzle_reveal).get_tree_hash(),
                     eph_coin_creation_spend.coin.amount
                 )
             )
