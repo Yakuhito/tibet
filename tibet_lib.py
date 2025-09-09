@@ -2084,6 +2084,216 @@ async def respond_to_swap_offer(
         coin_spends, offer_spend_bundle.aggregated_signature
     )
 
+async def rebase_spends_and_conditions(
+    pair_launcher_id,
+    current_pair_coin,
+    creation_spend,
+    token_tail_hash,
+    token_hidden_puzzle_hash,
+    inverse_fee,
+    pair_liquidity,
+    pair_xch_reserve,
+    pair_token_reserve,
+    new_token_reserve,
+    last_xch_reserve_coin,
+    last_token_reserve_coin,
+    # coin_parent_coin_info, inner_puzzle_hash, amount
+    last_token_reserve_lineage_proof,
+    additional_spendable_cats = None, # can be none; only used if reserves need to grow
+):
+    # 1. re-create the pair singleton (spend it)
+    pair_singleton_puzzle = get_pair_puzzle(
+        pair_launcher_id,
+        token_tail_hash,
+        pair_liquidity,
+        pair_xch_reserve,
+        pair_token_reserve,
+        token_hidden_puzzle_hash,
+        inverse_fee
+    )
+    inner_inner_sol = Program.to((
+        (
+            current_pair_coin.name(),
+            (
+                last_xch_reserve_coin.name(),
+                last_token_reserve_coin.name()
+            )
+        ),
+        [
+            new_token_reserve
+        ]
+    ))
+    rebase_puzzle = get_rcat_rebase_puzzle(token_hidden_puzzle_hash)
+    pair_singleton_inner_solution = Program.to([
+        rebase_puzzle,
+        Program.to(
+            get_rcat_merkle_root_and_proofs(inverse_fee, token_hidden_puzzle_hash)[1][rebase_puzzle.get_tree_hash()]
+        ),
+        inner_inner_sol
+    ])
+
+    lineage_proof = lineage_proof_for_coinsol(creation_spend)
+    pair_singleton_solution = solution_for_singleton(
+        lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
+    )
+    pair_singleton_spend = make_spend(
+        current_pair_coin, pair_singleton_puzzle, pair_singleton_solution)
+
+    # 2. spend token reserve
+    p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
+    p2_singleton_puzzle_hash = p2_singleton_puzzle.get_tree_hash()
+
+    last_token_reserve_coin_extra_conditions = [
+        [
+            ConditionOpcode.CREATE_COIN,
+            OFFER_MOD_HASH,
+            last_token_reserve_coin.amount
+        ]
+    ]
+
+    last_token_reserve_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        p2_singleton_puzzle,
+        solution_for_p2_singleton_flashloan(
+            last_token_reserve_coin,
+            pair_singleton_inner_puzzle.get_tree_hash(),
+            extra_conditions=last_token_reserve_coin_extra_conditions
+        )
+    )
+    last_token_reserve_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+        CAT_MOD,
+        [
+            SpendableCAT(
+                last_token_reserve_coin,
+                token_tail_hash,
+                get_cat_inner_puzzle(
+                    token_hidden_puzzle_hash,
+                    p2_singleton_puzzle
+                ),
+                last_token_reserve_coin_inner_solution,
+                lineage_proof=LineageProof(
+                    last_token_reserve_lineage_proof[0],
+                    last_token_reserve_lineage_proof[1],
+                    last_token_reserve_lineage_proof[2]
+                )
+            )
+        ]
+    )
+    last_token_reserve_coin_spend = last_token_reserve_coin_spend_bundle.coin_spends[0]
+
+    # 3. spend ephemeral token coin to create new token reserve
+    eph_token_coin = Coin(
+        last_token_reserve_coin.name(),
+        get_cat_puzzle(
+            token_tail_hash,
+            token_hidden_puzzle_hash,
+            OFFER_MOD
+        ).get_tree_hash(),
+        last_token_reserve_coin.amount
+    )
+    
+    eph_token_coin_notarized_payments = []
+    security_notarized_payment = None
+    if eph_token_coin.amount < new_token_reserve:
+        security_notarized_payment = Program.to([
+            b'\x00' * 32,
+            [hidden_puzzle_hash,
+                eph_token_coin.amount - new_token_reserve, [hidden_puzzle_hash]]
+        ])
+        eph_token_coin_notarized_payments.append(security_notarized_payment)
+    if new_token_reserve > 0:
+        eph_token_coin_notarized_payments.append([
+            current_pair_coin.name(),
+            [p2_singleton_puzzle_hash, new_token_reserve]
+        ])
+    
+    eph_token_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        OFFER_MOD,
+        Program.to(
+            eph_token_coin_notarized_payments
+        )
+    )
+
+    if additional_spendable_cats is None:
+        additional_spendable_cats = []
+    additional_spendable_cats.append(
+        SpendableCAT(
+            eph_token_coin,
+            token_tail_hash,
+            get_cat_inner_puzzle(
+                token_hidden_puzzle_hash,
+                OFFER_MOD
+            ),
+            eph_token_coin_inner_solution,
+            lineage_proof=LineageProof(
+                last_token_reserve_coin.parent_coin_info,
+                get_cat_inner_puzzle(
+                    token_hidden_puzzle_hash,
+                    p2_singleton_puzzle
+                ).get_tree_hash(),
+                last_token_reserve_coin.amount
+            )
+        )
+    )
+    eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+        CAT_MOD, additional_spendable_cats
+    )
+    eph_token_coin_spend = eph_token_coin_spend_bundle.coin_spends[0]
+
+    # 4. spend XCH reserve
+    last_xch_reserve_coin_extra_conditions = [
+        [
+            ConditionOpcode.CREATE_COIN,
+            OFFER_MOD_HASH,
+            last_xch_reserve_coin.amount
+        ]
+    ] + announcement_asserts
+
+    last_xch_reserve_coin_solution = solution_for_p2_singleton_flashloan(
+        last_xch_reserve_coin,
+        pair_singleton_inner_puzzle.get_tree_hash(),
+        extra_conditions=last_xch_reserve_coin_extra_conditions
+    )
+    last_xch_reserve_coin_spend = make_spend(
+        last_xch_reserve_coin,
+        p2_singleton_puzzle,
+        last_xch_reserve_coin_solution
+    )
+
+    # 5. spend ephemeral XCH coin to create new XCH reserve
+    eph_xch_coin = Coin(
+        last_xch_reserve_coin.name(),
+        OFFER_MOD_HASH,
+        last_xch_reserve_coin.amount
+    )
+    
+    eph_xch_coin_notarized_payments = []
+    if new_xch_reserve_amount > 0:
+        eph_xch_coin_notarized_payments.append([
+            current_pair_coin.name(),
+            [p2_singleton_puzzle_hash, new_xch_reserve_amount]
+        ])
+
+    eph_xch_coin_solution = Program.to(eph_xch_coin_notarized_payments)
+    eph_xch_coin_spend = make_spend(
+        eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
+
+    conds = []
+    conds.append([ConditionOpcode.SEND_MESSAGE, 18, new_token_reserve, current_pair_coin.puzzle_hash])
+    if security_notarized_payment is not None:
+        conds.append([
+            ConditionOpcode.ASSERT_PUZZLE_ANNOUNCEMENT,
+            std_hash(eph_token_coin.puzzle_hash + security_notarized_payment.get_tree_hash())
+        ])
+    
+    return [
+        pair_singleton_spend,
+        last_token_reserve_coin_spend,
+        eph_token_coin_spend,
+        last_xch_reserve_coin_spend,
+        eph_xch_coin_spend
+    ], conds
 
 async def get_fee_estimate(mempool_sb, full_node_client: FullNodeRpcClient):
     # upper bound (exaggerated so the tx doesn't fail)
