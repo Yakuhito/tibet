@@ -1071,7 +1071,8 @@ async def respond_to_deposit_liquidity_offer(
         pair_liquidity,
         pair_xch_reserve,
         pair_token_reserve,
-        token_hidden_puzzle_hash
+        token_hidden_puzzle_hash,
+        inverse_fee
     )
     if last_token_reserve_coin is not None:
         spendable_cats_for_token_reserve.append(
@@ -1143,7 +1144,8 @@ async def respond_to_deposit_liquidity_offer(
         pair_liquidity,
         pair_xch_reserve,
         pair_token_reserve,
-        token_hidden_puzzle_hash
+        token_hidden_puzzle_hash,
+        inverse_fee
     )
     inner_inner_sol = Program.to((
         (
@@ -1369,7 +1371,8 @@ async def respond_to_remove_liquidity_offer(
         pair_liquidity,
         pair_xch_reserve,
         pair_token_reserve,
-        token_hidden_puzzle_hash
+        token_hidden_puzzle_hash,
+        inverse_fee
     )
     pair_singleton_puzzle_hash = pair_singleton_puzzle.get_tree_hash()
     pair_singleton_inner_puzzle = get_pair_inner_puzzle(
@@ -1378,7 +1381,8 @@ async def respond_to_remove_liquidity_offer(
         pair_liquidity,
         pair_xch_reserve,
         pair_token_reserve,
-        token_hidden_puzzle_hash
+        token_hidden_puzzle_hash,
+        inverse_fee
     )
     pair_singleton_inner_puzzle_hash = pair_singleton_inner_puzzle.get_tree_hash()
 
@@ -1465,7 +1469,8 @@ async def respond_to_remove_liquidity_offer(
         pair_liquidity,
         pair_xch_reserve,
         pair_token_reserve,
-        token_hidden_puzzle_hash
+        token_hidden_puzzle_hash,
+        inverse_fee
     )
     inner_inner_sol = Program.to((
         (
@@ -1766,7 +1771,8 @@ async def respond_to_swap_offer(
         pair_liquidity,
         pair_xch_reserve,
         pair_token_reserve,
-        token_hidden_puzzle_hash
+        token_hidden_puzzle_hash,
+        inverse_fee
     )
     pair_singleton_inner_puzzle = get_pair_inner_puzzle(
         pair_launcher_id,
@@ -1774,7 +1780,8 @@ async def respond_to_swap_offer(
         pair_liquidity,
         pair_xch_reserve,
         pair_token_reserve,
-        token_hidden_puzzle_hash
+        token_hidden_puzzle_hash,
+        inverse_fee
     )
 
     inner_inner_sol = Program.to((
