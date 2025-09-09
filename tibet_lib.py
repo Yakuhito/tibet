@@ -1165,7 +1165,7 @@ async def respond_to_deposit_liquidity_offer(
     pair_singleton_inner_solution = Program.to([
         ADD_LIQUIDITY_PUZZLE,
         Program.to(
-            MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, hidden_puzzle_hash)[1][ADD_LIQUIDITY_PUZZLE_HASH]
+            MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, token_hidden_puzzle_hash)[1][ADD_LIQUIDITY_PUZZLE_HASH]
         ),
         inner_inner_sol
     ])
@@ -1489,7 +1489,7 @@ async def respond_to_remove_liquidity_offer(
     pair_singleton_inner_solution = Program.to([
         REMOVE_LIQUIDITY_PUZZLE,
         Program.to(
-            MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, hidden_puzzle_hash)[1][REMOVE_LIQUIDITY_PUZZLE_HASH]
+            MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, token_hidden_puzzle_hash)[1][REMOVE_LIQUIDITY_PUZZLE_HASH]
         ),
         inner_inner_sol
     ])
@@ -1798,9 +1798,9 @@ async def respond_to_swap_offer(
         ]
     ))
     pair_singleton_inner_solution = Program.to([
-        SWAP_PUZZLE if token_hidden_puzzle_hash is None else RCAT_SWAP_PUZZLE,
+        SWAP_PUZZLE if token_hidden_puzzle_hash is None else get_rcat_swap_puzzle(inverse_fee),
         Program.to(
-            MERKLE_PROOFS[SWAP_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, hidden_puzzle_hash)[1][get_rcat_swap_puzzle(inverse_fee).get_tree_hash()]
+            MERKLE_PROOFS[SWAP_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, token_hidden_puzzle_hash)[1][get_rcat_swap_puzzle(inverse_fee).get_tree_hash()]
         ),
         inner_inner_sol
     ])
