@@ -11,6 +11,7 @@ puzzles=(
     "swap"
     "v2r_router"
     "v2r_pair_inner_puzzle"
+    "v2r_swap"
 )
 
 for puzzle in ${puzzles[@]}; do

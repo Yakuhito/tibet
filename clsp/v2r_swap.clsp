@@ -41,6 +41,9 @@
                 (> current_liquidity 0)
                 ; verify that one of the deltas is positive and the other is negative
                 (> 0 (* xch_delta token_delta))
+                ; if any of the reserves is 0, swap is not enabled
+                (> current_xch_reserve 0)
+                (> current_token_reserve 0)
             )
             (c
                 ; new state 
