@@ -1120,8 +1120,13 @@ class TestTibetSwap:
         assert len(third_donation_address_coins) == 1
         assert third_donation_address_coins[0].coin.amount == xch_donation_amount
 
+    @pytest.mark.parametrize(
+        "split_kind",
+        ["reverse-split", "normal-split", "new-cat"],
+        ids=["reverse-split", "normal-split", "new-cat"]
+    )
     @pytest.mark.asyncio
-    async def test_v2r_rebase(self, setup):
+    async def test_v2r_rebase(self, setup, split_kind):
         hidden_puzzle = Program.to(1)
         hidden_puzzle_hash = hidden_puzzle.get_tree_hash()
 
@@ -1280,7 +1285,10 @@ class TestTibetSwap:
         token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, -token_amount)
         liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, liquidity_balance_before, liquidity_token_amount)
 
-        # 3. Simulate reverse split: all on-chain rCAT balances are divided by a factor of 10
+        # 3. Simulate split
+        #      - reverse split: all on-chain rCAT balances are divided by a factor of 10
+        #      - normal split: all on-chain rCAT balances are multiplied by a factor of 2
+        #      - new CAT: on-chain rCAT becomes worthless; rCAT balance set to 0 to disable trading but allow LPs to withdraw their XCH 
         # First, create the coin that will send the rebase
         await wallet_client.send_transaction(
             wallet_id=1,
@@ -1320,6 +1328,7 @@ class TestTibetSwap:
             sb_to_aggregate
         )
 
+        new_token_reserve = pair_state["token_reserve"] * 2 if split_kind == "normal-split" else pair_state["token_reserve"] // 10 if split_kind == "reverse-split" else 0
         coin_spends, conds = await rebase_spends_and_conditions(
             pair_launcher_id,
             current_pair_coin,
@@ -1330,7 +1339,7 @@ class TestTibetSwap:
             pair_state["liquidity"],
             pair_state["xch_reserve"],
             pair_state["token_reserve"],
-            500,
+            new_token_reserve,
             xch_reserve_coin,
             token_reserve_coin,
             token_reserve_lineage_proof,
@@ -1351,12 +1360,17 @@ class TestTibetSwap:
         liquidity_balance_before = liquidity_balance_now
 
         xch_amount = 80000000
-        token_amount = 80
+        token_amount = 800 * 2
+        if split_kind == "reverse-split":
+            token_amount = 80
+        else: # new-cat
+            token_amount = 0
         liquidity_token_amount = 800 # 10 for every 1 CAT removed
 
         offer_dict = {}
         offer_dict[1] = xch_amount + liquidity_token_amount # also ask for xch from liquidity cat burn
-        offer_dict[token_wallet_id] = token_amount
+        if token_amount > 0:
+            offer_dict[token_wallet_id] = token_amount
         offer_dict[liquidity_wallet_id] = -liquidity_token_amount
         offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
         offer = offer_resp.offer
@@ -1367,7 +1381,12 @@ class TestTibetSwap:
         )
         assert pair_state["liquidity"] == 5000
         assert pair_state["xch_reserve"] == 500000000
-        assert pair_state["token_reserve"] == 500
+        if split_kind == "new-cat":
+            assert pair_state["token_reserve"] == 0
+        elif split_kind == "normal-split":
+            assert pair_state["token_reserve"] == 10000
+        else: # reverse-split
+            assert pair_state["token_reserve"] == 5000
 
         xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
             full_node_client,
@@ -1396,10 +1415,4 @@ class TestTibetSwap:
         )
 
         assert((await full_node_client.push_tx(sb))["success"])
-        await self.wait_for_wallet_sync(wallet_client)
-
-        # xch_balance_now = await self.get_balance(wallet_client)
-        # assert xch_balance_now - xch_balance_before == xch_amount + liquidity_token_amount
-
-        # token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, token_amount)
-        # liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, liquidity_balance_before, -liquidity_token_amount)
+        
