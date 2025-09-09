@@ -1554,14 +1554,16 @@ async def respond_to_remove_liquidity_offer(
         last_token_reserve_coin.amount
     )
     notarized_payments = offer.get_requested_payments()
-    token_notarized_payment = notarized_payments[token_tail_hash][0]
+    token_notarized_payments = notarized_payments.get(token_tail_hash, None)
 
     eph_token_coin_notarized_payments = []
-    eph_token_coin_notarized_payments.append([
-        token_notarized_payment.nonce,
-        [token_notarized_payment.memos[0],
-            removed_token_amount, token_notarized_payment.memos]
-    ])
+    if token_notarized_payments is not None or new_token_reserve_amount - last_token_reserve_coin.amount != 0 or new_token_reserve_amount != 0:
+        token_notarized_payment = token_notarized_payments[0]
+        eph_token_coin_notarized_payments.append([
+            token_notarized_payment.nonce,
+            [token_notarized_payment.memos[0],
+                removed_token_amount, token_notarized_payment.memos]
+        ])
     if new_token_reserve_amount > 0:
         eph_token_coin_notarized_payments.append([
             current_pair_coin.name(),
@@ -2249,7 +2251,7 @@ async def rebase_spends_and_conditions(
     eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
         CAT_MOD, additional_spendable_cats
     )
-    eph_token_coin_spend = eph_token_coin_spend_bundle.coin_spends[0]
+    spends_from_eph_token_coin = eph_token_coin_spend_bundle.coin_spends
 
     # 4. spend XCH reserve
     last_xch_reserve_coin_extra_conditions = [
@@ -2300,10 +2302,9 @@ async def rebase_spends_and_conditions(
     return [
         pair_singleton_spend,
         last_token_reserve_coin_spend,
-        eph_token_coin_spend,
         last_xch_reserve_coin_spend,
         eph_xch_coin_spend
-    ], conds
+    ] + spends_from_eph_token_coin, conds
 
 
 async def get_fee_estimate(mempool_sb, full_node_client: FullNodeRpcClient):

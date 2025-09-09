@@ -1446,9 +1446,10 @@ class TestTibetSwap:
         liquidity_balance_before = liquidity_balance_now
 
         xch_amount = 80000000
-        token_amount = 800 * 2
         if split_kind == "reverse-split":
             token_amount = 80
+        elif split_kind == "normal-split":
+            token_amount = 800 * 2
         else: # new-cat
             token_amount = 0
         liquidity_token_amount = 800 # 10 for every 1 CAT removed
