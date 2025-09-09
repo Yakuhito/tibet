@@ -1,0 +1,61 @@
+; v2r_rebase.clsp by yakuhito
+;; Used to rebase rCAT reserves in the event of a normal/reverse split
+
+(mod (
+        HIDDEN_PUZZLE_HASH ; The puzzle hash that has the power to perform a rebase
+            ; This value should be set to a rCAT's hidden puzzle hash for XCH-rCAT pairs
+        Current_State
+        params
+        my_singleton_struct ; unused
+        my_coin_id ; unused
+    )
+
+    (include tibet_utils.clib)
+
+    ; params
+    (defun-inline new_token_reserve_from_params (params) (f params))
+
+    ; main
+    (defun-inline rebase ( 
+        current_liquidity
+        current_xch_reserve
+        current_token_reserve
+
+        new_token_reserve
+    )
+        (if (> new_token_reserve -1)
+            (c
+                ; new state 
+                (construct_state
+                    ; new liquidity
+                    current_liquidity
+                    ; new xch reserve
+                    current_xch_reserve
+                    ; new token reserve
+                    new_token_reserve
+                )
+                ; extra conditions
+                (list
+                    (list
+                        RECEIVE_MESSAGE
+                        18 ; puzzle-puzzle
+                        new_token_reserve ; message
+                        HIDDEN_PUZZLE_HASH ; sender puzzle hash
+                    )
+                    ; pair inner puzzle expects exactly two output conditions
+                    (list REMARK)
+                )
+            )
+            ; else
+            (x)
+        )
+    )
+
+    (rebase
+        (liquidity_from_state Current_State)
+        (xch_reserve_from_state Current_State)
+        (token_reserve_from_state Current_State)
+
+        (new_token_reserve_from_params params)
+    )
+)

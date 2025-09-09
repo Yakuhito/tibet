@@ -38,4 +38,7 @@
 
     ; A condition that is always true and always ignore all arguments
     (defconstant REMARK 1)
+
+    ; added by yak
+    (defconstant RECEIVE_MESSAGE 67)
 )
