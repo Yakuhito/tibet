@@ -120,6 +120,8 @@ REMOVE_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/remove_liquidity.clvm.hex")
 
 SWAP_MOD: Program = load_clvm_hex("clvm/swap.clvm.hex")
 
+P2_MERKLE_TREE_MODIFIED_MOD: Program = load_clvm_hex(
+    "clvm/p2_merkle_tree_modified.clvm.hex")
 P2_MERKLE_TREE_MODIFIED_MOD_HASH: Program = P2_MERKLE_TREE_MODIFIED_MOD.get_tree_hash()
 
 ADD_LIQUIDITY_PUZZLE = ADD_LIQUIDITY_MOD.curry(
@@ -282,7 +284,8 @@ def get_pair_puzzle(
             liquidity,
             xch_reserve,
             token_reserve,
-            hidden_puzzle_hash
+            hidden_puzzle_hash,
+            inverse_fee
         )
     )
 

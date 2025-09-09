@@ -319,6 +319,7 @@ class TestTibetSwap:
         router_launcher_id,
         tail_hash,
         hidden_puzzle_hash,
+        inverse_fee,
         current_router_coin,
         current_router_coin_creation_spend
     ):
@@ -329,6 +330,7 @@ class TestTibetSwap:
             coin_puzzle,
             tail_hash,
             hidden_puzzle_hash,
+            inverse_fee,
             router_launcher_id,
             current_router_coin,
             current_router_coin_creation_spend
@@ -424,6 +426,7 @@ class TestTibetSwap:
             router_launcher_id,
             tail_hash,
             hidden_puzzle_hash,
+            993 if hidden_puzzle_hash is None else 999,
             current_router_coin,
             router_creation_spend
         )
@@ -440,6 +443,7 @@ class TestTibetSwap:
             router_launcher_id,
             tail_hash2,
             hidden_puzzle_hash,
+            993 if hidden_puzzle_hash is None else 998,
             current_router_coin,
             router_creation_spend
         )
