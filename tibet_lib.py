@@ -101,24 +101,26 @@ def load_clvm_hex(
 
 
 ROUTER_MOD: Program = load_clvm_hex("clvm/router.clvm.hex")
+ROUTER_MOD_HASH = ROUTER_MOD.get_tree_hash()
+
 LIQUIDITY_TAIL_MOD: Program = load_clvm_hex("clvm/liquidity_tail.clvm.hex")
+LIQUIDITY_TAIL_MOD_HASH: Program = LIQUIDITY_TAIL_MOD.get_tree_hash()
 
 P2_SINGLETON_FLASHLOAN_MOD: Program = load_clvm_hex(
     "clvm/p2_singleton_flashloan.clvm.hex")
-P2_MERKLE_TREE_MODIFIED_MOD: Program = load_clvm_hex(
-    "clvm/p2_merkle_tree_modified.clvm.hex")
+P2_SINGLETON_FLASHLOAN_MOD_HASH: Program = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
 
 PAIR_INNER_PUZZLE_MOD: Program = load_clvm_hex(
     "clvm/pair_inner_puzzle.clvm.hex")
+PAIR_INNER_PUZZLE_MOD_HASH: Program = PAIR_INNER_PUZZLE_MOD.get_tree_hash()
+
 ADD_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/add_liquidity.clvm.hex")
+
 REMOVE_LIQUIDITY_MOD: Program = load_clvm_hex("clvm/remove_liquidity.clvm.hex")
+
 SWAP_MOD: Program = load_clvm_hex("clvm/swap.clvm.hex")
 
-ROUTER_MOD_HASH = ROUTER_MOD.get_tree_hash()
-LIQUIDITY_TAIL_MOD_HASH: Program = LIQUIDITY_TAIL_MOD.get_tree_hash()
-P2_SINGLETON_FLASHLOAN_MOD_HASH: Program = P2_SINGLETON_FLASHLOAN_MOD.get_tree_hash()
 P2_MERKLE_TREE_MODIFIED_MOD_HASH: Program = P2_MERKLE_TREE_MODIFIED_MOD.get_tree_hash()
-PAIR_INNER_PUZZLE_MOD_HASH: Program = PAIR_INNER_PUZZLE_MOD.get_tree_hash()
 
 ADD_LIQUIDITY_PUZZLE = ADD_LIQUIDITY_MOD.curry(
     CAT_MOD_HASH,
@@ -154,19 +156,30 @@ MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
 RCAT_ROUTER_MOD: Program = load_clvm_hex("clvm/v2r_router.clvm.hex")
 RCAT_ROUTER_MOD_HASH = RCAT_ROUTER_MOD.get_tree_hash()
 
+RCAT_REBASE_MOD: Program = load_clvm_hex("clvm/v2r_router.clvm.hex")
+RCAT_REBASE_MOD_HASH = RCAT_REBASE_MOD.get_tree_hash()
+
+RCAT_SWAP_MOD: Program = load_clvm_hex("clvm/v2r_swap.clvm.hex")
+RCAT_SWAP_MOD_HASH = RCAT_SWAP_MOD.get_tree_hash()
+
 RCAT_PAIR_INNER_PUZZLE_MOD: Program = load_clvm_hex(
     "clvm/v2r_pair_inner_puzzle.clvm.hex")
 RCAT_PAIR_INNER_PUZZLE_MOD_HASH = RCAT_PAIR_INNER_PUZZLE_MOD.get_tree_hash()
 
-RCAT_SWAP_PUZZLE = SWAP_MOD.curry(999)
-RCAT_SWAP_PUZZLE_HASH = RCAT_SWAP_PUZZLE.get_tree_hash()
+def get_rcat_swap_puzzle(inverse_fee):
+    return RCAT_SWAP_MOD.curry(inverse_fee)
 
-RCAT_MERKLE_ROOT, RCAT_MERKLE_PROOFS = build_merkle_tree([
-    ADD_LIQUIDITY_PUZZLE_HASH,
-    REMOVE_LIQUIDITY_PUZZLE_HASH,
-    RCAT_SWAP_PUZZLE_HASH,
-    SECRET_PUZZLE_HASH
-])
+def get_rcat_rebase_puzzle(hidden_puzzle_hash):
+    return RCAT_REBASE_MOD.curry(hidden_puzzle_hash)
+
+def get_rcat_merkle_root_and_proofs(inverse_fee, hidden_puzzle_hash):
+    # RCAT_MERKLE_ROOT, RCAT_MERKLE_PROOFS
+    return build_merkle_tree([
+        ADD_LIQUIDITY_PUZZLE_HASH,
+        REMOVE_LIQUIDITY_PUZZLE_HASH,
+        get_rcat_swap_puzzle(inverse_fee).get_tree_hash(),
+        get_rcat_rebase_puzzle(hidden_puzzle_hash).get_tree_hash()
+    ])
 # end XCH-rCAT puzzles
 
 
@@ -180,7 +193,11 @@ def get_router_puzzle(rcat):
             CAT_MOD_HASH,
             REVOCATION_LAYER_HASH,
             OFFER_MOD_HASH,
-            RCAT_MERKLE_ROOT,
+            Program.to(
+                (ADD_LIQUIDITY_PUZZLE_HASH, REMOVE_LIQUIDITY_PUZZLE_HASH)
+            ).get_tree_hash(),
+            RCAT_SWAP_MOD_HASH,
+            RCAT_REBASE_MOD_HASH,
             SINGLETON_LAUNCHER_HASH,
             RCAT_ROUTER_MOD_HASH
         )
@@ -231,12 +248,13 @@ def get_pair_inner_puzzle(
     liquidity,
     xch_reserve,
     token_reserve,
-    hidden_puzzle_hash
+    hidden_puzzle_hash,
+    inverse_fee
 ):
     if hidden_puzzle_hash is not None:
         return P2_MERKLE_TREE_MODIFIED_MOD.curry(
             get_pair_inner_inner_puzzle(singleton_launcher_id, tail_hash, hidden_puzzle_hash),
-            RCAT_MERKLE_ROOT,
+            get_rcat_merkle_root_and_proofs(inverse_fee, hidden_puzzle_hash)[0],
             (liquidity, (xch_reserve, token_reserve))
         )
 
@@ -253,7 +271,8 @@ def get_pair_puzzle(
     liquidity,
     xch_reserve,
     token_reserve,
-    hidden_puzzle_hash
+    hidden_puzzle_hash,
+    inverse_fee
 ):
     return puzzle_for_singleton(
         singleton_launcher_id,
@@ -900,6 +919,7 @@ async def respond_to_deposit_liquidity_offer(
     creation_spend,
     token_tail_hash,
     token_hidden_puzzle_hash,
+    inverse_fee,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
@@ -1131,7 +1151,7 @@ async def respond_to_deposit_liquidity_offer(
     pair_singleton_inner_solution = Program.to([
         ADD_LIQUIDITY_PUZZLE,
         Program.to(
-            MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else RCAT_MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH]
+            MERKLE_PROOFS[ADD_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, hidden_puzzle_hash)[1][ADD_LIQUIDITY_PUZZLE_HASH]
         ),
         inner_inner_sol
     ])
@@ -1260,6 +1280,7 @@ async def respond_to_remove_liquidity_offer(
     creation_spend,
     token_tail_hash,
     token_hidden_puzzle_hash,
+    inverse_fee,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
@@ -1451,7 +1472,7 @@ async def respond_to_remove_liquidity_offer(
     pair_singleton_inner_solution = Program.to([
         REMOVE_LIQUIDITY_PUZZLE,
         Program.to(
-            MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else RCAT_MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH]
+            MERKLE_PROOFS[REMOVE_LIQUIDITY_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, hidden_puzzle_hash)[1][REMOVE_LIQUIDITY_PUZZLE_HASH]
         ),
         inner_inner_sol
     ])
@@ -1642,6 +1663,7 @@ async def respond_to_swap_offer(
     creation_spend,
     token_tail_hash,
     token_hidden_puzzle_hash,
+    inverse_fee,
     pair_liquidity,
     pair_xch_reserve,
     pair_token_reserve,
@@ -1713,7 +1735,6 @@ async def respond_to_swap_offer(
     new_xch_reserve_amount = pair_xch_reserve
     new_token_reserve_amount = pair_token_reserve
 
-    inverse_fee = 993 if token_hidden_puzzle_hash is None else 999
     if eph_coin_is_cat:  # token offered, so swap is token -> XCH
         token_amount = eph_coin.amount
         new_xch_reserve_amount -= inverse_fee * token_amount * \
@@ -1760,7 +1781,7 @@ async def respond_to_swap_offer(
     pair_singleton_inner_solution = Program.to([
         SWAP_PUZZLE if token_hidden_puzzle_hash is None else RCAT_SWAP_PUZZLE,
         Program.to(
-            MERKLE_PROOFS[SWAP_PUZZLE_HASH] if token_hidden_puzzle_hash is None else RCAT_MERKLE_PROOFS[RCAT_SWAP_PUZZLE_HASH]
+            MERKLE_PROOFS[SWAP_PUZZLE_HASH] if token_hidden_puzzle_hash is None else get_rcat_merkle_root_and_proofs(inverse_fee, hidden_puzzle_hash)[1][get_rcat_swap_puzzle(inverse_fee).get_tree_hash()]
         ),
         inner_inner_sol
     ])
