@@ -1339,7 +1339,7 @@ class TestTibetSwap:
                 SpendableCAT(
                     additional_cat_record.coin,
                     token_tail_hash,
-                    get_cat_inner_puzzle(token_hidden_puzzle_hash, hidden_puzzle),
+                    get_cat_inner_puzzle(hidden_puzzle_hash, hidden_puzzle),
                     get_cat_inner_solution(True, hidden_puzzle, Program.to([])),
                     lineage_proof=LineageProof(
                         parent_spend.coin.parent_coin_info,
