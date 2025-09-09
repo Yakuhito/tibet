@@ -1361,7 +1361,11 @@ async def respond_to_remove_liquidity_offer(
     removed_xch_amount = pair_xch_reserve * \
         burned_liquidity_amount // pair_liquidity
 
-    new_token_reserve_amount = last_token_reserve_coin.amount - removed_token_amount
+    if last_token_reserve_coin is not None:
+        new_token_reserve_amount = last_token_reserve_coin.amount - removed_token_amount
+    else:
+        new_token_reserve_amount = 0
+        assert removed_token_amount == 0
     new_xch_reserve_amount = last_xch_reserve_coin.amount - removed_xch_amount
 
     # 3. spend ephemeral liquidity coin
@@ -1477,7 +1481,7 @@ async def respond_to_remove_liquidity_offer(
             current_pair_coin.name(),
             (
                 last_xch_reserve_coin.name(),
-                last_token_reserve_coin.name()
+                last_token_reserve_coin.name() if last_token_reserve_coin is not None else None
             )
         ),
         [
@@ -1505,104 +1509,109 @@ async def respond_to_remove_liquidity_offer(
     p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
     p2_singleton_puzzle_hash = p2_singleton_puzzle.get_tree_hash()
 
-    last_token_reserve_coin_extra_conditions = [
-        [
-            ConditionOpcode.CREATE_COIN,
-            OFFER_MOD_HASH,
-            last_token_reserve_coin.amount
+    last_token_reserve_coin_spend = None
+    if last_token_reserve_coin is not None:
+        last_token_reserve_coin_extra_conditions = [
+            [
+                ConditionOpcode.CREATE_COIN,
+                OFFER_MOD_HASH,
+                last_token_reserve_coin.amount
+            ]
         ]
-    ]
 
-    last_token_reserve_coin_inner_solution = get_cat_inner_solution(
-        token_hidden_puzzle_hash is not None,
-        p2_singleton_puzzle,
-        solution_for_p2_singleton_flashloan(
-            last_token_reserve_coin,
-            pair_singleton_inner_puzzle.get_tree_hash(),
-            extra_conditions=last_token_reserve_coin_extra_conditions
-        )
-    )
-    last_token_reserve_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
-        CAT_MOD,
-        [
-            SpendableCAT(
+        last_token_reserve_coin_inner_solution = get_cat_inner_solution(
+            token_hidden_puzzle_hash is not None,
+            p2_singleton_puzzle,
+            solution_for_p2_singleton_flashloan(
                 last_token_reserve_coin,
-                token_tail_hash,
-                get_cat_inner_puzzle(
-                    token_hidden_puzzle_hash,
-                    p2_singleton_puzzle
-                ),
-                last_token_reserve_coin_inner_solution,
-                lineage_proof=LineageProof(
-                    last_token_reserve_lineage_proof[0],
-                    last_token_reserve_lineage_proof[1],
-                    last_token_reserve_lineage_proof[2]
-                )
+                pair_singleton_inner_puzzle.get_tree_hash(),
+                extra_conditions=last_token_reserve_coin_extra_conditions
             )
-        ]
-    )
-    last_token_reserve_coin_spend = last_token_reserve_coin_spend_bundle.coin_spends[0]
-
-    # 7. spend ephemeral token coin to create new token reserve, resp. to offer
-    eph_token_coin = Coin(
-        last_token_reserve_coin.name(),
-        get_cat_puzzle(
-            token_tail_hash,
-            token_hidden_puzzle_hash,
-            OFFER_MOD
-        ).get_tree_hash(),
-        last_token_reserve_coin.amount
-    )
-    notarized_payments = offer.get_requested_payments()
-    token_notarized_payments = notarized_payments.get(token_tail_hash, None)
-
-    eph_token_coin_notarized_payments = []
-    if token_notarized_payments is not None or new_token_reserve_amount - last_token_reserve_coin.amount != 0 or new_token_reserve_amount != 0:
-        token_notarized_payment = token_notarized_payments[0]
-        eph_token_coin_notarized_payments.append([
-            token_notarized_payment.nonce,
-            [token_notarized_payment.memos[0],
-                removed_token_amount, token_notarized_payment.memos]
-        ])
-    if new_token_reserve_amount > 0:
-        eph_token_coin_notarized_payments.append([
-            current_pair_coin.name(),
-            [p2_singleton_puzzle_hash, new_token_reserve_amount]
-        ])
-    if last_token_reserve_coin.amount > removed_token_amount + new_token_reserve_amount:
-        raise Exception(
-            f"You asked for too few tokens - your offer is {token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount} token mojos short.")
-        
-    eph_token_coin_inner_solution = get_cat_inner_solution(
-        token_hidden_puzzle_hash is not None,
-        OFFER_MOD,
-        Program.to(
-            eph_token_coin_notarized_payments
         )
-    )
-    eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
-        CAT_MOD,
-        [
-            SpendableCAT(
-                eph_token_coin,
-                token_tail_hash,
-                get_cat_inner_puzzle(
-                    token_hidden_puzzle_hash,
-                    OFFER_MOD
-                ),
-                eph_token_coin_inner_solution,
-                lineage_proof=LineageProof(
-                    last_token_reserve_coin.parent_coin_info,
+        last_token_reserve_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+            CAT_MOD,
+            [
+                SpendableCAT(
+                    last_token_reserve_coin,
+                    token_tail_hash,
                     get_cat_inner_puzzle(
                         token_hidden_puzzle_hash,
                         p2_singleton_puzzle
-                    ).get_tree_hash(),
-                    last_token_reserve_coin.amount
+                    ),
+                    last_token_reserve_coin_inner_solution,
+                    lineage_proof=LineageProof(
+                        last_token_reserve_lineage_proof[0],
+                        last_token_reserve_lineage_proof[1],
+                        last_token_reserve_lineage_proof[2]
+                    )
                 )
+            ]
+        )
+        last_token_reserve_coin_spend = last_token_reserve_coin_spend_bundle.coin_spends[0]
+
+    # 7. spend ephemeral token coin to create new token reserve, resp. to offer
+    eph_token_coin_spend = None
+    notarized_payments = offer.get_requested_payments()
+    
+    if last_token_reserve_coin is not None:
+        eph_token_coin = Coin(
+            last_token_reserve_coin.name(),
+            get_cat_puzzle(
+                token_tail_hash,
+                token_hidden_puzzle_hash,
+                OFFER_MOD
+            ).get_tree_hash(),
+            last_token_reserve_coin.amount
+        )
+        token_notarized_payments = notarized_payments.get(token_tail_hash, None)
+
+        eph_token_coin_notarized_payments = []
+        if token_notarized_payments is not None or new_token_reserve_amount - last_token_reserve_coin.amount != 0 or new_token_reserve_amount != 0:
+            token_notarized_payment = token_notarized_payments[0]
+            eph_token_coin_notarized_payments.append([
+                token_notarized_payment.nonce,
+                [token_notarized_payment.memos[0],
+                    removed_token_amount, token_notarized_payment.memos]
+            ])
+        if new_token_reserve_amount > 0:
+            eph_token_coin_notarized_payments.append([
+                current_pair_coin.name(),
+                [p2_singleton_puzzle_hash, new_token_reserve_amount]
+            ])
+        if last_token_reserve_coin.amount > removed_token_amount + new_token_reserve_amount:
+            raise Exception(
+                f"You asked for too few tokens - your offer is {token_reserve_coin.amount - removed_token_amount - new_token_reserve_amount} token mojos short.")
+            
+        eph_token_coin_inner_solution = get_cat_inner_solution(
+            token_hidden_puzzle_hash is not None,
+            OFFER_MOD,
+            Program.to(
+                eph_token_coin_notarized_payments
             )
-        ]
-    )
-    eph_token_coin_spend = eph_token_coin_spend_bundle.coin_spends[0]
+        )
+        eph_token_coin_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+            CAT_MOD,
+            [
+                SpendableCAT(
+                    eph_token_coin,
+                    token_tail_hash,
+                    get_cat_inner_puzzle(
+                        token_hidden_puzzle_hash,
+                        OFFER_MOD
+                    ),
+                    eph_token_coin_inner_solution,
+                    lineage_proof=LineageProof(
+                        last_token_reserve_coin.parent_coin_info,
+                        get_cat_inner_puzzle(
+                            token_hidden_puzzle_hash,
+                            p2_singleton_puzzle
+                        ).get_tree_hash(),
+                        last_token_reserve_coin.amount
+                    )
+                )
+            ]
+        )
+        eph_token_coin_spend = eph_token_coin_spend_bundle.coin_spends[0]
 
     # 8. Spend XCH reserve
     xch_eph_coin_extra_payment = None
@@ -1660,13 +1669,15 @@ async def respond_to_remove_liquidity_offer(
     eph_xch_coin_spend = make_spend(
         eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
 
+    if last_token_reserve_coin_spend is not None:
+        cs_from_initial_offer.append(last_token_reserve_coin_spend)
+    if eph_token_coin_spend is not None:
+        cs_from_initial_offer.append(eph_token_coin_spend)
     sb = SpendBundle(
         cs_from_initial_offer + [
             eph_liquidity_coin_spend,
             liquidity_burn_coin_spend,
             pair_singleton_spend,
-            last_token_reserve_coin_spend,
-            eph_token_coin_spend,
             last_xch_reserve_coin_spend,
             eph_xch_coin_spend
         ],

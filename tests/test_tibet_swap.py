@@ -1451,7 +1451,7 @@ class TestTibetSwap:
         elif split_kind == "normal-split":
             token_amount = 800 * 2
         else: # new-cat
-            token_amount = 0
+            token_amount = 0 # No CATs will be given back
         liquidity_token_amount = 800 # 10 for every 1 CAT removed
 
         offer_dict = {}
