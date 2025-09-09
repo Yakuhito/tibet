@@ -1409,7 +1409,6 @@ class TestTibetSwap:
         coin_spends.append(make_spend(admin_coin_record.coin, hidden_puzzle, Program.to(conds)))
         sb = SpendBundle(coin_spends, AugSchemeMPL.aggregate([]))
 
-        import json; open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict())) # todo: debug
         assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
@@ -1502,4 +1501,84 @@ class TestTibetSwap:
         )
 
         assert((await full_node_client.push_tx(sb))["success"])
+        await self.wait_for_wallet_sync(wallet_client)
+
+        xch_balance_now = await self.get_balance(wallet_client)
+        assert xch_balance_now - xch_balance_before == xch_amount + liquidity_token_amount
+
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, token_amount)
+        liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, liquidity_balance_before, -liquidity_token_amount)
+
+        # 5. Add 100 liquidity CATs (to make sure it's not possible)
+        xch_balance_before = xch_balance_now
+        token_balance_before = token_balance_now
+        liquidity_balance_before = liquidity_token_amount
+
+        xch_amount = 100000000
+        liquidity_token_amount = 1000 # 1:1
+
+        token_amount = -1
+        if split_kind == "normal-split":
+            token_amount = 1000 * 2
+        elif split_kind == "reverse-split":
+            token_amount = 1000 // 10
+        else: # new-cat
+            token_amount = 0 # No CATs will be deposited, duh
+
+        offer_dict = {}
+        offer_dict[1] = - xch_amount - liquidity_token_amount # also for liqiudity TAIL creation
+        if token_amount != 0:
+            offer_dict[token_wallet_id] = -token_amount
+        offer_dict[liquidity_wallet_id] = liquidity_token_amount
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config)
+        offer = offer_resp.offer
+        offer_str = offer.to_bech32()
+
+        current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
+            full_node_client, current_pair_coin.name()
+        )
+        assert pair_state["liquidity"] == 4200
+        assert pair_state["xch_reserve"] == 420000000
+        if split_kind == "new-cat":
+            assert pair_state["token_reserve"] == 0
+        elif split_kind == "normal-split":
+            assert pair_state["token_reserve"] == 840
+        else: # reverse-split
+            assert pair_state["token_reserve"] == 420
+
+        xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+            full_node_client,
+            pair_launcher_id,
+            current_pair_coin,
+            token_tail_hash,
+            hidden_puzzle_hash,
+            pair_creation_spend,
+            sb_to_aggregate
+        )
+
+        sb = await respond_to_deposit_liquidity_offer(
+            pair_launcher_id,
+            current_pair_coin,
+            pair_creation_spend,
+            token_tail_hash,
+            hidden_puzzle_hash,
+            inverse_fee,
+            pair_state["liquidity"],
+            pair_state["xch_reserve"],
+            pair_state["token_reserve"],
+            offer_str,
+            xch_reserve_coin,
+            token_reserve_coin,
+            token_reserve_lineage_proof
+        )
+
+        assert((await full_node_client.push_tx(sb))["success"])
+        await self.wait_for_wallet_sync(wallet_client)
+
+        xch_balance_now = await self.get_balance(wallet_client)
+        assert xch_balance_before - xch_balance_now == xch_amount + liquidity_token_amount
+
+        token_balance_now = await self.expect_change_in_token(wallet_client, token_tail_hash, hidden_puzzle_hash, token_balance_before, -token_amount)
+        liquidity_balance_now = await self.expect_change_in_token(wallet_client, pair_liquidity_tail_hash, None, liquidity_balance_before, liquidity_token_amount)
+
         
