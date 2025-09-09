@@ -337,7 +337,6 @@ class TestTibetSwap:
         )
 
         signed_sb = await sign_spend_bundle(wallet_client, sb)
-        import json; open("spend_bundle.json", "w").write(json.dumps(signed_sb.to_json_dict())) # todo: debug
         assert((await full_node_client.push_tx(signed_sb))["success"])
 
         pair_coin = None

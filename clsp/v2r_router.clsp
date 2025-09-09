@@ -60,7 +60,7 @@
             (sha256tree (new_pair_singleton_struct))
             (curry_hashes_inline P2_MERKLE_TREE_MODIFIED_MOD_HASH
                 (pair_inner_puzzle_hash tail_hash)
-                (sha256 2
+                (sha256tree (sha256 2
                     LIQUIDITY_PUZZLES_BRANCH_HASH
                     (sha256 2
                         (sha256tree (curry_hashes_inline SWAP_MOD_HASH
@@ -70,7 +70,7 @@
                             (sha256tree new_pair_hidden_puzzle_hash)
                         ))
                     )
-                ) ; allowed puzzles merkle root of the XCH-rCAT pair
+                )) ; allowed puzzles merkle root of the XCH-rCAT pair
                 (sha256tree (c 0 (c 0 0)))
             )
         )
