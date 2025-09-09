@@ -1301,7 +1301,6 @@ class TestTibetSwap:
         admin_coin_record = None
         i = 0
         while admin_coin_record is None and i < 10:
-            print(i)
             resp = await full_node_client.get_coin_records_by_puzzle_hash(hidden_puzzle_hash)
             if len(resp) > 0:
                 admin_coin_record = resp[0]
@@ -1353,6 +1352,32 @@ class TestTibetSwap:
         assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 
+        if split_kind != "normal-split":
+            # 'Change' coin is created by the offer coin that's creaed by the reserve
+            # Just want to make sure it correctly ends back to the issuer
+            eph_liq_ph = get_cat_puzzle(
+                token_tail_hash,
+                hidden_puzzle_hash,
+                OFFER_MOD
+            ).get_tree_hash()
+            eph_liq_coin = Coin(token_reserve_coin.name(), eph_liq_ph, token_reserve_coin.amount)
+            
+            expected_coin_ph = get_cat_puzzle(
+                token_tail_hash,
+                hidden_puzzle_hash,
+                hidden_puzzle
+            ).get_tree_hash()
+            expected_coin = Coin(eph_liq_coin.name(), expected_coin_ph, eph_liq_coin.amount - new_token_reserve)
+            cr = None
+            i = 0
+            while cr is None and i < 10:
+                cr = await full_node_client.get_coin_record_by_name(expected_coin.name())
+                i += 1
+                time.sleep(10)
+
+            assert cr is not None
+            assert not cr.spent
+
         # 4. Withdraw 800 liquidity tokens
         # python3 tibet.py remove-liquidity --liquidity-token-amount 800 --asset-id [asset_id] --push-tx
         xch_balance_before = xch_balance_now
@@ -1386,7 +1411,7 @@ class TestTibetSwap:
         elif split_kind == "normal-split":
             assert pair_state["token_reserve"] == 10000
         else: # reverse-split
-            assert pair_state["token_reserve"] == 5000
+            assert pair_state["token_reserve"] == 500
 
         xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
             full_node_client,
