@@ -2124,15 +2124,6 @@ async def rebase_spends_and_conditions(
         ]
     ))
 
-    # todo: debug
-    print(get_pair_inner_inner_puzzle(
-        pair_launcher_id,
-        token_tail_hash,
-        token_hidden_puzzle_hash
-    ))# todo: debug
-    print(inner_inner_sol) # todo: debug
-    # todo: debug
-
     rebase_puzzle = get_rcat_rebase_puzzle(token_hidden_puzzle_hash)
     pair_singleton_inner_solution = Program.to([
         rebase_puzzle,
@@ -2161,15 +2152,15 @@ async def rebase_spends_and_conditions(
         ]
     ]
 
-    pair_singleton_inner_puzzle = get_pair_inner_inner_puzzle(
+    pair_singleton_inner_puzzle = get_pair_inner_puzzle(
         pair_launcher_id,
         token_tail_hash,
-        token_hidden_puzzle_hash
+        pair_liquidity,
+        pair_xch_reserve,
+        pair_token_reserve,
+        token_hidden_puzzle_hash,
+        inverse_fee
     )
-    # todo: debug
-    print('pip', pair_singleton_inner_puzzle) # todo: debug
-    print('psis', pair_singleton_inner_solution) # todo: debug
-    # todo: debug
     last_token_reserve_coin_inner_solution = get_cat_inner_solution(
         token_hidden_puzzle_hash is not None,
         p2_singleton_puzzle,
