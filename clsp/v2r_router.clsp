@@ -12,8 +12,10 @@
         CAT_MOD_HASH
         REVOCATION_LAYER_MOD_HASH ; sha256tree of the revocation_layer module (uncurried)
         SETTLEMENT_PAYMENTS_MOD_HASH
-        MERKLE_ROOT ; calculated off-chain
-
+        ; uset to calculate merkle root
+        LIQUIDITY_PUZZLES_BRANCH_HASH ; calculated off-chain
+        SWAP_MOD_HASH
+        REBASE_MOD_HASH 
         ; required for the router to work
         LAUNCHER_PUZZLE_HASH
         ROUTER_MOD_HASH
@@ -22,6 +24,7 @@
         my_coin_id
         new_pair_tail_hash ; hash of TAIL
         new_pair_hidden_puzzle_hash ; rCAT parameter
+        new_pair_inverse_fee ; (1000 - new_pair_inverse_fee) / 1000 fee
     )
 
     (include tibet_utils.clib)
@@ -57,7 +60,17 @@
             (sha256tree (new_pair_singleton_struct))
             (curry_hashes_inline P2_MERKLE_TREE_MODIFIED_MOD_HASH
                 (pair_inner_puzzle_hash tail_hash)
-                (sha256tree MERKLE_ROOT)
+                (sha256 2
+                    LIQUIDITY_PUZZLES_BRANCH_HASH
+                    (sha256 2
+                        (sha256tree (curry_hashes_inline SWAP_MOD_HASH
+                            (sha256tree new_pair_inverse_fee)
+                        ))
+                        (sha256tree (curry_hashes_inline REBASE_MOD_HASH
+                            (sha256tree new_pair_hidden_puzzle_hash)
+                        ))
+                    )
+                ) ; allowed puzzles merkle root of the XCH-rCAT pair
                 (sha256tree (c 0 (c 0 0)))
             )
         )
@@ -72,14 +85,21 @@
             (sha256tree CAT_MOD_HASH)
             (sha256tree REVOCATION_LAYER_MOD_HASH)
             (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
-            (sha256tree MERKLE_ROOT)
+            (sha256tree LIQUIDITY_PUZZLES_BRANCH_HASH)
+            (sha256tree SWAP_MOD_HASH)
+            (sha256tree REBASE_MOD_HASH)
             (sha256tree LAUNCHER_PUZZLE_HASH)
             (sha256tree ROUTER_MOD_HASH)
         )
     )
 
     ; main
-    (if (size_b32 new_pair_tail_hash)
+    (if (all
+        (size_b32 new_pair_tail_hash)
+        (size_b32 new_pair_hidden_puzzle_hash)
+        (> new_pair_inverse_fee 957) ; max fee is 4.2%
+        (> 1000 new_pair_inverse_fee)
+    )
         (list
             (list ASSERT_MY_COIN_ID my_coin_id)
 
