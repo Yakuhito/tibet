@@ -1304,6 +1304,49 @@ class TestTibetSwap:
             i += 1
             time.sleep(10)
 
+        print('HERE') # todo: debug
+
+        current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
+            full_node_client, current_pair_coin.name()
+        )
+        assert pair_state["liquidity"] == 5000
+        assert pair_state["xch_reserve"] == 500000000
+        assert pair_state["token_reserve"] == 5000
+
+        xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+            full_node_client,
+            pair_launcher_id,
+            current_pair_coin,
+            token_tail_hash,
+            hidden_puzzle_hash,
+            pair_creation_spend,
+            sb_to_aggregate
+        )
+
+        coin_spends, conds = await rebase_spends_and_conditions(
+            pair_launcher_id,
+            current_pair_coin,
+            pair_creation_spend,
+            token_tail_hash,
+            hidden_puzzle_hash,
+            inverse_fee,
+            pair_state["liquidity"],
+            pair_state["xch_reserve"],
+            pair_state["token_reserve"],
+            500,
+            xch_reserve_coin,
+            token_reserve_coin,
+            token_reserve_lineage_proof,
+            additional_spendable_cats=None,
+        )
+
+        coin_spends.push(make_spend(admin_coin, hidden_puzzle, conds))
+        sb = SpendBundle(coin_spends, AugSchemeMPL.aggregate([]))
+
+        import json; open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict()))
+        assert((await full_node_client.push_tx(sb))["success"])
+        await self.wait_for_wallet_sync(wallet_client)
+
         # 4. Withdraw 800 liquidity tokens
         # python3 tibet.py remove-liquidity --liquidity-token-amount 800 --asset-id [asset_id] --push-tx
         xch_balance_before = xch_balance_now
