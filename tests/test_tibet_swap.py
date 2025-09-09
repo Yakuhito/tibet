@@ -1295,11 +1295,11 @@ class TestTibetSwap:
         additional_spendable_cats = None
         if split_kind == "normal-split":
             needed_amount = 5000
-            await wallet_client.send_transaction(
+            await wallet_client.cat_spend(
                 wallet_id=token_wallet_id,
-                amount=needed_amount,
-                address=encode_puzzle_hash(hidden_puzzle_hash, "txch"),
                 tx_config=tx_config,
+                amount=needed_amount,
+                inner_address=encode_puzzle_hash(hidden_puzzle_hash, "txch"),
             )
             token_balance_now = await self.expect_change_in_token(
                 wallet_client,
