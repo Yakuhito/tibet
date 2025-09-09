@@ -1552,7 +1552,7 @@ async def respond_to_remove_liquidity_offer(
     # 7. spend ephemeral token coin to create new token reserve, resp. to offer
     eph_token_coin_spend = None
     notarized_payments = offer.get_requested_payments()
-    
+
     if last_token_reserve_coin is not None:
         eph_token_coin = Coin(
             last_token_reserve_coin.name(),
