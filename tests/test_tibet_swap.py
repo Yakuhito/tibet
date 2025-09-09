@@ -75,7 +75,6 @@ from chia.simulator.simulator_protocol import FarmNewBlockProtocol
 from chia.wallet.wallet_rpc_api import WalletRpcApi
 from chia.simulator.simulator_full_node_rpc_api import SimulatorFullNodeRpcApi
 from chia.rpc.rpc_server import start_rpc_server
-from chia.wallet.wallet_request_types import SendTransaction
 
 from clvm import SExp
 from private_key_things import *
@@ -465,7 +464,7 @@ class TestTibetSwap:
     ):
         retries = 0
         balance = await self.get_balance(wallet_client, token_tail_hash, hidden_puzzle_hash is not None)
-        while balance == initial_amount:
+        while balance - initial_amount != delta:
             print("balance", balance, "initial_amount", initial_amount, "delta", delta)
 
             retries += 1
@@ -1284,27 +1283,25 @@ class TestTibetSwap:
         # 3. Simulate reverse split: all on-chain rCAT balances are divided by a factor of 10
         # First, create the coin that will send the rebase
         await wallet_client.send_transaction(
-            1,
-            SendTransaction(
-                wallet_id=1,
-                amount=1,
-                address=encode_puzzle_hash(hidden_puzzle_hash, "txch"),
-                memos=[]
-            ),
-            tx_config,
+            wallet_id=1,
+            amount=1,
+            address=encode_puzzle_hash(hidden_puzzle_hash, "txch"),
+            tx_config=tx_config,
         )
         xch_balance_now = await self.expect_change_in_token(wallet_client, None, None, xch_balance_now, -1)
 
         admin_coin = None
         i = 0
         while admin_coin is None and i < 10:
+            print(i)
             resp = await full_node_client.get_coin_records_by_puzzle_hash(hidden_puzzle_hash)
             if len(resp) > 0:
                 admin_coin = resp[0]
             i += 1
             time.sleep(10)
 
-        print('HERE') # todo: debug
+
+        assert admin_coin is not None
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
             full_node_client, current_pair_coin.name()
