@@ -501,6 +501,7 @@ async def create_pair_from_coin(
     coin_puzzle,
     tail_hash,
     hidden_puzzle_hash,
+    inverse_fee,
     router_launcher_id,
     current_router_coin,
     current_router_coin_creation_spend,
@@ -509,6 +510,10 @@ async def create_pair_from_coin(
     if fee < ROUTER_MIN_FEE:
         raise Exception(
             f"The router requires a minimum fee of {ROUTER_MIN_FEE} to be spent.")
+
+    if hidden_puzzle_hash is None and inverse_fee != 993:
+        raise Exception(
+            f"Iverse fee can only be 993 for XCH-CAT pairs; got {inverse_fee}.")
 
     lineage_proof = lineage_proof_for_coinsol(
         current_router_coin_creation_spend)
@@ -525,7 +530,8 @@ async def create_pair_from_coin(
         router_inner_solution = Program.to([
             current_router_coin.name(),
             tail_hash,
-            hidden_puzzle_hash
+            hidden_puzzle_hash,
+            inverse_fee
         ])
 
     router_singleton_solution = solution_for_singleton(
@@ -539,7 +545,8 @@ async def create_pair_from_coin(
         pair_launcher_coin.name(),
         tail_hash,
         0, 0, 0,
-        hidden_puzzle_hash
+        hidden_puzzle_hash,
+        inverse_fee
     )
 
     comment: List[Tuple[str, str]] = []
@@ -601,7 +608,7 @@ async def sync_router(full_node_client, last_router_id, rcat):
     router_puzzle_hash = get_router_puzzle(rcat).get_tree_hash()
 
     while coin_record.spent:
-        tail_hash, hidden_puzzle_hash = None, None
+        tail_hash, hidden_puzzle_hash, inverse_fee = None, None, 993
 
         creation_spend = await full_node_client.get_puzzle_and_solution(last_router_id, coin_record.spent_block_index)
         conditions_dict = conditions_dict_for_solution(
@@ -619,8 +626,10 @@ async def sync_router(full_node_client, last_router_id, rcat):
 
             if rcat:
                 tail_hash = [_ for _ in solution_program.as_iter()
-                             ][-1].as_python()[-2]
+                             ][-1].as_python()[-3]
                 hidden_puzzle_hash = [_ for _ in solution_program.as_iter()
+                             ][-1].as_python()[-2]
+                inverse_fee = [_ for _ in solution_program.as_iter()
                              ][-1].as_python()[-1]
             else:
                 tail_hash = [_ for _ in solution_program.as_iter()
@@ -642,7 +651,7 @@ async def sync_router(full_node_client, last_router_id, rcat):
                 pair_launcher_id = pair_launcher_coin.name()
 
                 if hidden_puzzle_hash:
-                    new_pairs.append((tail_hash.hex(), hidden_puzzle_hash.hex(), pair_launcher_id.hex()))
+                    new_pairs.append((tail_hash.hex(), hidden_puzzle_hash.hex(), inverse_fee, pair_launcher_id.hex()))
                 else:
                     new_pairs.append((tail_hash.hex(), pair_launcher_id.hex()))
             else:
