@@ -2151,6 +2151,11 @@ async def rebase_spends_and_conditions(
         ]
     ]
 
+    pair_singleton_inner_puzzle = get_pair_inner_inner_puzzle(
+        pair_launcher_id,
+        token_tail_hash,
+        token_hidden_puzzle_hash
+    )
     last_token_reserve_coin_inner_solution = get_cat_inner_solution(
         token_hidden_puzzle_hash is not None,
         p2_singleton_puzzle,
@@ -2194,11 +2199,11 @@ async def rebase_spends_and_conditions(
     
     eph_token_coin_notarized_payments = []
     security_notarized_payment = None
-    if eph_token_coin.amount < new_token_reserve:
+    if eph_token_coin.amount > new_token_reserve:
         security_notarized_payment = Program.to([
             b'\x00' * 32,
-            [hidden_puzzle_hash,
-                eph_token_coin.amount - new_token_reserve, [hidden_puzzle_hash]]
+            [token_hidden_puzzle_hash,
+                eph_token_coin.amount - new_token_reserve, [token_hidden_puzzle_hash]]
         ])
         eph_token_coin_notarized_payments.append(security_notarized_payment)
     if new_token_reserve > 0:
@@ -2248,7 +2253,7 @@ async def rebase_spends_and_conditions(
             OFFER_MOD_HASH,
             last_xch_reserve_coin.amount
         ]
-    ] + announcement_asserts
+    ]
 
     last_xch_reserve_coin_solution = solution_for_p2_singleton_flashloan(
         last_xch_reserve_coin,
@@ -2269,10 +2274,10 @@ async def rebase_spends_and_conditions(
     )
     
     eph_xch_coin_notarized_payments = []
-    if new_xch_reserve_amount > 0:
+    if last_xch_reserve_coin.amount > 0:
         eph_xch_coin_notarized_payments.append([
             current_pair_coin.name(),
-            [p2_singleton_puzzle_hash, new_xch_reserve_amount]
+            [p2_singleton_puzzle_hash, last_xch_reserve_coin.amount]
         ])
 
     eph_xch_coin_solution = Program.to(eph_xch_coin_notarized_payments)
@@ -2294,6 +2299,7 @@ async def rebase_spends_and_conditions(
         last_xch_reserve_coin_spend,
         eph_xch_coin_spend
     ], conds
+
 
 async def get_fee_estimate(mempool_sb, full_node_client: FullNodeRpcClient):
     # upper bound (exaggerated so the tx doesn't fail)

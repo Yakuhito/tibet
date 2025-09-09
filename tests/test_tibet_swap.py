@@ -1122,8 +1122,8 @@ class TestTibetSwap:
 
     @pytest.mark.asyncio
     async def test_v2r_rebase(self, setup):
-        hideen_puzzle = Program.to(1)
-        hidden_puzzle_hash = hideen_puzzle.get_tree_hash()
+        hidden_puzzle = Program.to(1)
+        hidden_puzzle_hash = hidden_puzzle.get_tree_hash()
 
         full_node_client, wallet_client = setup
         router_launcher_id, current_router_coin, router_creation_spend = await self.launch_router(
@@ -1290,18 +1290,18 @@ class TestTibetSwap:
         )
         xch_balance_now = await self.expect_change_in_token(wallet_client, None, None, xch_balance_now, -1)
 
-        admin_coin = None
+        admin_coin_record = None
         i = 0
-        while admin_coin is None and i < 10:
+        while admin_coin_record is None and i < 10:
             print(i)
             resp = await full_node_client.get_coin_records_by_puzzle_hash(hidden_puzzle_hash)
             if len(resp) > 0:
-                admin_coin = resp[0]
+                admin_coin_record = resp[0]
             i += 1
             time.sleep(10)
 
 
-        assert admin_coin is not None
+        assert admin_coin_record is not None
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
             full_node_client, current_pair_coin.name()
@@ -1337,7 +1337,7 @@ class TestTibetSwap:
             additional_spendable_cats=None,
         )
 
-        coin_spends.push(make_spend(admin_coin, hidden_puzzle, conds))
+        coin_spends.append(make_spend(admin_coin_record.coin, hidden_puzzle, Program.to(conds)))
         sb = SpendBundle(coin_spends, AugSchemeMPL.aggregate([]))
 
         import json; open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict()))
