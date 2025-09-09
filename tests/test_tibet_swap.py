@@ -1289,7 +1289,67 @@ class TestTibetSwap:
         #      - reverse split: all on-chain rCAT balances are divided by a factor of 10
         #      - normal split: all on-chain rCAT balances are multiplied by a factor of 2
         #      - new CAT: on-chain rCAT becomes worthless; rCAT balance set to 0 to disable trading but allow LPs to withdraw their XCH 
-        # First, create the coin that will send the rebase
+        
+        # First, if this is a normal split, the extra 5000 CATs will need to come from somewhere
+        # The body of this if statement makes sure the 5000 delta is there :)
+        additional_spendable_cats = None
+        if split_kind == "normal-split":
+            needed_amount = 5000
+            await wallet_client.send_transaction(
+                wallet_id=token_wallet_id,
+                amount=needed_amount,
+                address=encode_puzzle_hash(hidden_puzzle_hash, "txch"),
+                tx_config=tx_config,
+            )
+            token_balance_now = await self.expect_change_in_token(
+                wallet_client,
+                token_tail_hash,
+                hidden_puzzle_hash,
+                token_balance_now,
+                -needed_amount
+            )
+
+            additional_cat_ph = get_cat_puzzle(
+                token_tail_hash,
+                hidden_puzzle_hash,
+                hidden_puzzle
+            ).get_tree_hash()
+
+            additional_cat_record = None
+            i = 0
+            while additional_cat_record is None and i < 10:
+                resp = await full_node_client.get_coin_records_by_puzzle_hash(additional_cat_ph)
+                if len(resp) > 0:
+                    additional_cat_record = resp[0]
+                i += 1
+                time.sleep(10)
+
+            assert additional_cat_record is not None
+            assert additional_cat_record.coin.amount == needed_amount
+
+            # spend required for lineage proof
+            parent_spend = await full_node_client.get_puzzle_and_solution(
+                additional_cat_record.coin.parent_coin_info,
+                additional_cat_record.confirmed_block_index
+            )
+
+            # CAT worth [needed_amount] spent without creating any output
+            #   --> delta can go into the new TibetSwap reserve
+            additional_spendable_cats = [
+                SpendableCAT(
+                    additional_cat_record.coin,
+                    token_tail_hash,
+                    get_cat_inner_puzzle(token_hidden_puzzle_hash, hidden_puzzle),
+                    get_cat_inner_solution(True, hidden_puzzle, Program.to([])),
+                    lineage_proof=LineageProof(
+                        parent_spend.coin.parent_coin_info,
+                        get_innerpuzzle_from_puzzle(parent_spend.puzzle_reveal).get_tree_hash(),
+                        parent_spend.coin.amount
+                    )
+                )
+            ]
+        
+        # Create the coin that will send the rebase
         await wallet_client.send_transaction(
             wallet_id=1,
             amount=1,
@@ -1307,8 +1367,9 @@ class TestTibetSwap:
             i += 1
             time.sleep(10)
 
-
         assert admin_coin_record is not None
+
+        # Do the rebase
 
         current_pair_coin, pair_creation_spend, pair_state, sb_to_aggregate, _ = await sync_pair(
             full_node_client, current_pair_coin.name()
@@ -1342,7 +1403,7 @@ class TestTibetSwap:
             xch_reserve_coin,
             token_reserve_coin,
             token_reserve_lineage_proof,
-            additional_spendable_cats=None,
+            additional_spendable_cats=additional_spendable_cats,
         )
 
         coin_spends.append(make_spend(admin_coin_record.coin, hidden_puzzle, Program.to(conds)))
