@@ -1340,7 +1340,7 @@ class TestTibetSwap:
         coin_spends.append(make_spend(admin_coin_record.coin, hidden_puzzle, Program.to(conds)))
         sb = SpendBundle(coin_spends, AugSchemeMPL.aggregate([]))
 
-        import json; open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict()))
+        import json; open("spend_bundle.json", "w").write(json.dumps(sb.to_json_dict())) # todo: debug
         assert((await full_node_client.push_tx(sb))["success"])
         await self.wait_for_wallet_sync(wallet_client)
 

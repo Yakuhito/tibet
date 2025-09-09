@@ -158,7 +158,7 @@ MERKLE_ROOT, MERKLE_PROOFS = build_merkle_tree([
 RCAT_ROUTER_MOD: Program = load_clvm_hex("clvm/v2r_router.clvm.hex")
 RCAT_ROUTER_MOD_HASH = RCAT_ROUTER_MOD.get_tree_hash()
 
-RCAT_REBASE_MOD: Program = load_clvm_hex("clvm/v2r_router.clvm.hex")
+RCAT_REBASE_MOD: Program = load_clvm_hex("clvm/v2r_rebase.clvm.hex")
 RCAT_REBASE_MOD_HASH = RCAT_REBASE_MOD.get_tree_hash()
 
 RCAT_SWAP_MOD: Program = load_clvm_hex("clvm/v2r_swap.clvm.hex")
@@ -2123,6 +2123,16 @@ async def rebase_spends_and_conditions(
             new_token_reserve
         ]
     ))
+
+    # todo: debug
+    print(get_pair_inner_inner_puzzle(
+        pair_launcher_id,
+        token_tail_hash,
+        token_hidden_puzzle_hash
+    ))# todo: debug
+    print(inner_inner_sol) # todo: debug
+    # todo: debug
+
     rebase_puzzle = get_rcat_rebase_puzzle(token_hidden_puzzle_hash)
     pair_singleton_inner_solution = Program.to([
         rebase_puzzle,
@@ -2156,6 +2166,10 @@ async def rebase_spends_and_conditions(
         token_tail_hash,
         token_hidden_puzzle_hash
     )
+    # todo: debug
+    print('pip', pair_singleton_inner_puzzle) # todo: debug
+    print('psis', pair_singleton_inner_solution) # todo: debug
+    # todo: debug
     last_token_reserve_coin_inner_solution = get_cat_inner_solution(
         token_hidden_puzzle_hash is not None,
         p2_singleton_puzzle,
