@@ -62,20 +62,10 @@ def save_config(config):
 
 @click.command()
 @click.option('--chia-root', default=None, help='Chia root directory (e.g., ~/.chia/mainnet)')
-@click.option('--use-preset', default='custom', type=click.Choice(['custom', 'simulator', 'testnet10', 'mainnet'], case_sensitive=False))
-@click.option('--fireacademyio-api-key', default=None, help='FireAcademy API key (if you want to use FireAcademy.io instead of your local full node.')
-@click.option('--fireacademyio-network', default='testnet10', type=click.Choice(['mainnet', 'testnet10'], case_sensitive=False))
-def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_network):
-    if use_preset == 'custom' and (chia_root is None or full_node_rpc_port is None or wallet_rpc_port is None):
-        click.echo("Use a preset or fill out all options.")
-        sys.exit(1)
-
-    if use_preset in ["mainnet", "testnet10"]:
-        chia_root = os.getenv('CHIA_ROOT', default="~/.chia/mainnet")
-    elif use_preset == "simulator":
-        chia_root = "~/.chia/simulator/main"
-
-    chia_root = os.path.expanduser(chia_root)
+@click.option('--network', default='mainnet', type=click.Choice(['testnet', 'mainnet'], case_sensitive=False))
+@click.option('--use-local-node', default=False, help='Use your local full node instead of coinset.org')
+def config_node(chia_root, mainnet, use_local_node):
+    chia_root = os.path.expanduser(os.getenv('CHIA_ROOT', default="~/.chia/mainnet"))
 
     root_path = Path(chia_root)
     config = load_config(root_path, "config.yaml")
@@ -84,29 +74,23 @@ def config_node(chia_root, use_preset, fireacademyio_api_key, fireacademyio_netw
     try:
         agg_sig_me_additional_data = config['full_node']['network_overrides'][
             'constants'][selected_network]['AGG_SIG_ME_ADDITIONAL_DATA']
+        print(f"Using network overrides for agg_sig_me_additional_data: {agg_sig_me_additional_data}")
     except:
         pass
 
     config = get_config()
+
     config["chia_root"] = chia_root
-    if fireacademyio_api_key is not None:
-        if len(fireacademyio_api_key) != 36:
-            print(
-                "Invalid API key for FireAcademy.io :(")
-            sys.exit(1)
-
-        leaflet_url = f"https://kraken.fireacademy.io/{fireacademyio_api_key}/"
-        if fireacademyio_network == "mainnet" or use_preset == "mainnet":
-            leaflet_url += "leaflet/"
-        else:
-            leaflet_url += "leaflet-testnet10/"
-
-        config["leaflet_url"] = leaflet_url
-    else:
-        if config.get("leaflet_url", -1) != -1:
-            del config["leaflet_url"]
-
     config["agg_sig_me_additional_data"] = agg_sig_me_additional_data
+
+    if use_local_node:
+        config["rpc_url"] = ""
+    else:
+        if network == 'mainnet':
+            config["rpc_url"] = "https://api.coinset.org/"
+        else:
+            config["rpc_url"] = "https://testnet11.api.coinset.org/"
+
     save_config(config)
     click.echo("Config updated and saved successfully.")
 
