@@ -484,7 +484,7 @@ def get_pair_info(asset_id):
     asyncio.run(_get_pair_info(asset_id))
 
 # returns (hidden puzzle hash or None, inverse fee, pair launcher id)
-def get_pair_info(asset_id_hex):
+def get_pair_data(asset_id_hex):
     rcat_pairs = get_config_item("rcat_pairs", asset_id_hex)
     pair_launcher_id = get_config_item("pairs", asset_id_hex)
 
@@ -515,7 +515,7 @@ async def _get_pair_info(token_tail_hash):
     click.echo("Getting info...")
     offer_str = ""
 
-    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(token_tail_hash)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
@@ -529,6 +529,10 @@ async def _get_pair_info(token_tail_hash):
     )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
+
+    if hidden_puzzle_hash is not None:
+        click.echo(f"Declared hidden puzzle hash: {hidden_puzzle_hash.hex()}")
+        click.echo(f"Inverse fee: {inverse_fee} (fee: {(1000 - inverse_fee) / 10}%)")
 
     click.echo(f"XCH reserve: {pair_state['xch_reserve'] / 10 ** 12} XCH")
     click.echo(f"Token reserve: {pair_state['token_reserve'] / 1000} tokens")
@@ -558,11 +562,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
     click.echo("Depositing liquidity...")
     offer_str = ""
 
-    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
-    if pair_launcher_id is None:
-        click.echo(
-            "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
-        sys.exit(1)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(token_tail_hash)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
@@ -710,11 +710,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
     click.echo("Removing liquidity...")
     offer_str = ""
 
-    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
-    if pair_launcher_id is None:
-        click.echo(
-            "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
-        sys.exit(1)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(token_tail_hash)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
@@ -862,11 +858,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
     click.echo("Swapping XCH for token...")
     offer_str = ""
 
-    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
-    if pair_launcher_id is None:
-        click.echo(
-            "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
-        sys.exit(1)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(token_tail_hash)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
@@ -1016,11 +1008,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
     click.echo("Swapping token for XCH...")
     offer_str = ""
 
-    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
-    if pair_launcher_id is None:
-        click.echo(
-            "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
-        sys.exit(1)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(token_tail_hash)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
@@ -1169,11 +1157,7 @@ async def _create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token
     click.echo("Deploying pair AND depositing liquidity in the same tx - that's crazy!")
     offer_str = ""
 
-    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(asset_id)
-    if pair_launcher_id is not None:
-        click.echo(
-            "A pair for that asset already exists :(")
-        sys.exit(1)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(asset_id)
 
     router_launcher_id = get_config_item("router_launcher_id")
     router_last_processed_id = get_config_item("router_last_processed_id")
