@@ -459,7 +459,8 @@ async def _sync_pairs(rcat):
                     config["rcat_pairs"][tail_hash].append({
                         "hidden_puzzle_hash": pair_hidden_puzzle_hash,
                         "inverse_fee": pair_inverse_fee,
-                        "pair_launcher_id": pair_launcher_id
+                        "launcher_id": pair_launcher_id,
+                        "last_pair_coin_id": pair_launcher_id
                     })
         else:
             config["router_last_processed_id"] = router_last_processed_id
