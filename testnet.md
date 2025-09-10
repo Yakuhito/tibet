@@ -32,7 +32,7 @@ python3 tibet.py config-node --network testnet11
 python3 tibet.py test-node-config
 python3 tibet.py set-routers \
     --launcher-id 52e07048bcd5c6a5cad415e32012c2047f8e8c3963ee02344f61804c6543dfc6 \
-    --rcat-launcher-id [testnet-rcat-router-launcher-id]
+    --rcat-launcher-id 540f0a595a55f8129ce2263835ddd0c7e84f5b646f3a7191e4a2108e749e95b9
 python3 tibet.py sync-pairs
 ```
 

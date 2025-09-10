@@ -503,12 +503,28 @@ def get_pair_data(asset_id_hex):
             "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
         sys.exit(1)
 
+    remember_choice_key = f"remember_pair_{asset_id_hex}"
+    remember_choice_value = get_config_item(remember_choice_key)
+    if remember_choice_value is not None:
+        for c in choices:
+            if c[0] == remember_choice_value:
+                return c
+
     print("Multiple pairs for the pair found - which one do you want to use?")
     for i, choice in enumerate(choices):
-        print(f"{i}: launcher_id: {choice[0]}, hidden_puzzle_hash: {choice[1]}, inverse_fee: {choice[2]}")
+        print(f"{i}: launcher_id: {choice[0]}, hidden_puzzle_hash: {choice[1].hex()}, inverse_fee: {choice[2]}")
     
-    user_choice = input("Enter the number of the pair you want to use: ")
-    return choices[int(user_choice)]
+    user_choice = input("Enter the number of the pair you want to use (append an 'r' to remember your choice): ")
+
+    user_choice_int = int(user_choice.replace("r", ""))
+    choice = choices[user_choice_int]
+    if 'r' in user_choice:
+        config = get_config()
+        config[remember_choice_key] = choice[0]
+        save_config(config)
+        print(f"Choice saved - if you want to undo, remove the 'remember_pair_{asset_id_hex}' entry from your config.json file.")
+
+    return choice
 
 
 async def _get_pair_info(token_tail_hash):
@@ -529,6 +545,7 @@ async def _get_pair_info(token_tail_hash):
     )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
+    click.echo(f"Liquidity asset id: {pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()}")
 
     if hidden_puzzle_hash is not None:
         click.echo(f"Declared hidden puzzle hash: {hidden_puzzle_hash.hex()}")
