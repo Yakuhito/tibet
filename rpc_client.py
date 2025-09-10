@@ -5,11 +5,11 @@ import time
 import json
 import random
 
-class LeafletFullNodeRpcClient(FullNodeRpcClient):
-    def __init__(self, leaflet_url):
-        self.leaflet_url = leaflet_url
+class HttpFullNodeRpcClient(FullNodeRpcClient):
+    def __init__(self, rpc_url):
+        self.rpc_url = rpc_url
         super().__init__(
-            url=leaflet_url,
+            url=rpc_url,
             session=aiohttp.ClientSession(),
             ssl_context=None,
             hostname='localhost',
@@ -19,15 +19,15 @@ class LeafletFullNodeRpcClient(FullNodeRpcClient):
 
 
     async def fetch(self, path, request_json):
-        leaflet_url = self.leaflet_url
-        if "," in leaflet_url:
-            leaflet_url = leaflet_url.split(",")[0]
+        rpc_url = self.rpc_url
+        if "," in rpc_url:
+            rpc_url = rpc_url.split(",")[0]
             if 'push_tx' in path or 'get_fee_estimate' in path:
-                leaflet_url = random.choice(self.leaflet_url.split(",")[1:])
+                rpc_url = random.choice(self.rpc_url.split(",")[1:])
         
-        async with self.session.post(leaflet_url + path, json=request_json) as response:
+        async with self.session.post(rpc_url + path, json=request_json) as response:
             if 'push_tx' in path or 'get_fee_estimate' in path:
-                print(f"Using {leaflet_url} for {path}:", leaflet_url)
+                print(f"Using {rpc_url} for {path}:", rpc_url)
                 print("Response:", await response.text())
 
             response.raise_for_status()

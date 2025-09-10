@@ -74,7 +74,7 @@ from clvm.casts import int_to_bytes
 
 from clvm import SExp
 
-from leaflet_client import LeafletFullNodeRpcClient
+from rpc_client import HttpFullNodeRpcClient
 from cic_replacement import build_merkle_tree
 from chia.full_node.bundle_tools import simple_solution_generator
 from chia._tests.util.get_name_puzzle_conditions import get_name_puzzle_conditions
@@ -316,13 +316,12 @@ def solution_for_p2_singleton_flashloan(
 
 async def get_full_node_client(
     chia_root,
-    leaflet_url
+    rpc_url
 ) -> FullNodeRpcClient:
     node_client = None
 
-    if leaflet_url is not None:
-        # use leaflet by default
-        node_client = LeafletFullNodeRpcClient(leaflet_url)
+    if rpc_url is not None and len(rpc_url) > 0:
+        node_client = HttpFullNodeRpcClient(rpc_url)
     else:
         root_path = Path(chia_root)
 

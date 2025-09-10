@@ -1,4 +1,4 @@
-# Testing on testnet10
+# Testing on testnet
 
 To use `tibet.py`, you'll first need to install the required packages:
 
@@ -28,10 +28,10 @@ chia wallet take_offer -m [fee_amount_in_xch] [raw_offer]
 Configure tibet:
 ```bash
 rm config.json # delete prev. config
-python3 tibet.py config-node --use-preset testnet11
+python3 tibet.py config-node --network testnet11
 python3 tibet.py test-node-config
 python3 tibet.py set-routers \
-    --launcher-id [testnet-router-id] \
+    --launcher-id 52e07048bcd5c6a5cad415e32012c2047f8e8c3963ee02344f61804c6543dfc6 \
     --rcat-launcher-id [testnet-rcat-router-launcher-id]
 python3 tibet.py sync-pairs
 ```

@@ -64,7 +64,7 @@ def save_config(config):
 @click.option('--chia-root', default=None, help='Chia root directory (e.g., ~/.chia/mainnet)')
 @click.option('--network', default='mainnet', type=click.Choice(['testnet', 'mainnet'], case_sensitive=False))
 @click.option('--use-local-node', default=False, help='Use your local full node instead of coinset.org')
-def config_node(chia_root, mainnet, use_local_node):
+def config_node(chia_root, network, use_local_node):
     chia_root = os.path.expanduser(os.getenv('CHIA_ROOT', default="~/.chia/mainnet"))
 
     root_path = Path(chia_root)
@@ -101,7 +101,7 @@ def test_node_config():
 
 
 async def _test_node_config():
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
     full_node_client_status = await full_node_client.healthz()
     click.echo("full node client... " + str(full_node_client_status))
 
@@ -146,7 +146,7 @@ async def _launch_router(push_tx, fee):
 
     if push_tx:
         click.echo(f"Pushing tx...")
-        full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+        full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
         resp = await full_node_client.push_tx(signed_sb)
         click.echo(resp)
         full_node_client.close()
@@ -217,7 +217,7 @@ async def _launch_test_token(amount, push_tx):
 
     if push_tx:
         click.echo(f"Pushing tx...")
-        full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+        full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
         resp = await full_node_client.push_tx(signed_sb)
         click.echo(resp)
         full_node_client.close()
@@ -265,7 +265,7 @@ async def _create_pair(tail_hash, push_tx, fee):
         sys.exit(1)
 
     click.echo("But first, we do a little sync")
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
     current_router_coin, latest_creation_spend, pairs = await sync_router(
         full_node_client, bytes.fromhex(router_last_processed_id)
     )
@@ -349,7 +349,7 @@ async def _sync_pairs():
             "No router launcher id. Please either set it or launch a new router.")
         sys.exit(1)
 
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
     current_router_coin, latest_creation_spend, pairs = await sync_router(
         full_node_client, bytes.fromhex(router_last_processed_id)
@@ -393,7 +393,7 @@ async def _get_pair_info(token_tail_hash):
             "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
         sys.exit(1)
 
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
     last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
     last_synced_pair_id_not_none = last_synced_pair_id
@@ -440,7 +440,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
             "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
         sys.exit(1)
 
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
     last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
     last_synced_pair_id_not_none = last_synced_pair_id
@@ -592,7 +592,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
             "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
         sys.exit(1)
 
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
     last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
     last_synced_pair_id_not_none = last_synced_pair_id
@@ -744,7 +744,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
             "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
         sys.exit(1)
 
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
     last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
     last_synced_pair_id_not_none = last_synced_pair_id
@@ -898,7 +898,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
             "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
         sys.exit(1)
 
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
     last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
     last_synced_pair_id_not_none = last_synced_pair_id
@@ -1058,7 +1058,7 @@ async def _create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token
         sys.exit(1)
 
     click.echo("But first, we do a little sync")
-    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("leaflet_url"))
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
     current_router_coin, latest_creation_spend, pairs = await sync_router(
         full_node_client, bytes.fromhex(router_last_processed_id)
     )
