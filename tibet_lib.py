@@ -627,12 +627,9 @@ async def sync_router(full_node_client, last_router_id, rcat):
                 solution_program = Program.from_bytes(creation_spend.solution.to_bytes())
 
             if rcat:
-                tail_hash = [_ for _ in solution_program.as_iter()
-                             ][-1].as_python()[-3]
-                hidden_puzzle_hash = [_ for _ in solution_program.as_iter()
-                             ][-1].as_python()[-2]
-                inverse_fee = [_ for _ in solution_program.as_iter()
-                             ][-1].as_python()[-1]
+                tail_hash = solution_program.at("rrfrf").as_python()
+                hidden_puzzle_hash = solution_program.at("rrfrrf").as_python()
+                inverse_fee = solution_program.at("rrfrrrf").as_int()
             else:
                 tail_hash = [_ for _ in solution_program.as_iter()
                              ][-1].as_python()[-1]
