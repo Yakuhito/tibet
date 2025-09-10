@@ -1,46 +1,26 @@
 ```bash
-# python3 -m venv venv
-. ./venv/bin/activate
-export CHIA_ROOT=~/.chia/simulator/main
-pip install -r requirements.txt
-
-
-# remove prev sessions
-chia stop all
-rm -r ~/.chia/simulator
-rm config.json
-
-# new testing session
-cdv sim create # choose a wallet that you *won't* use for testing
-chia start wallet
-chia wallet get_address # choose wallet that you will use for testing
-cdv sim farm -b 7 -a [ADDRESS]
+# Before running commands, make sure you followed instructions in either:
+#  - mainnet.md (for mainnet)
+#  - testnet.md (for testnet)
+# To set up wallet
 
 # setup router, test token, and test token pair
-python3 tibet.py config-node --use-preset simulator
+python3 tibet.py config-node --use-preset [network]
 python3 tibet.py test-node-config
 
 python3 tibet.py launch-router
 python3 tibet.py launch-router --push-tx
-python3 tibet.py launch-rcat-router
-python3 tibet.py launch-rcat-router --push-tx
+# For rCATs, just add a '--rcat' switch to the two commands above
 
 python3 tibet.py launch-test-token # take note of asset_id
 python3 tibet.py launch-test-token --push-tx
+# For rCATs, add: --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000
 
 python3 tibet.py create-pair --asset-id [asset_id]
 python3 tibet.py create-pair --push-tx --asset-id [asset_id]
+# For rCATs, add: --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 --inverse-fee 999
 
 python3 tibet.py sync-pairs
-
-python3 tibet.py create-pair --asset-id [asset_id]
-python3 tibet.py create-pair --push-tx --asset-id [asset_id]
-
-python3 tibet.py launch-test-rcat-token --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 # take note of asset_id
-python3 tibet.py launch-test-rcat-token --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 --push-tx
-
-python3 tibet.py create-rcat-pair --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 --asset-id [asset_id]
-python3 tibet.py create-rcat-pair --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 --push-tx --asset-id [asset_id]
 
 # running one of the following commands will generate an offer
 # that is not cancelled even if --push-tx was not used
@@ -49,7 +29,7 @@ python3 tibet.py create-rcat-pair --hidden-puzzle-hash 0000000000000000000000000
 
 # to clear offers, use:
 # chia wallet get_offers
-# chia wallet cancel_offer -id [id]
+# chia wallet cancel_offer --insecure -id [id]
 python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id]
 python3 tibet.py deposit-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
 
