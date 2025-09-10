@@ -459,8 +459,7 @@ async def _sync_pairs(rcat):
                     config["rcat_pairs"][tail_hash].append({
                         "hidden_puzzle_hash": pair_hidden_puzzle_hash,
                         "inverse_fee": pair_inverse_fee,
-                        "launcher_id": pair_launcher_id,
-                        "last_pair_coin_id": pair_launcher_id
+                        "launcher_id": pair_launcher_id
                     })
         else:
             config["router_last_processed_id"] = router_last_processed_id
@@ -477,23 +476,46 @@ async def _sync_pairs(rcat):
 
 
 @click.command()
-@click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
+@click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-(r)XCH)')
 def get_pair_info(asset_id):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
     asyncio.run(_get_pair_info(asset_id))
 
+# returns (hidden puzzle hash or None, inverse fee, pair launcher id)
+def get_pair_info(asset_id_hex):
+    rcat_pairs = get_config_item("rcat_pairs", asset_id_hex)
+    pair_launcher_id = get_config_item("pairs", asset_id_hex)
+
+    choices = []
+    if pair_launcher_id is not None:
+            possible_pairs.append((pair_launcher_id, None, 997))
+
+    if rcat_pairs is not None:
+        for rcat_pair in rcat_pairs:
+            choices.append((rcat_pair["launcher_id"], bytes.fromhex(rcat_pair["hidden_puzzle_hash"]), rcat_pair["inverse_fee"]))
+        
+    if len(choices) == 1:
+        return choices[0]
+    elif len(choices) == 0:
+        click.echo(
+            "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
+        sys.exit(1)
+
+    print("Multiple pairs for the pair found - which one do you want to use?")
+    for i, choice in enumerate(choices):
+        print(f"{i}: launcher_id: {choice[0]}, hidden_puzzle_hash: {choice[1]}, inverse_fee: {choice[2]}")
+    
+    user_choice = input("Enter the number of the pair you want to use: ")
+    return choices[int(user_choice)]
+
 
 async def _get_pair_info(token_tail_hash):
     click.echo("Getting info...")
     offer_str = ""
 
-    pair_launcher_id = get_config_item("pairs", token_tail_hash)
-    if pair_launcher_id is None:
-        click.echo(
-            "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
-        sys.exit(1)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
 
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
@@ -536,7 +558,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
     click.echo("Depositing liquidity...")
     offer_str = ""
 
-    pair_launcher_id = get_config_item("pairs", token_tail_hash)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
     if pair_launcher_id is None:
         click.echo(
             "Corresponding pair launcher id not found in config - you might want to sync-pairs or create-pair.")
@@ -688,7 +710,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
     click.echo("Removing liquidity...")
     offer_str = ""
 
-    pair_launcher_id = get_config_item("pairs", token_tail_hash)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
     if pair_launcher_id is None:
         click.echo(
             "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
@@ -840,7 +862,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
     click.echo("Swapping XCH for token...")
     offer_str = ""
 
-    pair_launcher_id = get_config_item("pairs", token_tail_hash)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
     if pair_launcher_id is None:
         click.echo(
             "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
@@ -994,7 +1016,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
     click.echo("Swapping token for XCH...")
     offer_str = ""
 
-    pair_launcher_id = get_config_item("pairs", token_tail_hash)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(token_tail_hash)
     if pair_launcher_id is None:
         click.echo(
             "Corresponding pair launcher id not found in config - you might want to sync-pairs.")
@@ -1147,7 +1169,7 @@ async def _create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token
     click.echo("Deploying pair AND depositing liquidity in the same tx - that's crazy!")
     offer_str = ""
 
-    pair_launcher_id = get_config_item("pairs", asset_id)
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_info(asset_id)
     if pair_launcher_id is not None:
         click.echo(
             "A pair for that asset already exists :(")
