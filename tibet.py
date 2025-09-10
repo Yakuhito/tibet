@@ -215,6 +215,13 @@ async def _set_router(router_launcher_id, rcat_launcher_id):
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add cat to wallet.")
 @click.option('--hidden-puzzle-hash', default=None, help="Hidden puzzle hash (hex string) for rCATs; if not provided, a normal CAT will be created.")
 def launch_test_token(amount, push_tx, hidden_puzzle_hash):
+    if hidden_puzzle_hash is not None and len(hidden_puzzle_hash) != 64:
+        click.echo("Oops! That hidden puzzle hash doesn't look right...")
+        sys.exit(1)
+
+    if hidden_puzzle_hash is not None:
+        hidden_puzzle_hash = bytes.fromhex(hidden_puzzle_hash)
+
     asyncio.run(_launch_test_token(amount, push_tx, hidden_puzzle_hash))
 
 
@@ -224,7 +231,7 @@ async def _launch_test_token(amount, push_tx, hidden_puzzle_hash):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
     # wallet id 1 = XCH
-    coins = await wallet_client.select_coins(amount * 1000, 1, min_coin_amount=amount * 1000, coin_selection_config=CoinSelectionConfig(
+    coins = await wallet_client.select_coins(amount * 1000, 1, coin_selection_config=CoinSelectionConfig(
         min_coin_amount=amount * 1000,
         max_coin_amount=1337 * 10 ** 12,
         excluded_coin_amounts=[],
@@ -267,25 +274,45 @@ async def _launch_test_token(amount, push_tx, hidden_puzzle_hash):
 @click.option('--asset-id', required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
 @click.option('--fee', default=ROUTER_MIN_FEE, help=f'Fee to use for transaction (min fee: {ROUTER_MIN_FEE} = 0.042 XCH)')
-def create_pair(asset_id, push_tx, fee):
+@click.option('--hidden-puzzle-hash', show_default=True, default=None, help="If provided, the pair will be created for an rCAT instead of a normal CAT.")
+@click.option('--inverse-fee', show_default=True, default=999, help="[for XCH-rCAT pairs only] Inverse fee for the pair (999 means 0.1 percent fee)")
+def create_pair(asset_id, push_tx, fee, hidden_puzzle_hash, inverse_fee):
     # very basic check to prevent most mistakes
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
 
-    asyncio.run(_create_pair(asset_id, push_tx, fee))
+    if hidden_puzzle_hash is not None and len(hidden_puzzle_hash) != 64:
+        click.echo("Oops! That hidden puzzle hash doesn't look right...")
+        sys.exit(1)
+
+    if hidden_puzzle_hash is not None:
+        hidden_puzzle_hash = bytes.fromhex(hidden_puzzle_hash)
+
+    if hidden_puzzle_hash is not None and (inverse_fee < 952 or inverse_fee >= 1000):
+        click.echo("Oops! That inverse fee doesn't look right - chose a value between 952 and 999 (inclusive).")
+        sys.exit(1)
+
+    asyncio.run(_create_pair(asset_id, push_tx, fee, hidden_puzzle_hash, inverse_fee))
 
 
-async def _create_pair(tail_hash, push_tx, fee):
+async def _create_pair(tail_hash, push_tx, fee, hidden_puzzle_hash, inverse_fee):
     if fee < ROUTER_MIN_FEE:
         click.echo(
             "The router imposes a minimum fee of 42000000000 mojos (0.042 XCH)")
         sys.exit(1)
 
-    click.echo(f"Creating pair for {tail_hash}...")
+    if hidden_puzzle_hash is not None:
+        click.echo(f"Creating XCH-rCAT pair for {tail_hash}...")
+    else:
+        click.echo(f"Creating XCH-CAT pair for {tail_hash}...")
 
     router_launcher_id = get_config_item("router_launcher_id")
     router_last_processed_id = get_config_item("router_last_processed_id")
+    if hidden_puzzle_hash is not None:
+        router_launcher_id = get_config_item("rcat_router_launcher_id")
+        router_last_processed_id = get_config_item("rcat_router_last_processed_id")
+
     if router_launcher_id is None or router_last_processed_id is None:
         click.echo("Oops - looks like someone forgot to launch their router.")
         sys.exit(1)
@@ -293,7 +320,7 @@ async def _create_pair(tail_hash, push_tx, fee):
     click.echo("But first, we do a little sync")
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
     current_router_coin, latest_creation_spend, pairs = await sync_router(
-        full_node_client, bytes.fromhex(router_last_processed_id)
+        full_node_client, bytes.fromhex(router_last_processed_id), hidden_puzzle_hash is not None
     )
     router_last_processed_id_new = current_router_coin.name().hex()
     click.echo(f"Last router id: {router_last_processed_id_new}")
@@ -303,11 +330,30 @@ async def _create_pair(tail_hash, push_tx, fee):
         router_last_processed_id = router_last_processed_id_new
 
         config = get_config()
-        config["router_last_processed_id"] = router_last_processed_id
-        config["pairs"] = config.get("pairs", {})
-        for pair in pairs:
-            if config["pairs"].get(pair[0], -1) == -1:
-                config["pairs"][pair[0]] = pair[1]
+        pairs_key = "rcat_pairs" if hidden_puzzle_hash is not None else "pairs"
+        if hidden_puzzle_hash is not None:
+            config["rcat_router_last_processed_id"] = router_last_processed_id
+            config["rcat_pairs"] = config.get("rcat_pairs", {})
+
+            for (tail_hash, pair_launcher_id, hidden_puzzle_hash, inverse_fee) in config["rcat_pairs"]:
+                saved_pairs = config["rcat_pairs"].get(tail_hash, [])
+                already_seen = False
+                for saved_pair in saved_pairs:
+                    if saved_pair["hidden_puzzle_hash"] == hidden_puzzle_hash and saved_pair["inverse_fee"] == inverse_fee:
+                        already_seen = True
+                        break
+                if not already_seen:
+                    config["rcat_pairs"][tail_hash].append({
+                        "hidden_puzzle_hash": hidden_puzzle_hash,
+                        "inverse_fee": inverse_fee,
+                        "pair_launcher_id": pair_launcher_id
+                    })
+        else:
+            config["router_last_processed_id"] = router_last_processed_id
+            config["pairs"] = config.get("pairs", {})
+            for pair in config["pairs"]:
+                if config["pairs"].get(pair[0], -1) == -1:
+                    config["pairs"][pair[0]] = pair[1]
         save_config(config)
 
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
@@ -364,12 +410,13 @@ async def _create_pair(tail_hash, push_tx, fee):
 
 
 @click.command()
-def sync_pairs():
-    asyncio.run(_sync_pairs())
+@click.option('--rcat', is_flag=True, show_default=True, default=False, help="Sync rCAT pairs instead of normal CAT pairs.")
+def sync_pairs(rcat):
+    asyncio.run(_sync_pairs(rcat))
 
 
-async def _sync_pairs():
-    router_last_processed_id = get_config_item("router_last_processed_id")
+async def _sync_pairs(rcat):
+    router_last_processed_id = get_config_item("rcat_router_last_processed_id" if rcat else "router_last_processed_id")
     if router_last_processed_id is None or len(router_last_processed_id) != 64:
         click.echo(
             "No router launcher id. Please either set it or launch a new router.")
@@ -378,7 +425,7 @@ async def _sync_pairs():
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
     current_router_coin, latest_creation_spend, pairs = await sync_router(
-        full_node_client, bytes.fromhex(router_last_processed_id)
+        full_node_client, bytes.fromhex(router_last_processed_id), rcat
     )
     router_last_processed_id_new = current_router_coin.name().hex()
     click.echo(f"Last router id: {router_last_processed_id_new}")
@@ -388,11 +435,30 @@ async def _sync_pairs():
         router_last_processed_id = router_last_processed_id_new
 
         config = get_config()
-        config["router_last_processed_id"] = router_last_processed_id
-        config["pairs"] = config.get("pairs", {})
-        for pair in pairs:
-            if config["pairs"].get(pair[0], -1) == -1:
-                config["pairs"][pair[0]] = pair[1]
+        pairs_key = "rcat_pairs" if hidden_puzzle_hash is not None else "pairs"
+        if hidden_puzzle_hash is not None:
+            config["rcat_router_last_processed_id"] = router_last_processed_id
+            config["rcat_pairs"] = config.get("rcat_pairs", {})
+
+            for (tail_hash, pair_launcher_id, hidden_puzzle_hash, inverse_fee) in config["rcat_pairs"]:
+                saved_pairs = config["rcat_pairs"].get(tail_hash, [])
+                already_seen = False
+                for saved_pair in saved_pairs:
+                    if saved_pair["hidden_puzzle_hash"] == hidden_puzzle_hash and saved_pair["inverse_fee"] == inverse_fee:
+                        already_seen = True
+                        break
+                if not already_seen:
+                    config["rcat_pairs"][tail_hash].append({
+                        "hidden_puzzle_hash": hidden_puzzle_hash,
+                        "inverse_fee": inverse_fee,
+                        "pair_launcher_id": pair_launcher_id
+                    })
+        else:
+            config["router_last_processed_id"] = router_last_processed_id
+            config["pairs"] = config.get("pairs", {})
+            for pair in config["pairs"]:
+                if config["pairs"].get(pair[0], -1) == -1:
+                    config["pairs"][pair[0]] = pair[1]
         save_config(config)
 
     click.echo("Bye!")

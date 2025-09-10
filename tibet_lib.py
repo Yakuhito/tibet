@@ -653,7 +653,7 @@ async def sync_router(full_node_client, last_router_id, rcat):
                 pair_launcher_id = pair_launcher_coin.name()
 
                 if hidden_puzzle_hash:
-                    new_pairs.append((tail_hash.hex(), hidden_puzzle_hash.hex(), inverse_fee, pair_launcher_id.hex()))
+                    new_pairs.append((tail_hash.hex(), pair_launcher_id.hex(), hidden_puzzle_hash.hex(), inverse_fee))
                 else:
                     new_pairs.append((tail_hash.hex(), pair_launcher_id.hex()))
             else:
