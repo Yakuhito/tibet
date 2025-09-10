@@ -127,33 +127,39 @@ async def sign_spend_bundle(wallet_client, sb, additional_data=DEFAULT_CONSTANTS
     i = 0
     while i < 10000:
         wallet_sk = master_sk_to_wallet_sk(master_sk, i)
-        synth_secret_key = calculate_synthetic_secret_key(
-            wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH)
-        synth_key = synth_secret_key.get_g1()
-        puzzle = puzzle_for_synthetic_public_key(synth_key)
-        puzzle_hash = puzzle.get_tree_hash()
-        if puzzle_hash in puzzle_hashes:
-            keys_used += 1
+        wallet_sk_unhardened = master_sk_to_wallet_sk_unhardened(master_sk, i)
+        possible_sks = [
+            wallet_sk,
+            calculate_synthetic_secret_key(wallet_sk, DEFAULT_HIDDEN_PUZZLE_HASH),
+            wallet_sk_unhardened,
+            calculate_synthetic_secret_key(wallet_sk_unhardened, DEFAULT_HIDDEN_PUZZLE_HASH),
+        ]
+        for possible_sk in possible_sks:
+            pk = possible_sk.get_g1()
+            puzzle = puzzle_for_synthetic_public_key(pk)
+            puzzle_hash = puzzle.get_tree_hash()
+            if puzzle_hash in puzzle_hashes:
+                keys_used += 1
 
-            async def pk_to_sk(pk):
-                return synth_secret_key
+                async def pk_to_sk(pk):
+                    return possible_sk
 
-            async def ph_to_sk(ph):
-                return synth_secret_key
+                async def ph_to_sk(ph):
+                    return possible_sk
 
-            sig_old = sb.aggregated_signature
-            sb = await sign_coin_spends(
-                sb.coin_spends,
-                pk_to_sk,
-                ph_to_sk,
-                additional_data,
-                DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
-                []
-            )
+                sig_old = sb.aggregated_signature
+                sb = await sign_coin_spends(
+                    sb.coin_spends,
+                    pk_to_sk,
+                    ph_to_sk,
+                    additional_data,
+                    DEFAULT_CONSTANTS.MAX_BLOCK_COST_CLVM,
+                    []
+                )
 
-            new_agg_sig = AugSchemeMPL.aggregate(
-                [sig_old, sb.aggregated_signature])
-            sb = SpendBundle(sb.coin_spends, new_agg_sig)
+                new_agg_sig = AugSchemeMPL.aggregate(
+                    [sig_old, sb.aggregated_signature])
+                sb = SpendBundle(sb.coin_spends, new_agg_sig)
 
         if keys_used >= no_max_keys:
             return sb

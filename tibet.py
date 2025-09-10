@@ -128,7 +128,7 @@ async def _launch_router(push_tx, fee, rcat):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
     # wallet id 1, amount 2 (+ fee)
-    coins = await wallet_client.select_coins(2 + fee, 1, min_coin_amount=2 + fee, coin_selection_config=CoinSelectionConfig(
+    coins = await wallet_client.select_coins(2 + fee, 1, coin_selection_config=CoinSelectionConfig(
         min_coin_amount=fee + 3,
         max_coin_amount=1337 * 10 ** 12,
         excluded_coin_amounts=[],
@@ -143,7 +143,11 @@ async def _launch_router(push_tx, fee, rcat):
     launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle, rcat, fee=fee)
     click.echo(f"Router launcher id: {launcher_id}")
 
-    signed_sb = await sign_spend_bundle(wallet_client, sb, additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data")))
+    signed_sb = await sign_spend_bundle(
+        wallet_client,
+        sb,
+        additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data"))
+    )
 
     if push_tx:
         click.echo(f"Pushing tx...")
@@ -155,9 +159,14 @@ async def _launch_router(push_tx, fee, rcat):
 
         click.echo("Saving config...")
         config = get_config()
-        config["router_launcher_id"] = launcher_id
-        config["router_last_processed_id"] = launcher_id
-        config["pairs"] = {}
+        if rcat:
+            config["rcat_router_launcher_id"] = launcher_id
+            config["rcat_router_last_processed_id"] = launcher_id
+            config["rcat_pairs"] = {}
+        else:
+            config["router_launcher_id"] = launcher_id
+            config["router_last_processed_id"] = launcher_id
+            config["pairs"] = {}
         save_config(config)
         click.echo("Done.")
     else:
