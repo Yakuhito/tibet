@@ -119,11 +119,12 @@ async def _test_node_config():
 @click.command()
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and update launcher is in config.")
 @click.option('--fee', default=0, help='Fee to use for transaction')
-def launch_router(push_tx, fee):
-    asyncio.run(_launch_router(push_tx, fee))
+@click.option('--rcat', is_flag=True, show_default=True, default=False, help="Launch a v2r router (for XCH-rCAT pairs) instead of a v2 router (for XCH-CAT pairs)")
+def launch_router(push_tx, fee, rcat):
+    asyncio.run(_launch_router(push_tx, fee, rcat))
 
 
-async def _launch_router(push_tx, fee):
+async def _launch_router(push_tx, fee, rcat):
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
 
     # wallet id 1, amount 2 (+ fee)
@@ -139,7 +140,7 @@ async def _launch_router(push_tx, fee):
 
     click.echo(f"Using coin 0x{coin.name().hex()}...")
 
-    launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle, fee=fee)
+    launcher_id, sb = await launch_router_from_coin(coin, coin_puzzle, rcat, fee=fee)
     click.echo(f"Router launcher id: {launcher_id}")
 
     signed_sb = await sign_spend_bundle(wallet_client, sb, additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data")))
@@ -170,17 +171,32 @@ async def _launch_router(push_tx, fee):
 
 
 @click.command()
-@click.option('--launcher-id', required=True, help='Launcher coin id of the router.')
-def set_router(launcher_id):
-    asyncio.run(_set_router(launcher_id))
+@click.option('--launcher-id', required=False, help='Launcher coin id of the v2 router.')
+@click.option('--rcat-launcher-id', required=False, help='Launcher coin id of the v2r (XCH-rCAT pairs) router.')
+def set_router(launcher_id, rcat_launcher_id):
+    asyncio.run(_set_router(launcher_id, rcat_launcher_id))
 
 
-async def _set_router(router_launcher_id):
+async def _set_router(router_launcher_id, rcat_launcher_id):
     click.echo("Saving config...")
     config = get_config()
-    config["router_launcher_id"] = router_launcher_id
-    config["router_last_processed_id"] = router_launcher_id
-    config["pairs"] = {}
+
+    if router_launcher_id is not None:
+        print("Updating v2 router...")
+        config["router_launcher_id"] = router_launcher_id
+        config["router_last_processed_id"] = router_launcher_id
+        config["pairs"] = {}
+    else:
+        print("No v2 router provided, skipping update...")
+
+    if rcat_launcher_id is not None:
+        print("Updating v2r router...")
+        config["rcat_router_launcher_id"] = rcat_launcher_id
+        config["rcat_router_last_processed_id"] = rcat_launcher_id
+        config["rcat_pairs"] = {}
+    else:
+        print("No v2r router provided, skipping update...")
+
     save_config(config)
     click.echo("Done.")
 
@@ -188,11 +204,12 @@ async def _set_router(router_launcher_id):
 @click.command()
 @click.option('--amount', default=1000000, help='Amount, in CATs (1 CAT = 1000 mojos)')
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add cat to wallet.")
-def launch_test_token(amount, push_tx):
-    asyncio.run(_launch_test_token(amount, push_tx))
+@click.option('--hidden-puzzle-hash', default=None, help="Hidden puzzle hash (hex string) for rCATs; if not provided, a normal CAT will be created.")
+def launch_test_token(amount, push_tx, hidden_puzzle_hash):
+    asyncio.run(_launch_test_token(amount, push_tx, hidden_puzzle_hash))
 
 
-async def _launch_test_token(amount, push_tx):
+async def _launch_test_token(amount, push_tx, hidden_puzzle_hash):
     click.echo(
         f"Creating test CAT with a supply of {amount} ({amount * 1000} mojos used)...")
     wallet_client = await get_wallet_client(get_config_item("chia_root"))
@@ -210,7 +227,7 @@ async def _launch_test_token(amount, push_tx):
 
     click.echo(f"Using coin 0x{coin.name().hex()}...")
 
-    tail_id, sb = await create_test_cat(amount, coin, coin_puzzle)
+    tail_id, sb = await create_test_cat(hidden_puzzle_hash, amount, coin, coin_puzzle)
     click.echo(f"Token asset id: {tail_id}")
 
     signed_sb = await sign_spend_bundle(wallet_client, sb, additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data")))
