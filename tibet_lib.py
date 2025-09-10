@@ -481,6 +481,7 @@ def get_spend_bundle_cost_and_fees(sb: SpendBundle):
     npc_result: NPCResult = get_name_puzzle_conditions(
         program,
         INFINITE_COST,
+        height=10000000,
         mempool_mode=True,
         constants=DEFAULT_CONSTANTS,
     )
@@ -664,7 +665,8 @@ async def sync_router(full_node_client, last_router_id, rcat):
 
 
 async def get_spend_bundle_in_mempool(full_node_client, coin):
-    items = await full_node_client.fetch("get_mempool_items_by_coin_name", {"coin_name": coin.name().hex()})
+    coin_id = coin.name()
+    items = await full_node_client.fetch("get_mempool_items_by_coin_name", {"coin_name": coin_id.hex()})
 
     for sb_json in items["mempool_items"]:
         sb = SpendBundle.from_json_dict(sb_json["spend_bundle"])

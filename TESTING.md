@@ -21,7 +21,6 @@ python3 tibet.py create-pair --push-tx --asset-id [asset_id]
 # For rCATs, add: --hidden-puzzle-hash 0000000000000000000000000000000000000000000000000000000000000000 --inverse-fee 999
 
 python3 tibet.py sync-pairs
-# For rCATs, add: --rcat
 
 # running one of the following commands will generate an offer
 # that is not cancelled even if --push-tx was not used
@@ -30,7 +29,7 @@ python3 tibet.py sync-pairs
 
 # to clear offers, use:
 # chia wallet get_offers
-# chia wallet cancel_offer -id [id]
+# chia wallet cancel_offer --insecure -id [id]
 python3 tibet.py deposit-liquidity --xch-amount 100000000 --token-amount 1000 --asset-id [asset_id]
 python3 tibet.py deposit-liquidity --offer offer.txt --push-tx --asset-id [asset_id]
 

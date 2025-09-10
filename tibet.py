@@ -597,10 +597,14 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
         wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
-
+        wallets = await wallet_client.get_wallets(
+            wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT
+        )
         token_wallet_id = next((_['id'] for _ in wallets if _[
                                'data'].startswith(token_tail_hash)), None)
+        
+        if hidden_puzzle_hash is not None:
+            wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
         liquidity_wallet_id = next((_['id'] for _ in wallets if _[
                                    'data'].startswith(pair_liquidity_tail_hash)), None)
 
@@ -629,7 +633,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         offer_dict[token_wallet_id] = -token_amount
         offer_dict[liquidity_wallet_id] = liquidity_token_amount
         offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config, fee=fee)
-        offer = offer_resp[0]
+        offer = offer_resp.offer
 
         offer_str = offer.to_bech32()
         open("offer.txt", "w").write(offer_str)
@@ -749,10 +753,13 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
         wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
 
+        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT)
         token_wallet_id = next((_['id'] for _ in wallets if _[
                                'data'].startswith(token_tail_hash)), None)
+
+        if hidden_puzzle_hash is not None:
+            wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
         liquidity_wallet_id = next((_['id'] for _ in wallets if _[
                                    'data'].startswith(pair_liquidity_tail_hash)), None)
 
@@ -780,7 +787,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         offer_dict[token_wallet_id] = token_amount
         offer_dict[liquidity_wallet_id] = -liquidity_token_amount
         offer_resp = await wallet_client.create_offer_for_ids(offer_dict,  tx_config=tx_config,  fee=fee)
-        offer = offer_resp[0]
+        offer = offer_resp.offer
 
         offer_str = offer.to_bech32()
         open("offer.txt", "w").write(offer_str)
@@ -899,8 +906,8 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
         wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
 
+        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT)
         token_wallet_id = next((_['id'] for _ in wallets if _[
                                'data'].startswith(token_tail_hash)), None)
 
@@ -913,9 +920,9 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
             await full_node_client.await_closed()
             sys.exit(1)
 
-        token_amount = 993 * xch_amount * \
+        token_amount = inverse_fee * xch_amount * \
             pair_state['token_reserve'] // (1000 *
-                                            pair_state['xch_reserve'] + 993 * xch_amount)
+                                            pair_state['xch_reserve'] + inverse_fee * xch_amount)
 
         click.echo(
             f"You'll receive {token_amount / 1000} tokens from this trade.")
@@ -933,7 +940,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
         offer_dict[1] = -xch_amount  # offer XCH
         offer_dict[token_wallet_id] = token_amount  # ask for token
         offer_resp = await wallet_client.create_offer_for_ids(offer_dict,  tx_config=tx_config, fee=fee)
-        offer = offer_resp[0]
+        offer = offer_resp.offer
 
         offer_str = offer.to_bech32()
         open("offer.txt", "w").write(offer_str)
@@ -1052,8 +1059,8 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
         wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
 
+        wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT)
         token_wallet_id = next((_['id'] for _ in wallets if _[
                                'data'].startswith(token_tail_hash)), None)
 
@@ -1066,9 +1073,9 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
             await full_node_client.await_closed()
             sys.exit(1)
 
-        xch_amount = 993 * token_amount * \
+        xch_amount = inverse_fee * token_amount * \
             pair_state['xch_reserve'] // (1000 *
-                                          pair_state['token_reserve'] + 993 * token_amount)
+                                          pair_state['token_reserve'] + inverse_fee * token_amount)
 
         click.echo(
             f"You'll receive {xch_amount / 1000000000000} XCH from this trade.")
@@ -1086,7 +1093,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
         offer_dict[1] = xch_amount  # ask for XCH
         offer_dict[token_wallet_id] = -token_amount  # offer tokens
         offer_resp = await wallet_client.create_offer_for_ids(offer_dict,  tx_config=tx_config, fee=fee)
-        offer = offer_resp[0]
+        offer = offer_resp.offer
 
         offer_str = offer.to_bech32()
         open("offer.txt", "w").write(offer_str)
