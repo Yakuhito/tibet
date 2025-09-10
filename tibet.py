@@ -335,17 +335,17 @@ async def _create_pair(tail_hash, push_tx, fee, hidden_puzzle_hash, inverse_fee)
             config["rcat_router_last_processed_id"] = router_last_processed_id
             config["rcat_pairs"] = config.get("rcat_pairs", {})
 
-            for (tail_hash, pair_launcher_id, hidden_puzzle_hash, inverse_fee) in config["rcat_pairs"]:
+            for (tail_hash, pair_launcher_id, pair_hidden_puzzle_hash, pair_inverse_fee) in config["rcat_pairs"]:
                 saved_pairs = config["rcat_pairs"].get(tail_hash, [])
                 already_seen = False
                 for saved_pair in saved_pairs:
-                    if saved_pair["hidden_puzzle_hash"] == hidden_puzzle_hash and saved_pair["inverse_fee"] == inverse_fee:
+                    if saved_pair["hidden_puzzle_hash"] == pair_hidden_puzzle_hash and saved_pair["inverse_fee"] == pair_inverse_fee:
                         already_seen = True
                         break
                 if not already_seen:
                     config["rcat_pairs"][tail_hash].append({
-                        "hidden_puzzle_hash": hidden_puzzle_hash,
-                        "inverse_fee": inverse_fee,
+                        "hidden_puzzle_hash": pair_hidden_puzzle_hash,
+                        "inverse_fee": pair_inverse_fee,
                         "pair_launcher_id": pair_launcher_id
                     })
         else:
@@ -375,6 +375,8 @@ async def _create_pair(tail_hash, push_tx, fee, hidden_puzzle_hash, inverse_fee)
         coin,
         coin_puzzle,
         bytes.fromhex(tail_hash),
+        hidden_puzzle_hash,
+        inverse_fee,
         bytes.fromhex(router_launcher_id),
         current_router_coin,
         latest_creation_spend,
@@ -435,22 +437,22 @@ async def _sync_pairs(rcat):
         router_last_processed_id = router_last_processed_id_new
 
         config = get_config()
-        pairs_key = "rcat_pairs" if hidden_puzzle_hash is not None else "pairs"
-        if hidden_puzzle_hash is not None:
+        pairs_key = "rcat_pairs" if rcat else "pairs"
+        if rcat:
             config["rcat_router_last_processed_id"] = router_last_processed_id
             config["rcat_pairs"] = config.get("rcat_pairs", {})
 
-            for (tail_hash, pair_launcher_id, hidden_puzzle_hash, inverse_fee) in config["rcat_pairs"]:
+            for (tail_hash, pair_launcher_id, pair_hidden_puzzle_hash, pair_inverse_fee) in config["rcat_pairs"]:
                 saved_pairs = config["rcat_pairs"].get(tail_hash, [])
                 already_seen = False
                 for saved_pair in saved_pairs:
-                    if saved_pair["hidden_puzzle_hash"] == hidden_puzzle_hash and saved_pair["inverse_fee"] == inverse_fee:
+                    if saved_pair["hidden_puzzle_hash"] == pair_hidden_puzzle_hash and saved_pair["inverse_fee"] == pair_inverse_fee:
                         already_seen = True
                         break
                 if not already_seen:
                     config["rcat_pairs"][tail_hash].append({
-                        "hidden_puzzle_hash": hidden_puzzle_hash,
-                        "inverse_fee": inverse_fee,
+                        "hidden_puzzle_hash": pair_hidden_puzzle_hash,
+                        "inverse_fee": pair_inverse_fee,
                         "pair_launcher_id": pair_launcher_id
                     })
         else:
