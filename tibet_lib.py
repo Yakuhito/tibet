@@ -2361,6 +2361,7 @@ async def create_pair_with_liquidity(
     router_launcher_id,
     current_router_coin,
     current_router_coin_creation_spend,
+    additional_data,
 ):
     # 1. Detect ephemeral coins (those created by the offer that we're allowed to use)
     offer = Offer.from_bech32(offer_str)
@@ -2534,7 +2535,7 @@ async def create_pair_with_liquidity(
 
     cs_to_sign = [cs for cs in coin_spends if cs.coin.puzzle_hash == temp_custody_puzzle_hash]
     assert len(cs_to_sign) == 3
-    temp_custody_sb = await sign_spend_bundle_with_specific_sk(cs_to_sign, temp_sk)
+    temp_custody_sb = await sign_spend_bundle_with_specific_sk(cs_to_sign, temp_sk, additional_data)
 
     return SpendBundle(
         coin_spends,

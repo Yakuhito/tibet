@@ -1181,11 +1181,11 @@ def create_pair_with_initial_liquidity(
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
 
-    if hidden_puzzle_hash is not None and inverse_fee != 993:
+    if hidden_puzzle_hash is None and inverse_fee != 993:
         click.echo("Inverse fee cannot be something other than 993 for normal XCH-CAT pairs.")
         sys.exit(1)
 
-    if hidden_puzzle_hash is not None and len(hidden_puzzle_hash) != 32:
+    if hidden_puzzle_hash is not None and len(hidden_puzzle_hash) != 64:
         click.echo("Hidden puzzle hash must be 32 bytes.")
         sys.exit(1)
 
@@ -1222,8 +1222,8 @@ async def _create_pair_with_initial_liquidity(
     router_launcher_id = get_config_item("router_launcher_id")
     router_last_processed_id = get_config_item("router_last_processed_id")
     if hidden_puzzle_hash is not None:
-        router_launcher_id = get_config_item("router_launcher_id_rcat")
-        router_last_processed_id = get_config_item("router_last_processed_id_rcat")
+        router_launcher_id = get_config_item("rcat_router_launcher_id")
+        router_last_processed_id = get_config_item("rcat_router_last_processed_id")
 
     if router_launcher_id is None or router_last_processed_id is None:
         click.echo("Oops - looks like someone forgot to launch their router.")
@@ -1232,7 +1232,9 @@ async def _create_pair_with_initial_liquidity(
     click.echo("But first, we do a little sync")
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
     current_router_coin, latest_creation_spend, pairs = await sync_router(
-        full_node_client, bytes.fromhex(router_last_processed_id)
+        full_node_client,
+        bytes.fromhex(router_last_processed_id), 
+        hidden_puzzle_hash is not None
     )
     router_last_processed_id_new = current_router_coin.name().hex()
     click.echo(f"Last router id: {router_last_processed_id_new}")
@@ -1272,8 +1274,6 @@ async def _create_pair_with_initial_liquidity(
 
         save_config(config)
 
-    pair_launcher_id, ret_hidden_puzzle_hash, ret_inverse_fee = get_pair_data(asset_id)
-
     sb = await create_pair_with_liquidity(
         bytes.fromhex(asset_id),
         hidden_puzzle_hash,
@@ -1284,7 +1284,8 @@ async def _create_pair_with_initial_liquidity(
         liquidity_destination_address,
         bytes.fromhex(router_launcher_id),
         current_router_coin,
-        latest_creation_spend
+        latest_creation_spend,
+        additional_data=bytes.fromhex(get_config_item("agg_sig_me_additional_data"))
     )
 
     if push_tx:
