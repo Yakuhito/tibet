@@ -1160,26 +1160,71 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
 
 @click.command()
 @click.option('--asset-id', required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
+@click.option('--hidden-puzzle-hash', required=False, help='If provided, an XCH-rCAT pair will be created instead.')
+@click.option('--inverse-fee', required=False, default=993, help='Inverse fee for the pair - values other than 993 only allowed for rCAT pairs.')
 @click.option("--offer", required=True, help='Offer to build tx from. Should contain CATs and 0.42 + 0.042 + 1 + [liquidity XCH] + [liquidity CAT] XCH.')
 @click.option("--token-amount", required=True, help="CAT amount to deposit as initial liquidity. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--xch-amount", required=True, help="XCH amount to deposit as initial liquidity. Unit is mojos.")
 @click.option("--liquidity-destination-address", required=True, help="Address to send liquidity tokens to.")
 @click.option("--push-tx", is_flag=True, default=False, help="Push the tx to the network.")
-def create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx):
+def create_pair_with_initial_liquidity(
+    asset_id,
+    hidden_puzzle_hash,
+    inverse_fee,
+    offer,
+    xch_amount,
+    token_amount,
+    liquidity_destination_address,
+    push_tx
+):
     if len(asset_id) != 64:
         click.echo("Oops! That asset id doesn't look right...")
         sys.exit(1)
-    asyncio.run(_create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx))
+
+    if hidden_puzzle_hash is not None and inverse_fee != 993:
+        click.echo("Inverse fee cannot be something other than 993 for normal XCH-CAT pairs.")
+        sys.exit(1)
+
+    if hidden_puzzle_hash is not None and len(hidden_puzzle_hash) != 32:
+        click.echo("Hidden puzzle hash must be 32 bytes.")
+        sys.exit(1)
+
+    if hidden_puzzle_hash is not None:
+        hidden_puzzle_hash = bytes.fromhex(hidden_puzzle_hash)
+    
+    asyncio.run(
+        _create_pair_with_initial_liquidity(
+            asset_id,
+            hidden_puzzle_hash,
+            inverse_fee,
+            offer,
+            xch_amount,
+            token_amount,
+            liquidity_destination_address,
+            push_tx
+        )
+    )
 
 
-async def _create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token_amount, liquidity_destination_address, push_tx):
+async def _create_pair_with_initial_liquidity(
+    asset_id,
+    hidden_puzzle_hash,
+    inverse_fee,
+    offer,
+    xch_amount,
+    token_amount,
+    liquidity_destination_address,
+    push_tx
+):
     click.echo("Deploying pair AND depositing liquidity in the same tx - that's crazy!")
     offer_str = ""
 
-    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(asset_id)
-
     router_launcher_id = get_config_item("router_launcher_id")
     router_last_processed_id = get_config_item("router_last_processed_id")
+    if hidden_puzzle_hash is not None:
+        router_launcher_id = get_config_item("router_launcher_id_rcat")
+        router_last_processed_id = get_config_item("router_last_processed_id_rcat")
+
     if router_launcher_id is None or router_last_processed_id is None:
         click.echo("Oops - looks like someone forgot to launch their router.")
         sys.exit(1)
@@ -1197,15 +1242,42 @@ async def _create_pair_with_initial_liquidity(asset_id, offer, xch_amount, token
         router_last_processed_id = router_last_processed_id_new
 
         config = get_config()
-        config["router_last_processed_id"] = router_last_processed_id
-        config["pairs"] = config.get("pairs", {})
-        for pair in pairs:
-            if config["pairs"].get(pair[0], -1) == -1:
-                config["pairs"][pair[0]] = pair[1]
+        pairs_key = "rcat_pairs" if rcat else "pairs"
+        if rcat:
+            config["rcat_router_last_processed_id"] = router_last_processed_id
+            config["rcat_pairs"] = config.get("rcat_pairs", {})
+
+            for (tail_hash, pair_launcher_id, pair_hidden_puzzle_hash, pair_inverse_fee) in pairs:
+                saved_pairs = config["rcat_pairs"].get(tail_hash, [])
+                already_seen = False
+                for saved_pair in saved_pairs:
+                    if saved_pair["hidden_puzzle_hash"] == pair_hidden_puzzle_hash and saved_pair["inverse_fee"] == pair_inverse_fee:
+                        already_seen = True
+                        break
+                if not already_seen:
+                    if len(config["rcat_pairs"].get(tail_hash, [])) == 0:
+                        config["rcat_pairs"][tail_hash] = []
+
+                    config["rcat_pairs"][tail_hash].append({
+                        "hidden_puzzle_hash": pair_hidden_puzzle_hash,
+                        "inverse_fee": pair_inverse_fee,
+                        "launcher_id": pair_launcher_id
+                    })
+        else:
+            config["router_last_processed_id"] = router_last_processed_id
+            config["pairs"] = config.get("pairs", {})
+            for pair in pairs:
+                if config["pairs"].get(pair[0], -1) == -1:
+                    config["pairs"][pair[0]] = pair[1]
+
         save_config(config)
+
+    pair_launcher_id, ret_hidden_puzzle_hash, ret_inverse_fee = get_pair_data(asset_id)
 
     sb = await create_pair_with_liquidity(
         bytes.fromhex(asset_id),
+        hidden_puzzle_hash,
+        inverse_fee,
         offer,
         int(xch_amount),
         int(token_amount),

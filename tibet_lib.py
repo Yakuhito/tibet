@@ -2353,6 +2353,7 @@ DEV_DEPLOYMENT_FEE - sent to tibetswap dev
 async def create_pair_with_liquidity(
     tail_hash, # bytes
     hidden_puzzle_hash, # bytes
+    inverse_fee,
     offer_str, # str
     initial_xch_liquidity,
     initial_cat_liquidity,
@@ -2476,7 +2477,16 @@ async def create_pair_with_liquidity(
         ])
     ])
 
-    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(router_launcher_coin, temp_custody_puzzle, tail_hash, hidden_puzzle_hash, router_launcher_id, current_router_coin, current_router_coin_creation_spend)
+    pair_launcher_id_hex, router_launch_sb, current_pair_coin, pair_launcher_spend = await create_pair_from_coin(
+        router_launcher_coin,
+        temp_custody_puzzle,
+        tail_hash,
+        hidden_puzzle_hash,
+        inverse_fee,
+        router_launcher_id,
+        current_router_coin,
+        current_router_coin_creation_spend
+    )
     for cs in router_launch_sb.coin_spends:
         cs_to_aggregate.append(cs)
 
@@ -2511,6 +2521,7 @@ async def create_pair_with_liquidity(
         pair_launcher_spend,
         tail_hash,
         hidden_puzzle_hash,
+        inverse_fee,
         0, 0, 0, # no liquidity
         liquidity_offer_str,
         None, None, None # no previous reserves since pool was just added
