@@ -644,6 +644,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
         creation_spend,
         sb_to_aggregate
     )
@@ -660,6 +661,8 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         current_pair_coin,
         creation_spend,
         bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
+        inverse_fee,
         pair_state["liquidity"],
         pair_state["xch_reserve"],
         pair_state["token_reserve"],
@@ -792,6 +795,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
         creation_spend,
         sb_to_aggregate
     )
@@ -808,6 +812,8 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         current_pair_coin,
         creation_spend,
         bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
+        inverse_fee,
         pair_state["liquidity"],
         pair_state["xch_reserve"],
         pair_state["token_reserve"],
@@ -942,6 +948,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
         creation_spend,
         sb_to_aggregate
     )
@@ -958,6 +965,8 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
         current_pair_coin,
         creation_spend,
         bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
+        inverse_fee,
         pair_state["liquidity"],
         pair_state["xch_reserve"],
         pair_state["token_reserve"],
@@ -1092,6 +1101,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
         creation_spend,
         sb_to_aggregate
     )
@@ -1108,6 +1118,8 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
         current_pair_coin,
         creation_spend,
         bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
+        inverse_fee,
         pair_state["liquidity"],
         pair_state["xch_reserve"],
         pair_state["token_reserve"],
