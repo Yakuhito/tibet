@@ -33,12 +33,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-leaflet_url = None
+coinset_url = None
 dexie_token_url = None
 spacescan_token_url = None
 try:
-    # https://kraken.fireacademy.io/[api-key]/leaflet[-testnet10]/
-    leaflet_url = os.environ["FIREACADEMYIO_LEAFLET_URL"]
+    coinset_url = os.environ["COINSET_URL"]
     dexie_token_url = os.environ["DEXIE_TOKEN_URL"]
     spacescan_token_url = os.environ["SPACESCAN_TOKEN_URL"]
 except KeyError as e:
@@ -56,7 +55,7 @@ async def get_client():
     global full_node_client
     
     if full_node_client is None:
-        full_node_client = await get_full_node_client("~/.chia/mainnet", leaflet_url)
+        full_node_client = await get_full_node_client("~/.chia/mainnet", coinset_url)
     return full_node_client
 
 engine = create_engine(DATABASE_URL, pool_size=50, max_overflow=0)
@@ -461,10 +460,6 @@ async def create_offer(
             offer_id=offerId
         )
         t = int(time.time())
-        #if sb is not None:
-            #open(f"spend_bundle.{t}.json", "w").write(json.dumps(sb.to_json_dict(), sort_keys=True, indent=4))
-        #open(f"offer.{t}.json", "w").write(offer)
-        #capture_exception(e)
         
         return response
         
