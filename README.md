@@ -7,7 +7,7 @@ To see how to use on testnet, see [testnet.md](testnet.md).
 To see how to use on mainnet, see [mainnet.md](mainnet.md).
 
 ```bash
-ghcr.io/yakuhito/tibet:1.4.24
+ghcr.io/yakuhito/tibet:2.0.0
 ```
 
 # Explanations

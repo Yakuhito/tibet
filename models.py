@@ -10,6 +10,7 @@ class Pair(Base):
 
     launcher_id = Column(String(64), primary_key=True)
     asset_id = Column(String(64))
+    inverse_fee = Column(BigInteger)
     liquidity_asset_id = Column(String(64))
     xch_reserve = Column(BigInteger)
     token_reserve = Column(BigInteger)
@@ -26,9 +27,19 @@ class Token(Base):
     image_url = Column(Text)
     verified = Column(Boolean)
 
+class RevocableToken(Base):
+    __tablename__ = "revocable_tokens"
+
+    asset_id = Column(String(64), primary_key=True)
+    hidden_puzzle_hash = Column(String(64))
+    name = Column(Text)
+    short_name = Column(Text)
+    image_url = Column(Text)
+
 class Router(Base):
     __tablename__ = "router"
 
     launcher_id = Column(String(64), primary_key=True)
     current_id = Column(String(64))
+    rcat = Column(Boolean)
     network = Column(String)

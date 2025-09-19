@@ -75,6 +75,11 @@ def get_tokens(db: Session = Depends(get_db)):
     return db.query(models.Token).all()
 
 
+@app.get("/revocable-tokens", response_model=List[schemas.RevocableToken])
+def get_revocable_tokens(db: Session = Depends(get_db)):
+    return db.query(models.RevocableToken).all()
+
+
 @app.get("/pairs", response_model=List[schemas.Pair])
 async def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     pairs = await get_all_pairs(db)
@@ -87,6 +92,13 @@ def get_token(asset_id: str, db: Session = Depends(get_db)):
     if token is None:
         raise HTTPException(status_code=404, detail="Token not found")
     return token
+
+@app.get("/revocable-token/{asset_id}", response_model=schemas.RevocableToken)
+def get_revocable_token(asset_id: str, db: Session = Depends(get_db)):
+    revocable_token = db.query(models.RevocableToken).get(asset_id)
+    if revocable_token is None:
+        raise HTTPException(status_code=404, detail="Revocable token not found")
+    return revocable_token
 
 @app.get("/pair/{launcher_id}", response_model=schemas.Pair)
 async def read_pair(launcher_id: str, db: Session = Depends(get_db)):
@@ -104,15 +116,30 @@ def init_router(db: Session):
     router = db.query(models.Router).first()
     if router is None:
         try:
-            launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
-            current_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
+            v2_launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
             network = os.environ["TIBETSWAP_NETWORK"]
+
+            rcat_launcher_id = os.environ["TIBETSWAP_RCAT_LAUNCHER_ID"]
         except KeyError as e:
             print(f"Error: Environment variable {e} is not set. Exiting...")
             sys.exit(1)
 
-        router = models.Router(launcher_id=launcher_id, current_id=current_id, network=network)
+        router = models.Router(
+            launcher_id=v2_launcher_id,
+            current_id=v2_launcher_id,
+            network=network,
+            rcat=False
+        )
+        rcat_router = models.Router(
+            launcher_id=rcat_launcher_id,
+            current_id=rcat_launcher_id,
+            network=network,
+            rcat=True
+        )
+
         db.add(router)
+        db.add(rcat_router)
+
         db.commit()
         db.refresh(router)
 

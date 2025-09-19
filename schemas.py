@@ -15,9 +15,21 @@ class Token(TokenBase):
     class Config:
         orm_mode = True
 
+class RevocableTokenBase(BaseModel):
+    asset_id: str
+    hidden_puzzle_hash: str
+    name: str
+    short_name: str
+    image_url: Optional[str] = None
+
+class RevocableToken(RevocableTokenBase):
+    class Config:
+        orm_mode = True
+
 class PairBase(BaseModel):
     launcher_id: str
     asset_id: str
+    inverse_fee: int
     liquidity_asset_id: str
     xch_reserve: int
     token_reserve: int
@@ -31,6 +43,7 @@ class Pair(PairBase):
 class RouterBase(BaseModel):
     launcher_id: str
     current_id: str
+    rcat: bool
     network: str
 
 class Router(RouterBase):
