@@ -1,5 +1,3 @@
-# main.py
-# special thanks to GPT-4
 from fastapi import FastAPI, Depends, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -46,11 +44,6 @@ except KeyError as e:
 
 full_node_client = None
 
-# Add these two global variables
-last_check_router_update_call = datetime.now() - timedelta(minutes=1)
-router_instance = None
-last_pair_update = {}
-
 async def get_client():
     global full_node_client
     
@@ -70,21 +63,44 @@ def get_db():
     finally:
         db.close()
 
+def create_api_pair(pair: models.Pair, token: models.Token) -> schemas.ApiPair:
+    """Utility function to convert a DB pair and token to an ApiPair schema"""
+    return schemas.ApiPair(
+        pair_id=pair.launcher_id,
+        asset_id=pair.asset_id,
+        asset_name=token.name,
+        asset_short_name=token.short_name,
+        asset_image_url=token.image_url,
+        asset_verified=token.verified,
+        pair_inverse_fee=pair.inverse_fee,
+        pair_liquidity_asset_id=pair.liquidity_asset_id,
+        pair_xch_reserve=pair.xch_reserve,
+        pair_token_reserve=pair.token_reserve,
+        pair_liquidity=pair.liquidity,
+        pair_last_coin_id_on_chain=pair.last_coin_id_on_chain
+    )
+
 @app.get("/tokens", response_model=List[schemas.Token])
 def get_tokens(db: Session = Depends(get_db)):
     return db.query(models.Token).all()
 
-
-@app.get("/revocable-tokens", response_model=List[schemas.RevocableToken])
-def get_revocable_tokens(db: Session = Depends(get_db)):
-    return db.query(models.RevocableToken).all()
-
-
-@app.get("/pairs", response_model=List[schemas.Pair])
-async def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    pairs = await get_all_pairs(db)
-    return pairs[skip : skip + limit]
-
+@app.get("/pairs", response_model=List[schemas.ApiPair])
+def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    # Get all pairs and tokens in one query each to minimize DB calls
+    pairs = db.query(models.Pair).order_by(models.Pair.xch_reserve.desc()).all()
+    tokens = db.query(models.Token).all()
+    
+    # Create a map of asset_id to token for quick lookup
+    token_map = {token.asset_id: token for token in tokens}
+    
+    # Convert pairs to ApiPair objects
+    api_pairs = []
+    for pair in pairs:
+        token = token_map.get(pair.asset_id)
+        if token:  # Only include pairs that have corresponding tokens
+            api_pairs.append(create_api_pair(pair, token))
+    
+    return api_pairs[skip : skip + limit]
 
 @app.get("/token/{asset_id}", response_model=schemas.Token)
 def get_token(asset_id: str, db: Session = Depends(get_db)):
@@ -93,185 +109,64 @@ def get_token(asset_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Token not found")
     return token
 
-@app.get("/revocable-token/{asset_id}", response_model=schemas.RevocableToken)
-def get_revocable_token(asset_id: str, db: Session = Depends(get_db)):
-    revocable_token = db.query(models.RevocableToken).get(asset_id)
-    if revocable_token is None:
-        raise HTTPException(status_code=404, detail="Revocable token not found")
-    return revocable_token
-
 @app.get("/pair/{launcher_id}", response_model=schemas.Pair)
 async def read_pair(launcher_id: str, db: Session = Depends(get_db)):
-    pair = await get_pair(db, launcher_id)
+    pair = await get_pair(db, launcher_id, force_refresh=True)
     if pair is None:
         raise HTTPException(status_code=404, detail="Pair not found")
     return pair
 
 @app.get("/router", response_model=schemas.Router, summary="Get Router", description="Fetch the current Router object.")
-async def get_router(db: Session = Depends(get_db)):
-    return await get_router()
-
+async def get_router_endpoint(rcat: bool = Query(False, description="Whether to fetch the rCAT router"), db: Session = Depends(get_db)):
+    router = db.query(models.Router).filter(models.Router.rcat == rcat).first()
+    if router is None:
+        raise HTTPException(status_code=404, detail="Router not found")
+    return router
 
 def init_router(db: Session):
-    router = db.query(models.Router).first()
-    if router is None:
-        try:
-            v2_launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
-            network = os.environ["TIBETSWAP_NETWORK"]
+    # Check if routers already exist
+    existing_routers = db.query(models.Router).all()
+    if len(existing_routers) >= 2:
+        return existing_routers[0]  # Return any existing router
+    
+    try:
+        v2_launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
+        rcat_launcher_id = os.environ["TIBETSWAP_RCAT_LAUNCHER_ID"]
+    except KeyError as e:
+        print(f"Error: Environment variable {e} is not set. Exiting...")
+        sys.exit(1)
 
-            rcat_launcher_id = os.environ["TIBETSWAP_RCAT_LAUNCHER_ID"]
-        except KeyError as e:
-            print(f"Error: Environment variable {e} is not set. Exiting...")
-            sys.exit(1)
-
-        router = models.Router(
+    # Create regular router if it doesn't exist
+    regular_router = db.query(models.Router).filter(models.Router.rcat == False).first()
+    if regular_router is None:
+        regular_router = models.Router(
             launcher_id=v2_launcher_id,
             current_id=v2_launcher_id,
-            network=network,
             rcat=False
         )
+        db.add(regular_router)
+
+    # Create rCAT router if it doesn't exist
+    rcat_router = db.query(models.Router).filter(models.Router.rcat == True).first()
+    if rcat_router is None:
         rcat_router = models.Router(
             launcher_id=rcat_launcher_id,
             current_id=rcat_launcher_id,
-            network=network,
             rcat=True
         )
-
-        db.add(router)
         db.add(rcat_router)
 
-        db.commit()
-        db.refresh(router)
-
-    return router
-
-
-async def check_router_update(db):
-    router = db.query(models.Router).first()
-    if router is None:
-        return None
-    
-    try:
-        client = await get_client()
-        current_router_coin, _, pairs = await sync_router(
-            client, bytes.fromhex(router.current_id)
-        )
-        router_new_current_id = current_router_coin.name().hex()
-
-        # pairs: array of (tail_hash.hex(), pair_launcher_id.hex())
-        return (router_new_current_id, pairs)
-    except:
-        print("exception in check_router_update")
-        return None
-
-
-async def get_router(force_refresh=False):
-    global last_check_router_update_call
-    global router_instance
-
-    now = datetime.now()
-
-    if router_instance is None:
-        with SessionLocal() as db:
-            router_instance = init_router(db)
-
-    # Check if check_router_update was called in the last minute
-    if force_refresh or now - last_check_router_update_call >= timedelta(minutes=1):
-        last_check_router_update_call = now
-        update = None
-        with SessionLocal() as db:
-            update = await check_router_update(db)
-        if update is not None:
-            router_instance.current_id = update[0]
-            db.commit()
-
-            pairs = update[1]
-            for pair_tail_hash, pair_launcher_id in pairs:
-                pair = db.query(models.Pair).filter(models.Pair.launcher_id == pair_launcher_id).first()
-                if pair is not None:
-                    continue
-
-                # Create a new Pair object
-                pair = models.Pair(
-                    launcher_id=pair_launcher_id,
-                    asset_id=pair_tail_hash,
-                    liquidity_asset_id=pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex(),
-                    xch_reserve=0,
-                    token_reserve=0,
-                    liquidity=0,
-                    last_coin_id_on_chain=pair_launcher_id,
-                )
-                db.add(pair)
-                db.commit()
-
-                # Create a new Token object
-                token = None
-                try:
-                    token_data = requests.get(dexie_token_url + pair_tail_hash).json()
-                    if token_data["success"]:
-                        token_data = token_data["token"]
-                        token = models.Token(
-                            asset_id=pair_tail_hash,
-                            pair_id=pair_launcher_id,
-                            name=token_data["name"],
-                            short_name=token_data["code"],
-                            image_url=token_data["icon"],
-                            verified=True,
-                        )
-                    else:
-                        print(f"Token not verified on Dexie: {pair_tail_hash}; falling back to SpaceScan resolution...")
-                        token_info = requests.get(spacescan_token_url + pair_tail_hash).json()["info"]
-                        token = models.Token(
-                            asset_id=pair_tail_hash,
-                            pair_id=pair_launcher_id,
-                            name=token_info["name"],
-                            short_name=token_info["symbol"],
-                            image_url=token_info["preview_url"],
-                            verified=False,
-                        )
-                except:
-                    token = models.Token(
-                        asset_id=pair_tail_hash,
-                        pair_id=pair_launcher_id,
-                        name=f"CAT 0x{pair_tail_hash[:8]}",
-                        short_name=f"???",
-                        image_url="https://bafybeigzcazxeu7epmm4vtkuadrvysv74lbzzbl2evphtae6k57yhgynp4.ipfs.dweb.link/9098.gif",
-                        verified=False,
-                    )
-                db.add(token)
-                db.commit()
-
-    return router_instance
+    db.commit()
+    db.refresh(regular_router)
+    return regular_router
 
 async def get_pair(db: Session, pair_id: str, force_refresh: bool = False) -> models.Pair:
-    global last_pair_update
-    
     pair = db.query(models.Pair).filter(models.Pair.launcher_id == pair_id).first()
-    now = datetime.now()
     
-    if pair is not None:
-        last_update = last_pair_update.get(pair_id)
-        if force_refresh or last_update is None or now - last_update >= timedelta(seconds=5):
-            last_pair_update[pair_id] = now
-            pair, _ = await check_pair_update(db, pair)
+    if pair is not None and force_refresh:
+        pair, _ = await check_pair_update(db, pair)
     
     return pair
-
-
-async def get_all_pairs(db: Session, force_refresh: bool = False) -> List[models.Pair]:
-    pairs = db.query(models.Pair).order_by(models.Pair.xch_reserve.desc()).all()
-
-    for pair in pairs:
-        pair_id = pair.launcher_id
-        last_update = last_pair_update.get(pair_id)
-
-        now = datetime.now()
-        if force_refresh or last_update is None:
-            last_pair_update[pair_id] = now
-            pair, _ = await check_pair_update(db, pair)
-
-    return pairs
-
 
 async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
     client = await get_client()
@@ -358,7 +253,6 @@ async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amoun
 
     quote = await get_quote(db, pair_id, amount_in, amount_out, xch_is_input, estimate_fee)
     return quote
-
 
 async def create_offer(
     db: Session,
@@ -537,7 +431,14 @@ async def create_pair_endpoint(asset_id: str,
                                 liquidity_destination_address: str = Body(""),
                                 db: Session = Depends(get_db)):
 
-    router_instance = await get_router(True)
+    # For now, assume hidden_puzzle_hash=None as requested
+    hidden_puzzle_hash = None
+    
+    # Get the appropriate router (regular router for now)
+    router = db.query(models.Router).filter(models.Router.rcat == False).first()
+    if router is None:
+        raise HTTPException(status_code=500, detail="Router not found")
+    
     pair = await get_pair(db, asset_id)
     if pair is not None:
         return schemas.CreatePairResponse(success=False, message="Pair for asset already exists", coin_id="")
@@ -546,18 +447,21 @@ async def create_pair_endpoint(asset_id: str,
         client = await get_client()
 
         current_router_coin, latest_creation_spend, pairs = await sync_router(
-            client, bytes.fromhex(router_instance.current_id)
+            client, bytes.fromhex(router.current_id), False  # rcat=False for regular router
         )
 
         sb = await create_pair_with_liquidity(
             bytes.fromhex(asset_id),
+            hidden_puzzle_hash,
+            993,  # default inverse_fee for regular pairs
             offer,
             int(xch_liquidity),
             int(token_liquidity),
             liquidity_destination_address,
-            bytes.fromhex(router_instance.launcher_id),
+            bytes.fromhex(router.launcher_id),
             current_router_coin,
-            latest_creation_spend
+            latest_creation_spend,
+            additional_data=bytes.fromhex(os.environ.get("AGG_SIG_ME_ADDITIONAL_DATA", DEFAULT_CONSTANTS.AGG_SIG_ME_ADDITIONAL_DATA.hex()))
         )
 
         try:
@@ -584,7 +488,6 @@ async def create_pair_endpoint(asset_id: str,
             }),
             coin_id=""
         )
-
 
 @app.get("/")
 async def root():

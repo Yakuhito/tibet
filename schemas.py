@@ -5,24 +5,13 @@ from enum import Enum
 
 class TokenBase(BaseModel):
     asset_id: str
-    pair_id: str
+    hidden_puzzle_hash: Optional[str] = None
     name: str
     short_name: str
     image_url: Optional[str] = None
     verified: bool
 
 class Token(TokenBase):
-    class Config:
-        orm_mode = True
-
-class RevocableTokenBase(BaseModel):
-    asset_id: str
-    hidden_puzzle_hash: str
-    name: str
-    short_name: str
-    image_url: Optional[str] = None
-
-class RevocableToken(RevocableTokenBase):
     class Config:
         orm_mode = True
 
@@ -40,11 +29,28 @@ class Pair(PairBase):
     class Config:
         orm_mode = True
 
+class ApiPairBase(BaseModel):
+    pair_id: str
+    asset_id: str
+    asset_name: str
+    asset_short_name: str
+    asset_image_url: Optional[str] = None
+    asset_verified: bool
+    pair_inverse_fee: int
+    pair_liquidity_asset_id: str
+    pair_xch_reserve: int
+    pair_token_reserve: int
+    pair_liquidity: int
+    pair_last_coin_id_on_chain: str
+
+class ApiPair(ApiPairBase):
+    class Config:
+        orm_mode = True
+
 class RouterBase(BaseModel):
     launcher_id: str
     current_id: str
     rcat: bool
-    network: str
 
 class Router(RouterBase):
     class Config:

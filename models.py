@@ -21,20 +21,11 @@ class Token(Base):
     __tablename__ = "tokens"
 
     asset_id = Column(String(64), primary_key=True)
-    pair_id = Column(String(64))
+    hidden_puzzle_hash = Column(String(64), nullable=True)
     name = Column(Text)
     short_name = Column(Text)
     image_url = Column(Text)
     verified = Column(Boolean)
-
-class RevocableToken(Base):
-    __tablename__ = "revocable_tokens"
-
-    asset_id = Column(String(64), primary_key=True)
-    hidden_puzzle_hash = Column(String(64))
-    name = Column(Text)
-    short_name = Column(Text)
-    image_url = Column(Text)
 
 class Router(Base):
     __tablename__ = "router"
@@ -42,4 +33,3 @@ class Router(Base):
     launcher_id = Column(String(64), primary_key=True)
     current_id = Column(String(64))
     rcat = Column(Boolean)
-    network = Column(String)
