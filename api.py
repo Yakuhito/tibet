@@ -37,7 +37,10 @@ spacescan_token_url = None
 try:
     coinset_url = os.environ["COINSET_URL"]
     dexie_token_url = os.environ["DEXIE_TOKEN_URL"]
+    dexie_offer_url = os.environ["DEXIE_OFFER_URL"]
     spacescan_token_url = os.environ["SPACESCAN_TOKEN_URL"]
+    router_launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
+    rcat_router_launcher_id = os.environ["TIBETSWAP_RCAT_LAUNCHER_ID"]
 except KeyError as e:
     print(f"Error: Environment variable {e} is not set. Exiting...")
     sys.exit(1)
@@ -124,24 +127,18 @@ async def get_router_endpoint(rcat: bool = Query(False, description="Whether to 
     return router
 
 def init_router(db: Session):
+    global router_launcher_id, rcat_router_launcher_id
     # Check if routers already exist
     existing_routers = db.query(models.Router).all()
     if len(existing_routers) >= 2:
         return existing_routers[0]  # Return any existing router
-    
-    try:
-        v2_launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
-        rcat_launcher_id = os.environ["TIBETSWAP_RCAT_LAUNCHER_ID"]
-    except KeyError as e:
-        print(f"Error: Environment variable {e} is not set. Exiting...")
-        sys.exit(1)
 
     # Create regular router if it doesn't exist
     regular_router = db.query(models.Router).filter(models.Router.rcat == False).first()
     if regular_router is None:
         regular_router = models.Router(
-            launcher_id=v2_launcher_id,
-            current_id=v2_launcher_id,
+            launcher_id=router_launcher_id,
+            current_id=router_launcher_id,
             rcat=False
         )
         db.add(regular_router)
@@ -150,8 +147,8 @@ def init_router(db: Session):
     rcat_router = db.query(models.Router).filter(models.Router.rcat == True).first()
     if rcat_router is None:
         rcat_router = models.Router(
-            launcher_id=rcat_launcher_id,
-            current_id=rcat_launcher_id,
+            launcher_id=rcat_router_launcher_id,
+            current_id=rcat_router_launcher_id,
             rcat=True
         )
         db.add(rcat_router)
@@ -400,6 +397,8 @@ async def create_offer_endpoint(pair_id: str,
                                 donation_addresses: List[str] = Body([]),
                                 donation_weights: List[int] = Body([]),
                                 db: Session = Depends(get_db)):
+    global dexie_offer_url
+    
     total_donation_amount: int = int(total_donation_amount)
     response = await create_offer(
         db,
@@ -413,12 +412,9 @@ async def create_offer_endpoint(pair_id: str,
 
     try:
         if response.success:
-            dexie_url = "https://api.dexie.space/v1/offers"
-            if os.environ["TIBETSWAP_NETWORK"] != "mainnet":
-                dexie_url = "https://api-testnet.dexie.space/v1/offers"
             # this is a very important print statement
             # do not remove under any circumstance 
-            r = requests.post(dexie_url, json={"offer": offer, "drop_only": True}, headers={"User-Agent": "TibetSwap v2 fren"})
+            r = requests.post(dexie_offer_url, json={"offer": offer, "drop_only": True}, headers={"User-Agent": "TibetSwap v2 fren"})
             # edit: I had to separate the original print statement in two parts
             # but I did not remove it!
             print(r.text)
