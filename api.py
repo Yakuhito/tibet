@@ -295,6 +295,7 @@ async def create_offer(
             bytes.fromhex(pair.launcher_id),
             current_pair_coin,
             bytes.fromhex(pair.asset_id),
+            None,  # token_hidden_puzzle_hash - assume None for now
             creation_spend,
             sb_to_aggregate
         )
@@ -305,6 +306,8 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
+                None,  # token_hidden_puzzle_hash - assume None for now
+                993,   # inverse_fee - default for regular pairs
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
                 pair_state["token_reserve"],
@@ -322,6 +325,8 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
+                None,  # token_hidden_puzzle_hash - assume None for now
+                993,   # inverse_fee - default for regular pairs
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
                 pair_state["token_reserve"],
@@ -336,6 +341,8 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
+                None,  # token_hidden_puzzle_hash - assume None for now
+                993,   # inverse_fee - default for regular pairs
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
                 pair_state["token_reserve"],
