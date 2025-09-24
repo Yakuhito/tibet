@@ -10,6 +10,7 @@ class Pair(Base):
 
     launcher_id = Column(String(64), primary_key=True)
     asset_id = Column(String(64))
+    asset_hidden_puzzle_hash = Column(String(64), nullable=True)
     inverse_fee = Column(BigInteger)
     liquidity_asset_id = Column(String(64))
     xch_reserve = Column(BigInteger)

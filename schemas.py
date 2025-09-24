@@ -18,6 +18,7 @@ class Token(TokenBase):
 class PairBase(BaseModel):
     launcher_id: str
     asset_id: str
+    asset_hidden_puzzle_hash: Optional[str] = None
     inverse_fee: int
     liquidity_asset_id: str
     xch_reserve: int

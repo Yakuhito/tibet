@@ -52,6 +52,7 @@ async def get_client():
     
     if full_node_client is None:
         full_node_client = await get_full_node_client("~/.chia/mainnet", coinset_url)
+
     return full_node_client
 
 engine = create_engine(DATABASE_URL, pool_size=50, max_overflow=0)
@@ -66,7 +67,18 @@ def get_db():
     finally:
         db.close()
 
-def create_api_pair(pair: models.Pair, token: models.Token) -> schemas.ApiPair:
+def create_unknown_token(asset_id: str, hidden_puzzle_hash: Optional[str] = None) -> schemas.Token:
+    """Generate an unknown Token object for pairs without matching token entries"""
+    return schemas.Token(
+        asset_id=asset_id,
+        hidden_puzzle_hash=hidden_puzzle_hash,
+        name=f"CAT 0x{asset_id[:8]}",
+        short_name="???",
+        image_url="https://bafybeigzcazxeu7epmm4vtkuadrvysv74lbzzbl2evphtae6k57yhgynp4.ipfs.dweb.link/9098.gif",
+        verified=False
+    )
+
+def create_api_pair(pair: models.Pair, token: schemas.Token) -> schemas.ApiPair:
     """Utility function to convert a DB pair and token to an ApiPair schema"""
     return schemas.ApiPair(
         pair_id=pair.launcher_id,
@@ -93,15 +105,26 @@ def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     pairs = db.query(models.Pair).order_by(models.Pair.xch_reserve.desc()).all()
     tokens = db.query(models.Token).all()
     
-    # Create a map of asset_id to token for quick lookup
-    token_map = {token.asset_id: token for token in tokens}
+    # Create a map of (asset_id, hidden_puzzle_hash) to token for quick lookup
+    token_map = {}
+    for token in tokens:
+        key = (token.asset_id, token.hidden_puzzle_hash)
+        token_map[key] = token
     
     # Convert pairs to ApiPair objects
     api_pairs = []
     for pair in pairs:
-        token = token_map.get(pair.asset_id)
-        if token:  # Only include pairs that have corresponding tokens
+        # Match on (asset_id, asset_hidden_puzzle_hash)
+        key = (pair.asset_id, pair.asset_hidden_puzzle_hash)
+        token = token_map.get(key)
+        
+        if token:
+            # Use existing token from database
             api_pairs.append(create_api_pair(pair, token))
+        else:
+            # Generate unknown token for unmatched pairs
+            unknown_token = create_unknown_token(pair.asset_id, pair.asset_hidden_puzzle_hash)
+            api_pairs.append(create_api_pair(pair, unknown_token))
     
     return api_pairs[skip : skip + limit]
 
