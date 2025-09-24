@@ -116,7 +116,7 @@ def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
         
         if token:
             api_pairs.append(create_api_pair(pair, token))
-        else:
+        elif pair.asset_hidden_puzzle_hash is not None:
             unknown_token = unknown_token(pair.asset_id, pair.asset_hidden_puzzle_hash)
             api_pairs.append(create_api_pair(pair, unknown_token))
     
@@ -129,13 +129,20 @@ def get_token(asset_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Token not found")
     return token
 
-@app.get("/pair/{launcher_id}", response_model=schemas.Pair)
+@app.get("/pair/{launcher_id}", response_model=schemas.ApiPair)
 async def read_pair(launcher_id: str, db: Session = Depends(get_db)):
     pair = await get_pair(db, launcher_id)
     if pair is None:
         raise HTTPException(status_code=404, detail="Pair not found")
 
-    return pair
+    token = db.query(models.Token).filter(
+        models.Token.asset_id == pair.asset_id,
+        models.Token.hidden_puzzle_hash == pair.asset_hidden_puzzle_hash
+    ).first()
+    if token is None:
+        token = unknown_token(pair.asset_id, pair.asset_hidden_puzzle_hash)
+
+    return create_api_pair(pair, token)
 
 @app.get("/router", response_model=schemas.Router, summary="Get Router", description="Fetch the current Router object.")
 async def get_router_endpoint(rcat: bool = Query(False, description="Whether to fetch the rCAT router"), db: Session = Depends(get_db)):
@@ -146,8 +153,16 @@ async def get_router_endpoint(rcat: bool = Query(False, description="Whether to 
     # Refresh router by syncing with blockchain
     try:
         client = await get_client()
+
+        current_router_id = bytes.fromhex(router.current_id)
+        record = await client.get_coin_record_by_name(current_router_id)
+
+        if not record.spent:
+            return router
+        
+        # current router coin spent, sync it
         current_router_coin, latest_creation_spend, new_pairs = await sync_router(
-            client, bytes.fromhex(router.current_id), rcat
+            client, current_router_id, rcat
         )
         
         # Update router current_id if it changed
@@ -172,7 +187,7 @@ async def get_router_endpoint(rcat: bool = Query(False, description="Whether to 
             # Check if pair already exists
             existing_pair = db.query(models.Pair).filter(
                 models.Pair.asset_id == tail_hash,
-                models.Pair.asset_hidden_puzzle_hash == hidden_puzzle_hash.hex(),
+                models.Pair.asset_hidden_puzzle_hash == hidden_puzzle_hash,
                 models.Pair.inverse_fee == inverse_fee
             ).first()
             if existing_pair is not None:
