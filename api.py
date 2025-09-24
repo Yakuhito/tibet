@@ -84,6 +84,7 @@ def create_api_pair(pair: models.Pair, token: schemas.Token) -> schemas.ApiPair:
         pair_id=pair.launcher_id,
         asset_id=pair.asset_id,
         asset_name=token.name,
+        asset_hidden_puzzle_hash=pair.asset_hidden_puzzle_hash,
         asset_short_name=token.short_name,
         asset_image_url=token.image_url,
         asset_verified=token.verified,
@@ -116,7 +117,7 @@ def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
         
         if token:
             api_pairs.append(create_api_pair(pair, token))
-        elif pair.asset_hidden_puzzle_hash is not None:
+        elif pair.asset_hidden_puzzle_hash is None:
             unknown_token = unknown_token(pair.asset_id, pair.asset_hidden_puzzle_hash)
             api_pairs.append(create_api_pair(pair, unknown_token))
     

@@ -33,6 +33,7 @@ class Pair(PairBase):
 class ApiPairBase(BaseModel):
     pair_id: str
     asset_id: str
+    asset_hidden_puzzle_hash: Optional[str] = None
     asset_name: str
     asset_short_name: str
     asset_image_url: Optional[str] = None
