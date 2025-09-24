@@ -129,7 +129,7 @@ async def _launch_router(push_tx, fee, rcat):
 
     # wallet id 1, amount 2 (+ fee)
     coins = await wallet_client.select_coins(2 + fee, 1, coin_selection_config=CoinSelectionConfig(
-        min_coin_amount=fee + 3,
+        min_coin_amount=fee + 2,
         max_coin_amount=1337 * 10 ** 12,
         excluded_coin_amounts=[],
         excluded_coin_ids=[]
