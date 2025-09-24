@@ -143,6 +143,94 @@ async def get_router_endpoint(rcat: bool = Query(False, description="Whether to 
     if router is None:
         raise HTTPException(status_code=404, detail="Router not found")
 
+    # Refresh router by syncing with blockchain
+    try:
+        client = await get_client()
+        current_router_coin, latest_creation_spend, new_pairs = await sync_router(
+            client, bytes.fromhex(router.current_id), rcat
+        )
+        
+        # Update router current_id if it changed
+        new_current_id = current_router_coin.name().hex()
+        if router.current_id != new_current_id:
+            router.current_id = new_current_id
+            db.add(router)
+            db.commit()
+            db.refresh(router)
+        
+        # Process new pairs discovered during sync
+        for pair_info in new_pairs:
+            if rcat:
+                # rCAT pairs have 4 elements: (tail_hash, pair_launcher_id, hidden_puzzle_hash, inverse_fee)
+                tail_hash, pair_launcher_id, hidden_puzzle_hash, inverse_fee = pair_info
+            else:
+                # Regular pairs have 2 elements: (tail_hash, pair_launcher_id)
+                tail_hash, pair_launcher_id = pair_info
+                hidden_puzzle_hash = None
+                inverse_fee = 993
+            
+            # Check if pair already exists
+            existing_pair = db.query(models.Pair).filter(
+                models.Pair.asset_id == tail_hash,
+                models.Pair.asset_hidden_puzzle_hash == hidden_puzzle_hash.hex(),
+                models.Pair.inverse_fee == inverse_fee
+            ).first()
+            if existing_pair is not None:
+                continue
+            
+            # Create new Pair object
+            pair = models.Pair(
+                launcher_id=pair_launcher_id,
+                asset_id=tail_hash,
+                asset_hidden_puzzle_hash=hidden_puzzle_hash,
+                inverse_fee=inverse_fee,
+                liquidity_asset_id=pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex(),
+                xch_reserve=0,
+                token_reserve=0,
+                liquidity=0,
+                last_coin_id_on_chain=pair_launcher_id,
+            )
+            db.add(pair)
+            db.commit()
+            
+            # Try to create Token object with external API data
+            try:
+                token_data = requests.get(dexie_token_url + tail_hash).json()
+                if token_data["success"]:
+                    print(f"Token verified on Dexie: {tail_hash}")
+                    token_data = token_data["token"]
+                    token = models.Token(
+                        asset_id=tail_hash,
+                        hidden_puzzle_hash=None,
+                        name=token_data["name"],
+                        short_name=token_data["code"],
+                        image_url=token_data["icon"],
+                        verified=True,
+                    )
+                    db.add(token)
+                    db.commit()
+                else:
+                    print(f"Token not verified on Dexie: {tail_hash}; falling back to SpaceScan resolution...")
+                    token_info = requests.get(spacescan_token_url + tail_hash).json()["info"]
+                    token = models.Token(
+                        asset_id=tail_hash,
+                        hidden_puzzle_hash=None,
+                        name=token_info["name"],
+                        short_name=token_info["symbol"],
+                        image_url=token_info["preview_url"],
+                        verified=False,
+                    )
+                    db.add(token)
+                    db.commit()
+            except Exception as e:
+                # If token can't be fetched from external APIs, skip adding it
+                print(f"Failed to fetch token info for {tail_hash}: {e}")
+                continue
+                
+    except Exception as e:
+        print(f"Failed to sync router: {e}")
+        # Continue with existing router data if sync fails
+
     return router
 
 def init_router(db: Session):
@@ -475,7 +563,8 @@ async def create_pair_endpoint(
     
     pair = db.query(models.Pair).filter(
         models.Pair.asset_id == asset_id,
-        models.Pair.asset_hidden_puzzle_hash == hidden_puzzle_hash
+        models.Pair.asset_hidden_puzzle_hash == hidden_puzzle_hash, 
+        models.Pair.inverse_fee == inverse_fee
     ).first()
     if pair is not None:
         return schemas.CreatePairResponse(success=False, message="Pair for asset already exists", coin_id="")
