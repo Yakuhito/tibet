@@ -1,0 +1,60 @@
+To migrate databases created before the rCAT update, run the following statements:
+
+```
+-- Add new columns to pairs table
+ALTER TABLE pairs ADD COLUMN asset_hidden_puzzle_hash TEXT;
+ALTER TABLE pairs ADD COLUMN inverse_fee INTEGER;
+
+-- Set default values for existing records
+UPDATE pairs SET asset_hidden_puzzle_hash = NULL, inverse_fee = 993;
+```
+
+```
+-- Add new column and remove old column from tokens table
+ALTER TABLE tokens ADD COLUMN hidden_puzzle_hash TEXT;
+
+-- Set default value for existing records
+UPDATE tokens SET hidden_puzzle_hash = NULL;
+
+-- Remove the old pair_id column (SQLite doesn't support DROP COLUMN directly, so we need to recreate the table)
+-- First, create a new table with the correct structure
+CREATE TABLE tokens_new (
+    asset_id TEXT PRIMARY KEY,
+    hidden_puzzle_hash TEXT,
+    name TEXT,
+    short_name TEXT,
+    image_url TEXT,
+    verified INTEGER
+);
+
+-- Copy data from old table to new table
+INSERT INTO tokens_new (asset_id, hidden_puzzle_hash, name, short_name, image_url, verified)
+SELECT asset_id, NULL, name, short_name, image_url, verified FROM tokens;
+
+-- Drop old table and rename new table
+DROP TABLE tokens;
+ALTER TABLE tokens_new RENAME TO tokens;
+```
+
+```
+-- Add new column to router table
+ALTER TABLE router ADD COLUMN rcat INTEGER;
+
+-- Set default value for existing records (assuming they are not rCAT)
+UPDATE router SET rcat = 0;
+
+-- Remove the old network column (similar approach as with tokens)
+CREATE TABLE router_new (
+    launcher_id TEXT PRIMARY KEY,
+    current_id TEXT,
+    rcat INTEGER
+);
+
+-- Copy data from old table to new table
+INSERT INTO router_new (launcher_id, current_id, rcat)
+SELECT launcher_id, current_id, 0 FROM router;
+
+-- Drop old table and rename new table
+DROP TABLE router;
+ALTER TABLE router_new RENAME TO router;
+```
