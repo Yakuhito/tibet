@@ -157,6 +157,7 @@ offer.txt
 spend_bundle.json
 fml/fml
 database.db
+database.db.bak
 data/*
 offer.*.json
 spend_bundle.*.json
