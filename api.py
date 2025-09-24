@@ -562,7 +562,7 @@ async def create_offer_endpoint(pair_id: str,
         pass
     return response
 
-@app.post("/pair/{asset_id}", response_model=schemas.CreatePairResponse)
+@app.post("/new-pair/{asset_id}", response_model=schemas.CreatePairResponse)
 async def create_pair_endpoint(
     asset_id: str,
     offer: str = Body(...),
