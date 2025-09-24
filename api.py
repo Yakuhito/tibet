@@ -41,6 +41,7 @@ try:
     spacescan_token_url = os.environ["SPACESCAN_TOKEN_URL"]
     router_launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
     rcat_router_launcher_id = os.environ["TIBETSWAP_RCAT_LAUNCHER_ID"]
+    fee_share_address = os.environ["TIBETSWAP_FEE_ADDRESS"]
 except KeyError as e:
     print(f"Error: Environment variable {e} is not set. Exiting...")
     sys.exit(1)
@@ -67,8 +68,7 @@ def get_db():
     finally:
         db.close()
 
-def create_unknown_token(asset_id: str, hidden_puzzle_hash: Optional[str] = None) -> schemas.Token:
-    """Generate an unknown Token object for pairs without matching token entries"""
+def unknown_token(asset_id: str, hidden_puzzle_hash: Optional[str] = None) -> schemas.Token:
     return schemas.Token(
         asset_id=asset_id,
         hidden_puzzle_hash=hidden_puzzle_hash,
@@ -101,29 +101,23 @@ def get_tokens(db: Session = Depends(get_db)):
 
 @app.get("/pairs", response_model=List[schemas.ApiPair])
 def read_pairs(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    # Get all pairs and tokens in one query each to minimize DB calls
     pairs = db.query(models.Pair).order_by(models.Pair.xch_reserve.desc()).all()
     tokens = db.query(models.Token).all()
     
-    # Create a map of (asset_id, hidden_puzzle_hash) to token for quick lookup
     token_map = {}
     for token in tokens:
-        key = (token.asset_id, token.hidden_puzzle_hash)
+        key = token.asset_id + (token.hidden_puzzle_hash if token.hidden_puzzle_hash else "")
         token_map[key] = token
     
-    # Convert pairs to ApiPair objects
     api_pairs = []
     for pair in pairs:
-        # Match on (asset_id, asset_hidden_puzzle_hash)
-        key = (pair.asset_id, pair.asset_hidden_puzzle_hash)
+        key = pair.asset_id + (pair.asset_hidden_puzzle_hash if pair.asset_hidden_puzzle_hash else "")
         token = token_map.get(key)
         
         if token:
-            # Use existing token from database
             api_pairs.append(create_api_pair(pair, token))
         else:
-            # Generate unknown token for unmatched pairs
-            unknown_token = create_unknown_token(pair.asset_id, pair.asset_hidden_puzzle_hash)
+            unknown_token = unknown_token(pair.asset_id, pair.asset_hidden_puzzle_hash)
             api_pairs.append(create_api_pair(pair, unknown_token))
     
     return api_pairs[skip : skip + limit]
@@ -137,9 +131,10 @@ def get_token(asset_id: str, db: Session = Depends(get_db)):
 
 @app.get("/pair/{launcher_id}", response_model=schemas.Pair)
 async def read_pair(launcher_id: str, db: Session = Depends(get_db)):
-    pair = await get_pair(db, launcher_id, force_refresh=True)
+    pair = await get_pair(db, launcher_id)
     if pair is None:
         raise HTTPException(status_code=404, detail="Pair not found")
+
     return pair
 
 @app.get("/router", response_model=schemas.Router, summary="Get Router", description="Fetch the current Router object.")
@@ -147,16 +142,13 @@ async def get_router_endpoint(rcat: bool = Query(False, description="Whether to 
     router = db.query(models.Router).filter(models.Router.rcat == rcat).first()
     if router is None:
         raise HTTPException(status_code=404, detail="Router not found")
+
     return router
 
 def init_router(db: Session):
     global router_launcher_id, rcat_router_launcher_id
-    # Check if routers already exist
-    existing_routers = db.query(models.Router).all()
-    if len(existing_routers) >= 2:
-        return existing_routers[0]  # Return any existing router
-
-    # Create regular router if it doesn't exist
+    
+    # Normal router
     regular_router = db.query(models.Router).filter(models.Router.rcat == False).first()
     if regular_router is None:
         regular_router = models.Router(
@@ -165,8 +157,10 @@ def init_router(db: Session):
             rcat=False
         )
         db.add(regular_router)
+        db.commit()
+        db.refresh(regular_router)
 
-    # Create rCAT router if it doesn't exist
+    # rCAT router
     rcat_router = db.query(models.Router).filter(models.Router.rcat == True).first()
     if rcat_router is None:
         rcat_router = models.Router(
@@ -175,15 +169,12 @@ def init_router(db: Session):
             rcat=True
         )
         db.add(rcat_router)
+        db.commit()
+        db.refresh(rcat_router)
 
-    db.commit()
-    db.refresh(regular_router)
-    return regular_router
-
-async def get_pair(db: Session, pair_id: str, force_refresh: bool = False) -> models.Pair:
+async def get_pair(db: Session, pair_id: str) -> models.Pair:
     pair = db.query(models.Pair).filter(models.Pair.launcher_id == pair_id).first()
-    
-    if pair is not None and force_refresh:
+    if pair is not None:
         pair, _ = await check_pair_update(db, pair)
     
     return pair
@@ -207,18 +198,24 @@ async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
     
     return pair, sb_to_aggregate
 
-def get_input_price(input_amount, input_reserve, output_reserve) -> int:
-    input_amount_with_fee = input_amount * 993
+def get_input_price(input_amount, input_reserve, output_reserve, inverse_fee) -> int:
+    input_amount_with_fee = input_amount * inverse_fee
     numerator = input_amount_with_fee * output_reserve
     denominator = (input_reserve * 1000) + input_amount_with_fee
     return numerator // denominator
 
-def get_output_price(output_amount, input_reserve, output_reserve) -> int:
+def get_output_price(output_amount, input_reserve, output_reserve, inverse_fee) -> int:
     numerator: uint256 = input_reserve * output_amount * 1000
-    denominator: uint256 = (output_reserve - output_amount) * 993
+    denominator: uint256 = (output_reserve - output_amount) * inverse_fee
     return numerator // denominator + 1
 
-async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_out: Optional[int], xch_is_input: bool, estimate_fee: bool = False) -> schemas.Quote:
+async def get_quote(
+    db: Session,
+    pair_id: str,
+    amount_in: Optional[int],
+    amount_out: Optional[int],
+    xch_is_input: bool,
+    estimate_fee: bool = False) -> schemas.Quote:
     # Fetch the pair with the given launcher_id
     pair = await get_pair(db, pair_id)
     if pair is None:
@@ -237,10 +234,10 @@ async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_
 
     if amount_in is None: 
         # amount_out given
-        amount_in = get_output_price(amount_out, input_reserve, output_reserve)
+        amount_in = get_output_price(amount_out, input_reserve, output_reserve, pair.inverse_fee)
     else:
         # amount_in given
-        amount_out = get_input_price(amount_in, input_reserve, output_reserve)
+        amount_out = get_input_price(amount_in, input_reserve, output_reserve, pair.inverse_fee)
 
     # https://docs.mimo.finance/the-formulas#price-impact
     price_impact = 1 - (output_reserve - amount_out) ** 2 / output_reserve ** 2
@@ -266,13 +263,18 @@ async def get_quote(db: Session, pair_id: str, amount_in: Optional[int], amount_
     return quote
 
 @app.get("/quote/{pair_id}", response_model=schemas.Quote)
-async def read_quote(pair_id: str, amount_in: Optional[int] = Query(None), amount_out: Optional[int] = Query(None), xch_is_input: bool = True, estimate_fee: bool = False, db: Session = Depends(get_db)):
+async def read_quote(
+    pair_id: str,
+    amount_in: Optional[int] = Query(None),
+    amount_out: Optional[int] = Query(None),
+    xch_is_input: bool = True,
+    estimate_fee: bool = False,
+    db: Session = Depends(get_db)):
     # Ensure that either amount_in or amount_out is provided, but not both
     if (amount_in is not None) == (amount_out is not None):
         raise HTTPException(status_code=400, detail="Provide either amount_in or amount_out, but not both")
 
-    quote = await get_quote(db, pair_id, amount_in, amount_out, xch_is_input, estimate_fee)
-    return quote
+    return await get_quote(db, pair_id, amount_in, amount_out, xch_is_input, estimate_fee)
 
 async def create_offer(
     db: Session,
@@ -283,11 +285,12 @@ async def create_offer(
     donation_addresses: List[str],
     donation_weights: List[int]
 ) -> schemas.OfferResponse:
+    global fee_share_address
+    
     total_donation_amount: int = int(total_donation_amount)
     if total_donation_amount < 0:
         raise HTTPException(status_code=400, detail="total_donation_amount negative")
 
-    fee_share_address = os.environ.get("TIBETSWAP_FEE_ADDRESS", "")
     if len(donation_addresses) > 0 and len(fee_share_address) > 0:
         given_shares = 0
         for i, address in enumerate(donation_addresses):
@@ -315,7 +318,7 @@ async def create_offer(
             bytes.fromhex(pair.launcher_id),
             current_pair_coin,
             bytes.fromhex(pair.asset_id),
-            None,  # token_hidden_puzzle_hash - assume None for now
+            bytes.fromhex(pair.asset_hidden_puzzle_hash),
             creation_spend,
             sb_to_aggregate
         )
@@ -326,8 +329,8 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
-                None,  # token_hidden_puzzle_hash - assume None for now
-                993,   # inverse_fee - default for regular pairs
+                bytes.fromhex(pair.asset_hidden_puzzle_hash),
+                pair.inverse_fee,
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
                 pair_state["token_reserve"],
@@ -345,8 +348,8 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
-                None,  # token_hidden_puzzle_hash - assume None for now
-                993,   # inverse_fee - default for regular pairs
+                bytes.fromhex(pair.asset_hidden_puzzle_hash),
+                pair.inverse_fee,
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
                 pair_state["token_reserve"],
@@ -361,8 +364,8 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
-                None,  # token_hidden_puzzle_hash - assume None for now
-                993,   # inverse_fee - default for regular pairs
+                bytes.fromhex(pair.asset_hidden_puzzle_hash),
+                pair.inverse_fee,
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
                 pair_state["token_reserve"],
@@ -450,22 +453,30 @@ async def create_offer_endpoint(pair_id: str,
     return response
 
 @app.post("/pair/{asset_id}", response_model=schemas.CreatePairResponse)
-async def create_pair_endpoint(asset_id: str,
-                                offer: str = Body(...),
-                                xch_liquidity: int = Body(1),
-                                token_liquidity: int = Body(1),
-                                liquidity_destination_address: str = Body(""),
-                                db: Session = Depends(get_db)):
-
-    # For now, assume hidden_puzzle_hash=None as requested
-    hidden_puzzle_hash = None
-    
-    # Get the appropriate router (regular router for now)
-    router = db.query(models.Router).filter(models.Router.rcat == False).first()
+async def create_pair_endpoint(
+    asset_id: str,
+    offer: str = Body(...),
+    xch_liquidity: int = Body(1),
+    token_liquidity: int = Body(1),
+    hidden_puzzle_hash: Optional[str] = None,
+    inverse_fee: int = 993,
+    liquidity_destination_address: str = Body(""),
+    db: Session = Depends(get_db)
+):
+    router = db.query(models.Router).filter(models.Router.rcat == (hidden_puzzle_hash is not None)).first()
     if router is None:
         raise HTTPException(status_code=500, detail="Router not found")
+
+    if hidden_puzzle_hash is None and inverse_fee != 993:
+        raise HTTPException(status_code=400, detail="Inverse fee must be 993 for regular pairs")
     
-    pair = await get_pair(db, asset_id)
+    if hidden_puzzle_hash is not None and (inverse_fee < 958 or inverse_fee > 999):
+        raise HTTPException(status_code=400, detail="Inverse fee must be between 958 and 999 for rCAT pairs")
+    
+    pair = db.query(models.Pair).filter(
+        models.Pair.asset_id == asset_id,
+        models.Pair.asset_hidden_puzzle_hash == hidden_puzzle_hash
+    ).first()
     if pair is not None:
         return schemas.CreatePairResponse(success=False, message="Pair for asset already exists", coin_id="")
 
@@ -473,13 +484,13 @@ async def create_pair_endpoint(asset_id: str,
         client = await get_client()
 
         current_router_coin, latest_creation_spend, pairs = await sync_router(
-            client, bytes.fromhex(router.current_id), False  # rcat=False for regular router
+            client, bytes.fromhex(router.current_id), hidden_puzzle_hash is not None
         )
 
         sb = await create_pair_with_liquidity(
             bytes.fromhex(asset_id),
             hidden_puzzle_hash,
-            993,  # default inverse_fee for regular pairs
+            inverse_fee,
             offer,
             int(xch_liquidity),
             int(token_liquidity),
