@@ -13,7 +13,7 @@ class TokenBase(BaseModel):
 
 class Token(TokenBase):
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class PairBase(BaseModel):
     launcher_id: str
@@ -28,7 +28,7 @@ class PairBase(BaseModel):
 
 class Pair(PairBase):
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ApiPairBase(BaseModel):
     pair_id: str
@@ -46,7 +46,7 @@ class ApiPairBase(BaseModel):
 
 class ApiPair(ApiPairBase):
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class RouterBase(BaseModel):
     launcher_id: str
@@ -55,7 +55,7 @@ class RouterBase(BaseModel):
 
 class Router(RouterBase):
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Quote(BaseModel):
     amount_in: int
