@@ -285,8 +285,14 @@ async def get_pair(db: Session, pair_id: str) -> models.Pair:
 async def check_pair_update(db: Session, pair: models.Pair) -> models.Pair:
     client = await get_client()
 
+    pair_last_coin_id = bytes.fromhex(pair.last_coin_id_on_chain)
+    pair_coin_record = await client.get_coin_record_by_name(pair_last_coin_id)
+
+    if not pair_coin_record.spent:
+        return pair, None
+
     _, _, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
-        client, bytes.fromhex(pair.last_coin_id_on_chain)
+        client, pair_last_coin_id, cached_record=pair_coin_record
     )
 
     pair.xch_reserve = pair_state['xch_reserve'] 

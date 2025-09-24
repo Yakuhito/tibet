@@ -688,13 +688,17 @@ def get_coin_spend_from_sb(sb, coin_name):
     return None
 
 
-async def sync_pair(full_node_client, last_synced_coin_id):
+async def sync_pair(full_node_client, last_synced_coin_id, cached_record=None):
     state = {
         "liquidity": 0,
         "xch_reserve": 0,
         "token_reserve": 0
     }
-    coin_record = await full_node_client.get_coin_record_by_name(last_synced_coin_id)
+    
+    coin_record = cached_record
+    if coin_record is None:
+        coin_record = await full_node_client.get_coin_record_by_name(last_synced_coin_id)
+
     last_synced_coin = coin_record.coin
     creation_spend = None
 
