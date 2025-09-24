@@ -87,12 +87,12 @@ def create_api_pair(pair: models.Pair, token: schemas.Token) -> schemas.ApiPair:
         asset_short_name=token.short_name,
         asset_image_url=token.image_url,
         asset_verified=token.verified,
-        pair_inverse_fee=pair.inverse_fee,
-        pair_liquidity_asset_id=pair.liquidity_asset_id,
-        pair_xch_reserve=pair.xch_reserve,
-        pair_token_reserve=pair.token_reserve,
-        pair_liquidity=pair.liquidity,
-        pair_last_coin_id_on_chain=pair.last_coin_id_on_chain
+        inverse_fee=pair.inverse_fee,
+        liquidity_asset_id=pair.liquidity_asset_id,
+        xch_reserve=pair.xch_reserve,
+        token_reserve=pair.token_reserve,
+        liquidity=pair.liquidity,
+        last_coin_id_on_chain=pair.last_coin_id_on_chain
     )
 
 @app.get("/tokens", response_model=List[schemas.Token])

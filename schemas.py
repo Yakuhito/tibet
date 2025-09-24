@@ -37,12 +37,12 @@ class ApiPairBase(BaseModel):
     asset_short_name: str
     asset_image_url: Optional[str] = None
     asset_verified: bool
-    pair_inverse_fee: int
-    pair_liquidity_asset_id: str
-    pair_xch_reserve: int
-    pair_token_reserve: int
-    pair_liquidity: int
-    pair_last_coin_id_on_chain: str
+    inverse_fee: int
+    liquidity_asset_id: str
+    xch_reserve: int
+    token_reserve: int
+    liquidity: int
+    last_coin_id_on_chain: str
 
 class ApiPair(ApiPairBase):
     class Config:
