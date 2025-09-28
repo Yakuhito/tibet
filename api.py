@@ -210,38 +210,46 @@ async def get_router_endpoint(rcat: bool = Query(False, description="Whether to 
             db.commit()
             
             # Try to create Token object with external API data
-            try:
-                token_data = requests.get(dexie_token_url + tail_hash).json()
-                if token_data["success"]:
-                    print(f"Token verified on Dexie: {tail_hash}")
-                    token_data = token_data["token"]
-                    token = models.Token(
-                        asset_id=tail_hash,
-                        hidden_puzzle_hash=None,
-                        name=token_data["name"],
-                        short_name=token_data["code"],
-                        image_url=token_data["icon"],
-                        verified=True,
-                    )
-                    db.add(token)
-                    db.commit()
-                else:
-                    print(f"Token not verified on Dexie: {tail_hash}; falling back to SpaceScan resolution...")
-                    token_info = requests.get(spacescan_token_url + tail_hash).json()["info"]
-                    token = models.Token(
-                        asset_id=tail_hash,
-                        hidden_puzzle_hash=None,
-                        name=token_info["name"],
-                        short_name=token_info["symbol"],
-                        image_url=token_info["preview_url"],
-                        verified=False,
-                    )
-                    db.add(token)
-                    db.commit()
-            except Exception as e:
-                # If token can't be fetched from external APIs, skip adding it
-                print(f"Failed to fetch token info for {tail_hash}: {e}")
-                continue
+            token = db.query(models.Token).filter(
+                models.Token.asset_id == tail_hash,
+                models.Token.hidden_puzzle_hash == hidden_puzzle_hash
+            ).first()
+            token_no_hidden_puzzle_hash = db.query(models.Token).filter(
+                models.Token.asset_id == tail_hash
+            ).first()
+            if token is None and token_no_hidden_puzzle_hash is None:
+                try:
+                    token_data = requests.get(dexie_token_url + tail_hash).json()
+                    if token_data["success"]:
+                        print(f"Token verified from Dexie: {tail_hash}")
+                        token_data = token_data["token"]
+                        token = models.Token(
+                            asset_id=tail_hash,
+                            hidden_puzzle_hash=None,
+                            name=token_data["name"],
+                            short_name=token_data["code"],
+                            image_url=token_data["icon"],
+                            verified=True,
+                        )
+                        db.add(token)
+                        db.commit()
+                    else:
+                        print(f"Token not verified on Dexie: {tail_hash}; falling back to SpaceScan resolution...")
+                        token_info = requests.get(spacescan_token_url + tail_hash).json()["info"]
+                        token = models.Token(
+                            asset_id=tail_hash,
+                            hidden_puzzle_hash=None,
+                            name=token_info["name"],
+                            short_name=token_info["symbol"],
+                            image_url=token_info["preview_url"],
+                            verified=False,
+                        )
+                        db.add(token)
+                        db.commit()
+                except Exception as e:
+                    # If token can't be fetched from external APIs, skip adding it
+                    print(f"Failed to fetch token info for {tail_hash}: {e}")
+                    continue
                 
     except Exception as e:
         print(f"Failed to sync router: {e}")
