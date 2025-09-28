@@ -42,6 +42,7 @@ try:
     router_launcher_id = os.environ["TIBETSWAP_LAUNCHER_ID"]
     rcat_router_launcher_id = os.environ["TIBETSWAP_RCAT_LAUNCHER_ID"]
     fee_share_address = os.environ["TIBETSWAP_FEE_ADDRESS"]
+    rcat_issuer_secret_token = os.environ["RCAT_ISSUER_SECRET_TOKEN"]
 except KeyError as e:
     print(f"Error: Environment variable {e} is not set. Exiting...")
     sys.exit(1)
@@ -129,6 +130,51 @@ def get_token(asset_id: str, db: Session = Depends(get_db)):
     if token is None:
         raise HTTPException(status_code=404, detail="Token not found")
     return token
+
+# For rCAT issuers
+@app.post("/token", response_model=schemas.AddTokenResponse)
+def add_token(request: schemas.AddTokenRequest, db: Session = Depends(get_db)):
+    global rcat_issuer_secret_token
+
+    if request.secret != rcat_issuer_secret_token:
+        raise HTTPException(status_code=401, detail="Invalid secret token")
+    
+    existing_verified_token = db.query(models.Token).filter(
+        models.Token.asset_id == request.asset_id,
+        models.Token.verified == True
+    ).first()
+    
+    if existing_verified_token is not None:
+        return schemas.AddTokenResponse(
+            success=False,
+            message="A verified CAT with this asset_id already exists"
+        )
+    
+    unverified_tokens = db.query(models.Token).filter(
+        models.Token.asset_id == request.asset_id,
+        models.Token.verified == False
+    ).all()
+    
+    for token in unverified_tokens:
+        db.delete(token)
+    
+    new_token = models.Token(
+        asset_id=request.asset_id,
+        hidden_puzzle_hash=request.hidden_puzzle_hash,
+        name=request.name,
+        short_name=request.short_name,
+        image_url=request.image_url,
+        verified=True
+    )
+    
+    db.add(new_token)
+    db.commit()
+    db.refresh(new_token)
+    
+    return schemas.AddTokenResponse(
+        success=True,
+        message=f"{request.name} ({request.short_name}) successfully added"
+    )
 
 @app.get("/pair/{launcher_id}", response_model=schemas.ApiPair)
 async def read_pair(launcher_id: str, db: Session = Depends(get_db)):

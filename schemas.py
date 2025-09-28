@@ -82,3 +82,15 @@ class ActionType(Enum):
     SWAP = "SWAP"
     ADD_LIQUIDITY = "ADD_LIQUIDITY"
     REMOVE_LIQUIDITY = "REMOVE_LIQUIDITY"
+
+class AddTokenRequest(BaseModel):
+    secret: str
+    asset_id: str
+    hidden_puzzle_hash: str
+    name: str
+    short_name: str
+    image_url: str
+
+class AddTokenResponse(BaseModel):
+    success: bool
+    message: str
