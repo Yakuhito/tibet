@@ -150,6 +150,18 @@ def add_token(request: schemas.AddTokenRequest, db: Session = Depends(get_db)):
             message="A verified CAT with this asset_id already exists"
         )
     
+    conflicting_pair = db.query(models.Pair).filter(
+        models.Pair.asset_id == request.asset_id,
+        models.Pair.asset_hidden_puzzle_hash != request.hidden_puzzle_hash,
+        models.Pair.liquidity > 0
+    ).first()
+    
+    if conflicting_pair is not None:
+        return schemas.AddTokenResponse(
+            success=False,
+            message="Cannot add token: pair with different hidden puzzle hash and liquidity > 0 exists for this asset_id"
+        )
+    
     unverified_tokens = db.query(models.Token).filter(
         models.Token.asset_id == request.asset_id,
         models.Token.verified == False
