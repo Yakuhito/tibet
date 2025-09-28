@@ -634,8 +634,8 @@ async def create_pair_endpoint(
     offer: str = Body(...),
     xch_liquidity: int = Body(1),
     token_liquidity: int = Body(1),
-    hidden_puzzle_hash: Optional[str] = None,
-    inverse_fee: int = 993,
+    hidden_puzzle_hash: Optional[str] = Body(None),
+    inverse_fee: int = Body(993),
     liquidity_destination_address: str = Body(""),
     db: Session = Depends(get_db)
 ):
@@ -666,7 +666,7 @@ async def create_pair_endpoint(
 
         sb = await create_pair_with_liquidity(
             bytes.fromhex(asset_id),
-            hidden_puzzle_hash,
+            bytes.fromhex(hidden_puzzle_hash) if hidden_puzzle_hash is not None else None,
             inverse_fee,
             offer,
             int(xch_liquidity),
@@ -690,7 +690,7 @@ async def create_pair_endpoint(
         return schemas.CreatePairResponse(
             success=resp['status'] == 'SUCCESS',
             message=json.dumps(resp),
-            coin_id=sb.coin_spends[-1].name().hex()
+            coin_id=sb.coin_spends[-1].coin.name().hex()
         )
     except Exception as e:
         traceback_message = traceback.format_exc()
