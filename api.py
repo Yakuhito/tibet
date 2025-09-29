@@ -281,9 +281,12 @@ async def get_router_endpoint(rcat: bool = Query(False, description="Whether to 
                     if token_data["success"]:
                         print(f"Token verified from Dexie: {tail_hash}")
                         token_data = token_data["token"]
+                        hidden_puzzle_hash = token_data.get("hidden_puzzle_hash", None)
+                        if hidden_puzzle_hash is not None and len(hidden_puzzle_hash) != 64:
+                            hidden_puzzle_hash = None
                         token = models.Token(
                             asset_id=tail_hash,
-                            hidden_puzzle_hash=None,
+                            hidden_puzzle_hash=hidden_puzzle_hash,
                             name=token_data["name"],
                             short_name=token_data["code"],
                             image_url=token_data["icon"],
