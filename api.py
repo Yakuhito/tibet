@@ -378,11 +378,15 @@ def get_input_price(input_amount, input_reserve, output_reserve, inverse_fee) ->
     input_amount_with_fee = input_amount * inverse_fee
     numerator = input_amount_with_fee * output_reserve
     denominator = (input_reserve * 1000) + input_amount_with_fee
+    if denominator == 0:
+        return 0
     return numerator // denominator
 
 def get_output_price(output_amount, input_reserve, output_reserve, inverse_fee) -> int:
     numerator: uint256 = input_reserve * output_amount * 1000
     denominator: uint256 = (output_reserve - output_amount) * inverse_fee
+    if denominator == 0:
+        return 1
     return numerator // denominator + 1
 
 async def get_quote(
@@ -416,7 +420,9 @@ async def get_quote(
         amount_out = get_input_price(amount_in, input_reserve, output_reserve, pair.inverse_fee)
 
     # https://docs.mimo.finance/the-formulas#price-impact
-    price_impact = 1 - (output_reserve - amount_out) ** 2 / output_reserve ** 2
+    price_impact = 1
+    if output_reserve > 0:
+        price_impact = 1 - (output_reserve - amount_out) ** 2 / output_reserve ** 2
 
     # warn price change when price impact > 5%
     price_warning = price_impact > 0.05
@@ -489,12 +495,13 @@ async def create_offer(
         )
         current_pair_coin_id = current_pair_coin.name().hex()
 
+        hidden_puzzle_hash = bytes.fromhex(pair.asset_hidden_puzzle_hash) if pair.asset_hidden_puzzle_hash is not None else None
         xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
             client,
             bytes.fromhex(pair.launcher_id),
             current_pair_coin,
             bytes.fromhex(pair.asset_id),
-            bytes.fromhex(pair.asset_hidden_puzzle_hash),
+            hidden_puzzle_hash,
             creation_spend,
             sb_to_aggregate
         )
@@ -505,7 +512,7 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
-                bytes.fromhex(pair.asset_hidden_puzzle_hash),
+                hidden_puzzle_hash,
                 pair.inverse_fee,
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
@@ -524,7 +531,7 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
-                bytes.fromhex(pair.asset_hidden_puzzle_hash),
+                hidden_puzzle_hash,
                 pair.inverse_fee,
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
@@ -540,7 +547,7 @@ async def create_offer(
                 current_pair_coin,
                 creation_spend,
                 bytes.fromhex(pair.asset_id),
-                bytes.fromhex(pair.asset_hidden_puzzle_hash),
+                hidden_puzzle_hash,
                 pair.inverse_fee,
                 pair_state["liquidity"],
                 pair_state["xch_reserve"],
