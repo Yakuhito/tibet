@@ -22,7 +22,7 @@ If you found a bug pr have any questions, please do not hesitate to contact us. 
 
 Twitter DM: [yakuh1t0](https://twitter.com/yakuh1t0)
 
-Discord: yakuhito (tag: the result of 18 * 100 + 38)
+Discord: yakuhito
 
 Keybase: yakuhito_chia
 

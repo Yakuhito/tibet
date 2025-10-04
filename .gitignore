@@ -151,13 +151,15 @@ master_private_key.txt
 router_launcher_id.txt
 
 config.json
-config.testnet10.json
+config.testnet.json
 config.mainnet.json
 offer.txt
 spend_bundle.json
 fml/fml
 database.db
+database.db.bak
 data/*
 offer.*.json
 spend_bundle.*.json
 start_api.sh
+nginx.conf

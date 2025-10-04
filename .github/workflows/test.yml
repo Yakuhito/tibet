@@ -1,53 +1,46 @@
-# name: Run Tests
+name: Run Tests
 
-# # on:
-# #   workflow_dispatch:
-# #   push:
-# #     branches:
-# #       - '**'
-# #     tags:
-# #         - '**'
-# #   pull_request:
-# #     branches:
-# #       - '**'
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    tags:
+        - '**'
+  pull_request:
+    branches:
+      - master
 
-# defaults:
-#   run:
-#     shell: bash
+defaults:
+  run:
+    shell: bash
 
-# jobs:
-#   build:
-#     name: Test - Ubuntu, Python 3.10
-#     runs-on: ubuntu-latest
-#     timeout-minutes: 10
-#     steps:
-#     - name: Clean workspace
-#       uses: Chia-Network/actions/clean-workspace@main
+jobs:
+  build:
+    name: Test - Ubuntu, Python 3.12
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-#     - name: Checkout Code
-#       uses: actions/checkout@v3
-#       with:
-#         fetch-depth: 0
+    - name: Ensure 'test-plots' directory exists
+      run: mkdir -p ~/.chia/test-plots
 
-#     - uses: Chia-Network/actions/setup-python@main
-#       with:
-#         python-version: '3.10'
+    - name: Cache 'test-plots' directory
+      uses: actions/cache@v4
+      with:
+        path: ~/.chia/test-plots
+        key: test-plots
+        restore-keys: test-plots
 
-#     - name: Create 'test-plots' Directory
-#       run: mkdir -p ~/.chia/test-plots
+    - name: Setup python3.12
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12' 
+        cache: 'pip'
 
-#     - uses: Chia-Network/actions/create-venv@main
-#       id: create-venv
+    - name: Install other required libraries
+      run: python3 -m pip install -r requirements.txt && python3 -m pip install -r requirements-testing.txt
 
-#     - uses: Chia-Network/actions/activate-venv@main
-#       with:
-#         directories: ${{ steps.create-venv.outputs.activate-venv-directories }}
-
-#     - name: Setup chia-dev-tools
-#       run: pip install --extra-index-url https://pypi.chia.net/simple/ chia-dev-tools
-
-#     - name: Install other required libraries
-#       run: python3 -m pip install -r requirements.txt
-
-#     - name: Test code with pytest
-#       run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning
+    - name: Test code with pytest
+      run: pytest tests/ -s -v --durations 0 -W ignore::DeprecationWarning

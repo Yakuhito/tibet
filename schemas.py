@@ -5,7 +5,7 @@ from enum import Enum
 
 class TokenBase(BaseModel):
     asset_id: str
-    pair_id: str
+    hidden_puzzle_hash: Optional[str] = None
     name: str
     short_name: str
     image_url: Optional[str] = None
@@ -13,11 +13,13 @@ class TokenBase(BaseModel):
 
 class Token(TokenBase):
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class PairBase(BaseModel):
     launcher_id: str
     asset_id: str
+    asset_hidden_puzzle_hash: Optional[str] = None
+    inverse_fee: int
     liquidity_asset_id: str
     xch_reserve: int
     token_reserve: int
@@ -26,16 +28,35 @@ class PairBase(BaseModel):
 
 class Pair(PairBase):
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+class ApiPairBase(BaseModel):
+    pair_id: str
+    asset_id: str
+    asset_hidden_puzzle_hash: Optional[str] = None
+    asset_name: str
+    asset_short_name: str
+    asset_image_url: Optional[str] = None
+    asset_verified: bool
+    inverse_fee: int
+    liquidity_asset_id: str
+    xch_reserve: int
+    token_reserve: int
+    liquidity: int
+    last_coin_id_on_chain: str
+
+class ApiPair(ApiPairBase):
+    class Config:
+        from_attributes = True
 
 class RouterBase(BaseModel):
     launcher_id: str
     current_id: str
-    network: str
+    rcat: bool
 
 class Router(RouterBase):
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Quote(BaseModel):
     amount_in: int
@@ -61,3 +82,15 @@ class ActionType(Enum):
     SWAP = "SWAP"
     ADD_LIQUIDITY = "ADD_LIQUIDITY"
     REMOVE_LIQUIDITY = "REMOVE_LIQUIDITY"
+
+class AddTokenRequest(BaseModel):
+    secret: str
+    asset_id: str
+    hidden_puzzle_hash: str
+    name: str
+    short_name: str
+    image_url: str
+
+class AddTokenResponse(BaseModel):
+    success: bool
+    message: str

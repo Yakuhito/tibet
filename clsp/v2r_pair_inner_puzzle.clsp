@@ -1,0 +1,253 @@
+; V2 pair (rCAT version) inner puzzle
+; author: yakuhito
+
+; modeled after https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy
+;; structure of a pair: singleton_top_layer_v1_1 -> p2_merkle_tree -> this puzzle
+
+(mod (
+        ; curried in - these will not change with spends
+        P2_MERKLE_TREE_MODIFIED_MOD_HASH ; sha256 of the parent module / puzzle (uncurried)
+        SINGLETON_STRUCT  ; to quote did_innerpuz.clvm, 
+            ;; 'my singleton_struct, formerly a Truth - ((SINGLETON_MOD_HASH, (LAUNCHER_ID, LAUNCHER_PUZZLE_HASH)))'
+        P2_SINGLETON_FLASHLOAN_MOD_HASH ; sha256tree of the p2_singleton_flashloan module (uncurried)
+        CAT_MOD_HASH ; sha256tree of the cat_v2 module (uncurried)
+        REVOCATION_LAYER_MOD_HASH ; sha256tree of the revocation_layer module (uncurried)
+        HIDDEN_PUZZLE_HASH ; sha256 of the hidden puzzle (uncurried)
+        SETTLEMENT_PAYMENTS_MOD_HASH ; sha256 tree of settlement_payments.clvm (not that it has any curried arguments, but still)
+
+        TAIL_HASH ; identifies the token this pair holds
+
+        ; -- still verified, but given at runtime \/
+
+        inner_puzzle ; this is verified to be included in the merkle tree in p2_merkle_tree
+            ; puzzle returns the new state, CURRIED_ARGS = (liquidity . (xch_reserve token_reserve)), and a list of extra conditions
+            ; (new_state . extra_conditions)
+        pair_inner_puzzle_hash
+        merkle_root
+        state
+
+        ; -- user input \/
+
+        inner_solution ; given by the user
+            ; format: (coin_ids . new_state_solution) = ((my_coin_id . (xch_reserve_coin_id . token_reserve_coin_id)) . new_state_solution)
+    )
+    ; libs
+    (include tibet_utils.clib)
+
+    ;; deposit/reserve-related
+    (defun-inline p2_singleton_puzzle_hash ()
+        (curry_hashes_inline P2_SINGLETON_FLASHLOAN_MOD_HASH
+            (sha256tree (singleton_mod_hash_from_struct SINGLETON_STRUCT))
+            (sha256tree (singleton_launcher_from_struct SINGLETON_STRUCT))
+            (sha256tree (singleton_launcher_puzzle_hash_from_struct SINGLETON_STRUCT))
+        )
+    )
+
+    (defun-inline settlement_announcement (my_coin_id amount)
+        (sha256tree
+            (list
+                my_coin_id
+                (list (p2_singleton_puzzle_hash) amount)
+            )
+        )
+    )
+
+    (defun-inline assert_xch_reserve_condition (my_coin_id amount)
+        (list
+            ASSERT_PUZZLE_ANNOUNCEMENT
+            (sha256
+                SETTLEMENT_PAYMENTS_MOD_HASH
+                (settlement_announcement my_coin_id amount)
+            )
+        )
+    )
+
+    (defun-inline settlement_cat_announcement (my_coin_id amount)
+        (sha256tree
+            (list
+                my_coin_id
+                (list
+                    (p2_singleton_puzzle_hash)
+                    amount
+                )
+            )
+        )
+    )
+
+    (defun-inline assert_token_reserve_condition (my_coin_id amount)
+        (list
+            ASSERT_PUZZLE_ANNOUNCEMENT
+            (sha256
+                (cat_puzzle_hash
+                    CAT_MOD_HASH
+                    TAIL_HASH
+                    (curry_hashes_inline REVOCATION_LAYER_MOD_HASH
+                        (sha256tree REVOCATION_LAYER_MOD_HASH)
+                        (sha256tree HIDDEN_PUZZLE_HASH)
+                        (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
+                    )
+                )
+                (settlement_cat_announcement
+                    my_coin_id
+                    amount
+                )
+            )
+        )
+    )
+
+    ; recreate self
+
+    (defun-inline recreate_self_condition (new_state)
+        (list
+            CREATE_COIN
+            (curry_hashes_inline P2_MERKLE_TREE_MODIFIED_MOD_HASH
+                pair_inner_puzzle_hash
+                (sha256tree merkle_root)
+                (sha256tree new_state)
+            )
+            1
+        )
+    )
+
+    ;; this is actually the main function
+    ;; (the thing that creates the output conditions)
+
+    ;; another genius idea (thanks, quexington!): do not merge any lists
+    ;; use REMARKs instead of conditions instead of not including them at all
+    ;; this skips the call(s) to merge_lists, which are expensive since they're recursive functions
+    (defun-inline create_output_conditions (
+        my_coin_id
+        xch_reserve_coin_id
+        token_reserve_coin_id
+
+        current_liquidity
+        current_xch_reserve
+        current_token_reserve
+
+        new_state
+        extra_conditions
+
+        new_liquidity
+        new_xch_reserve
+        new_token_reserve
+        )
+        (list
+            ; assert my id
+            (list ASSERT_MY_COIN_ID my_coin_id)
+
+            ; recreate self
+            (recreate_self_condition new_state)
+
+            ; spend XCH reserve, if there is one ('IF I HAD ONE' meme citation required)
+            (if (> current_xch_reserve 0)
+                (list CREATE_PUZZLE_ANNOUNCEMENT xch_reserve_coin_id)
+                ; else
+                (list REMARK)
+            )
+            (if (> current_xch_reserve 0)
+                (list ASSERT_COIN_ANNOUNCEMENT (sha256 xch_reserve_coin_id '$'))
+                ; else
+                (list REMARK)
+            )
+
+            ; spend token reserve, if there is one ('IF I HAD ONE' meme citation required)
+            (if (> current_token_reserve 0)
+                (list CREATE_PUZZLE_ANNOUNCEMENT token_reserve_coin_id)
+                ; else
+                (list REMARK)
+            )
+            (if (> current_token_reserve 0)
+                (list ASSERT_COIN_ANNOUNCEMENT (sha256 token_reserve_coin_id '$'))
+                ; else
+                (list REMARK)
+            )
+
+            ; assert new XCH reserve
+            (if (> new_xch_reserve 0)
+                (assert_xch_reserve_condition
+                    my_coin_id
+                    new_xch_reserve
+                )
+                ; else
+                (list REMARK)
+            )
+
+            ; assert new token reserve
+            (if (> new_token_reserve 0)
+                (assert_token_reserve_condition
+                    my_coin_id
+                    new_token_reserve
+                )
+                ; else
+                (list REMARK)
+            )
+
+            ; additional/extra conditions
+            ; when minting or burning liquidity, there'll be exactly two extra conditions
+            ; knowing this, we can skip using merge_list!
+            (if extra_conditions
+                (f extra_conditions)
+                ; else
+                (list REMARK)
+            )
+
+            (if extra_conditions
+                (f (r extra_conditions))
+                ; else
+                (list REMARK)
+            )
+        )
+    )
+
+    ;; stagers
+    (defun-inline stager_three (coin_ids new_state extra_conditions)
+        (create_output_conditions
+            (f coin_ids)
+            (f (r coin_ids))
+            (r (r coin_ids))
+
+            (liquidity_from_state state)
+            (xch_reserve_from_state state)
+            (token_reserve_from_state state)
+
+            new_state
+            extra_conditions
+
+            (liquidity_from_state new_state)
+            (xch_reserve_from_state new_state)
+            (token_reserve_from_state new_state)
+        )
+    )
+
+    (defun-inline stager_two (
+        coin_ids
+        inner_output
+    )
+        (stager_three
+            coin_ids
+            (f inner_output)
+            (r inner_output)
+        )
+    )
+
+    (defun-inline stager (
+        coin_ids
+    )
+        (stager_two
+            coin_ids
+            (a
+                inner_puzzle
+                (list
+                    state
+                    (r inner_solution)
+                    SINGLETON_STRUCT
+                    (f coin_ids)
+                )
+            )
+        )
+    )
+
+    (stager
+        (f inner_solution)
+    )
+)

@@ -1,0 +1,123 @@
+; the V2 (rCAT version) router
+; author: yakuhito
+
+;; only used to create pairs!
+
+(mod (
+        ; curried args - used for deploying pair
+        PAIR_INNER_PUZZLE_MOD_HASH
+        SINGLETON_MOD_HASH ; pay attention here - it's not SINGLETON_STRUCT
+        P2_MERKLE_TREE_MODIFIED_MOD_HASH
+        P2_SINGLETON_FLASHLOAN_MOD_HASH
+        CAT_MOD_HASH
+        REVOCATION_LAYER_MOD_HASH ; sha256tree of the revocation_layer module (uncurried)
+        SETTLEMENT_PAYMENTS_MOD_HASH
+        ; uset to calculate merkle root
+        LIQUIDITY_PUZZLES_BRANCH_HASH ; calculated off-chain
+        SWAP_MOD_HASH
+        REBASE_MOD_HASH 
+        ; required for the router to work
+        LAUNCHER_PUZZLE_HASH
+        ROUTER_MOD_HASH
+
+        ; inputs
+        my_coin_id
+        new_pair_tail_hash ; hash of TAIL
+        new_pair_hidden_puzzle_hash ; rCAT parameter
+        new_pair_inverse_fee ; (1000 - new_pair_inverse_fee) / 1000 fee
+    )
+
+    (include tibet_utils.clib)
+
+    ; minimum fee required to spend the router (launch a new pair)
+    ; (prevents spam)
+    (defconstant MIN_FEE 42000000000)
+
+    (defun-inline new_pair_launcher_id ()
+        ; launcher amount needs to be 2, since 1 would mean wrapping it in our singleton top layer puzzle
+        (calculate_coin_id my_coin_id LAUNCHER_PUZZLE_HASH (q . 2))
+    )
+
+    (defun-inline new_pair_singleton_struct ()
+        (c SINGLETON_MOD_HASH (c (new_pair_launcher_id) LAUNCHER_PUZZLE_HASH))
+    )
+
+    (defun-inline pair_inner_puzzle_hash (tail_hash)
+        (curry_hashes_inline PAIR_INNER_PUZZLE_MOD_HASH
+            (sha256tree P2_MERKLE_TREE_MODIFIED_MOD_HASH)
+            (sha256tree (new_pair_singleton_struct)) ; SINGLETON_STRUCT
+            (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
+            (sha256tree CAT_MOD_HASH)
+            (sha256tree REVOCATION_LAYER_MOD_HASH)
+            (sha256tree new_pair_hidden_puzzle_hash)
+            (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
+            (sha256tree tail_hash)
+        )
+    )
+
+    (defun-inline pair_puzzle_hash (tail_hash)
+        (curry_hashes_inline SINGLETON_MOD_HASH
+            (sha256tree (new_pair_singleton_struct))
+            (curry_hashes_inline P2_MERKLE_TREE_MODIFIED_MOD_HASH
+                (pair_inner_puzzle_hash tail_hash)
+                (sha256tree (sha256 2
+                    LIQUIDITY_PUZZLES_BRANCH_HASH
+                    (sha256 2
+                        (sha256tree (curry_hashes_inline SWAP_MOD_HASH
+                            (sha256tree new_pair_inverse_fee)
+                        ))
+                        (sha256tree (curry_hashes_inline REBASE_MOD_HASH
+                            (sha256tree new_pair_hidden_puzzle_hash)
+                        ))
+                    )
+                )) ; allowed puzzles merkle root of the XCH-rCAT pair
+                (sha256tree (c 0 (c 0 0)))
+            )
+        )
+    )
+
+    (defun-inline my_puzzle_hash ()
+        (curry_hashes_inline ROUTER_MOD_HASH
+            (sha256tree PAIR_INNER_PUZZLE_MOD_HASH)
+            (sha256tree SINGLETON_MOD_HASH)
+            (sha256tree P2_MERKLE_TREE_MODIFIED_MOD_HASH)
+            (sha256tree P2_SINGLETON_FLASHLOAN_MOD_HASH)
+            (sha256tree CAT_MOD_HASH)
+            (sha256tree REVOCATION_LAYER_MOD_HASH)
+            (sha256tree SETTLEMENT_PAYMENTS_MOD_HASH)
+            (sha256tree LIQUIDITY_PUZZLES_BRANCH_HASH)
+            (sha256tree SWAP_MOD_HASH)
+            (sha256tree REBASE_MOD_HASH)
+            (sha256tree LAUNCHER_PUZZLE_HASH)
+            (sha256tree ROUTER_MOD_HASH)
+        )
+    )
+
+    ; main
+    (if (all
+        (size_b32 new_pair_tail_hash)
+        (size_b32 new_pair_hidden_puzzle_hash)
+        (> new_pair_inverse_fee 957) ; max fee is 4.2%
+        (> 1000 new_pair_inverse_fee)
+    )
+        (list
+            (list ASSERT_MY_COIN_ID my_coin_id)
+
+            (list CREATE_COIN (my_puzzle_hash) 1)
+            (list CREATE_COIN LAUNCHER_PUZZLE_HASH 2)
+
+            (list RESERVE_FEE MIN_FEE)
+            
+            ; make sure the pair singleton is launched
+            (list
+                ASSERT_COIN_ANNOUNCEMENT
+                (sha256
+                    (new_pair_launcher_id)
+                    (sha256tree (list (pair_puzzle_hash new_pair_tail_hash) 1 ()))
+                )
+            )
+        )
+        ; else
+        (x)
+    )
+)
