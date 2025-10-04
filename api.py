@@ -1,5 +1,4 @@
 from fastapi import FastAPI, Depends, HTTPException, Body
-from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from fastapi import Query
 from typing import List
@@ -23,13 +22,6 @@ from tibet_lib import *
 DATABASE_URL = "sqlite:///./database.db"
 
 app = FastAPI(title="TibetSwap API", description="A centralized API for a decentralized AMM", version="2.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 coinset_url = None
 dexie_token_url = None
