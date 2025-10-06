@@ -2576,6 +2576,7 @@ async def respond_to_rebase_up_offer(
     offer_spend_bundle = offer.to_spend_bundle()
     offer_coin_spends = offer_spend_bundle.coin_spends
 
+    eph_xch_coin = None
     eph_token_coin = None
 
     # needed when spending eph_token_coin since it's a CAT
@@ -2608,6 +2609,10 @@ async def respond_to_rebase_up_offer(
         for cwa in conditions_dict.get(ConditionOpcode.CREATE_COIN, []):
             puzzle_hash = cwa.vars[0]
             amount = SExp.to(cwa.vars[1]).as_int()
+
+            if puzzle_hash == OFFER_MOD_HASH:
+                eph_xch_coin = Coin(coin_spend.coin.name(),
+                                    puzzle_hash, amount)
 
             if puzzle_hash == ephemeral_token_coin_puzzle_hash:
                 eph_token_coin = Coin(
@@ -2737,7 +2742,7 @@ async def respond_to_rebase_up_offer(
     pair_singleton_spend = make_spend(
         current_pair_coin, pair_singleton_puzzle, pair_singleton_solution)
 
-    # 5. Right now, the tx is valid, but the fee is negative - spend the last (previous) xch reserve coin and we're done!
+    # 5. Spend the last (previous) xch reserve coin and we're done!
     last_xch_reserve_spend_maybe = []
 
     if last_xch_reserve_coin != None:
@@ -2750,9 +2755,18 @@ async def respond_to_rebase_up_offer(
                       last_xch_reserve_coin_solution)
         )
 
+    # 6. Spend the ephemeral XCH coin to re-create the XCH reserve
+    eph_xch_coin_solution = Program.to([[
+        current_pair_coin.name(),
+        [p2_singleton_puzzle.get_tree_hash(), last_xch_reserve_coin.amount]
+    ]])
+    eph_xch_coin_spend = make_spend(
+        eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
+
     sb = SpendBundle(
         [
             pair_singleton_spend,
+            eph_xch_coin_spend,
         ] + token_reserve_creation_spends + cs_from_initial_offer + last_xch_reserve_spend_maybe + hidden_puzzle_hash_spend_bundle.coin_spends,
         AugSchemeMPL.aggregate([
             offer_spend_bundle.aggregated_signature,

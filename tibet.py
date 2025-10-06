@@ -1403,7 +1403,7 @@ async def _create_pair_with_initial_liquidity(
 @click.command()
 @click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
 @click.option("--other-sb", required=True, help='JSON file containing the spend bundle that spends the hidden puzzle hash to send a message to this pair.')
-@click.option("--offer", default=None, help='Offer to build liquidity tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
+@click.option("--offer", default=None, help='Offer to build liquidity tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer. Offer added CAT amount + 1 mojo.')
 @click.option("--token-amount", default=0, help="Amount of tokens to *add* to the pair's reserve via rebase. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
 @click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
@@ -1482,6 +1482,7 @@ async def _rebase_up(token_tail_hash, other_sb, offer, token_amount, push_tx, fe
                 print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
             offer_dict = {}
             offer_dict[token_wallet_id] = -token_amount
+            offer_dict[1] = -1
             offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config, fee=fee)
             offer = offer_resp.offer
 
@@ -1490,7 +1491,10 @@ async def _rebase_up(token_tail_hash, other_sb, offer, token_amount, push_tx, fe
         else:
             offer = wallet_client.make_offer(
                 [],
-                [[bytes.fromhex(token_tail_hash), hidden_puzzle_hash, token_amount]],
+                [
+                    [bytes.fromhex(token_tail_hash), hidden_puzzle_hash, token_amount],
+                    [None, None, 1]
+                ],
                 fee,
                 auto_import=False
             )
