@@ -62,9 +62,10 @@ def save_config(config):
 
 @click.command()
 @click.option('--chia-root', default=None, help='Chia root directory (e.g., ~/.chia/mainnet)')
+@click.option('--use-sage', default=False, help='Use Sage wallet instead of reference wallet (recommended)')
 @click.option('--network', default='mainnet', type=click.Choice(['testnet', 'mainnet'], case_sensitive=False))
 @click.option('--use-local-node', default=False, help='Use your local full node instead of coinset.org')
-def config_node(chia_root, network, use_local_node):
+def config_node(chia_root, use_sage, network, use_local_node):
     chia_root = os.path.expanduser(os.getenv('CHIA_ROOT', default="~/.chia/mainnet"))
 
     root_path = Path(chia_root)
@@ -82,6 +83,7 @@ def config_node(chia_root, network, use_local_node):
 
     config["chia_root"] = chia_root
     config["agg_sig_me_additional_data"] = agg_sig_me_additional_data
+    config["use_sage"] = use_sage
 
     if use_local_node:
         config["rpc_url"] = ""
@@ -108,12 +110,15 @@ async def _test_node_config():
     full_node_client.close()
     await full_node_client.await_closed()
 
-    wallet_client = await get_wallet_client(get_config_item("chia_root"))
-    wallet_client_status = await wallet_client.healthz()
+    sage, wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+    wallet_client_status = 'OK'
+    if not sage:
+        wallet_client_status = await wallet_client.healthz()
     click.echo("wallet client... " + str(wallet_client_status))
 
-    wallet_client.close()
-    await wallet_client.await_closed()
+    if not sage:
+        wallet_client.close()
+        await wallet_client.await_closed()
 
 
 @click.command()
@@ -125,7 +130,10 @@ def launch_router(push_tx, fee, rcat):
 
 
 async def _launch_router(push_tx, fee, rcat):
-    wallet_client = await get_wallet_client(get_config_item("chia_root"))
+    sage, wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+    if sage:
+        print("Cannot launch router with Sage yet")
+        return
 
     # wallet id 1, amount 2 (+ fee)
     coins = await wallet_client.select_coins(2 + fee, 1, coin_selection_config=CoinSelectionConfig(
@@ -228,7 +236,10 @@ def launch_test_token(amount, push_tx, hidden_puzzle_hash):
 async def _launch_test_token(amount, push_tx, hidden_puzzle_hash):
     click.echo(
         f"Creating test CAT with a supply of {amount} ({amount * 1000} mojos used)...")
-    wallet_client = await get_wallet_client(get_config_item("chia_root"))
+    sage, wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+    if sage:
+        print("Cannot launch test CAT with Sage yet")
+        return
 
     # wallet id 1 = XCH
     coins = await wallet_client.select_coins(amount * 1000, 1, coin_selection_config=CoinSelectionConfig(
@@ -359,7 +370,10 @@ async def _create_pair(tail_hash, push_tx, fee, hidden_puzzle_hash, inverse_fee)
                     config["pairs"][pair[0]] = pair[1]
         save_config(config)
 
-    wallet_client = await get_wallet_client(get_config_item("chia_root"))
+    sage, wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+    if sage:
+        print("Cannot create pair with Sage yet")
+        return
     print(f"Fee: {fee}")
     # wallet id 1 = XCH
     coins = await wallet_client.select_coins(fee + 1, 1, coin_selection_config=CoinSelectionConfig(
@@ -613,27 +627,6 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
             bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
-        wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(
-            wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT
-        )
-        token_wallet_id = next((_['id'] for _ in wallets if _[
-                               'data'].startswith(token_tail_hash)), None)
-        
-        if hidden_puzzle_hash is not None:
-            wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
-        liquidity_wallet_id = next((_['id'] for _ in wallets if _[
-                                   'data'].startswith(pair_liquidity_tail_hash)), None)
-
-        if token_wallet_id is None or liquidity_wallet_id is None:
-            click.echo(
-                "You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
-            wallet_client.close()
-            await wallet_client.await_closed()
-            full_node_client.close()
-            await full_node_client.await_closed()
-            sys.exit(1)
-
         liquidity_token_amount = token_amount
         if pair_state['liquidity'] != 0:
             liquidity_token_amount = pair_state['liquidity'] * \
@@ -644,21 +637,57 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         if use_fee_estimate:
             fee = await get_fee_estimate(sb_to_aggregate, full_node_client)
             print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
-        offer_dict = {}
-        # also for liqiudity TAIL creation
-        offer_dict[1] = - xch_amount - liquidity_token_amount
-        offer_dict[token_wallet_id] = -token_amount
-        offer_dict[liquidity_wallet_id] = liquidity_token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config, fee=fee)
-        offer = offer_resp.offer
+
+        sage, wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+
+        offer = None
+        if not sage:
+            wallets = await wallet_client.get_wallets(
+                wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT
+            )
+            token_wallet_id = next((_['id'] for _ in wallets if _[
+                                'data'].startswith(token_tail_hash)), None)
+            
+            if hidden_puzzle_hash is not None:
+                wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT)
+            liquidity_wallet_id = next((_['id'] for _ in wallets if _[
+                                    'data'].startswith(pair_liquidity_tail_hash)), None)
+
+            if token_wallet_id is None or liquidity_wallet_id is None:
+                click.echo(
+                    "You don't have a wallet for the token and/or the pair liquidity token. Please set them up before using this command.")
+                wallet_client.close()
+                await wallet_client.await_closed()
+                full_node_client.close()
+                await full_node_client.await_closed()
+                sys.exit(1)
+        
+            offer_dict = {}
+            # also for liqiudity TAIL creation
+            offer_dict[1] = - xch_amount - liquidity_token_amount
+            offer_dict[token_wallet_id] = -token_amount
+            offer_dict[liquidity_wallet_id] = liquidity_token_amount
+            offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config, fee=fee)
+            offer = offer_resp.offer
+
+            wallet_client.close()
+            await wallet_client.await_closed()
+        else:
+            offer = wallet_client.make_offer(
+                [[pair_liquidity_tail_hash, None, liquidity_token_amount]],
+                [
+                    [bytes.fromhex(token_tail_hash), hidden_puzzle_hash, token_amount],
+                    [None, None, xch_amount + liquidity_token_amount]
+                ],
+                fee,
+                auto_import=False
+            )
+
 
         offer_str = offer.to_bech32()
         open("offer.txt", "w").write(offer_str)
 
         click.echo("Offer successfully generated and saved to offer.txt.")
-
-        wallet_client.close()
-        await wallet_client.await_closed()
 
     xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
         full_node_client,
@@ -769,7 +798,10 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
             bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
-        wallet_client = await get_wallet_client(get_config_item("chia_root"))
+        sage, wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+        if sage:
+            click.echo("Cannot remove liquidity with Sage yet")
+            return
 
         wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT)
         token_wallet_id = next((_['id'] for _ in wallets if _[
@@ -922,7 +954,10 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
             bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
-        wallet_client = await get_wallet_client(get_config_item("chia_root"))
+        sage, wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+        if sage:
+            click.echo("Cannot swap XCH for token with Sage yet")
+            return
 
         wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT)
         token_wallet_id = next((_['id'] for _ in wallets if _[
@@ -1075,7 +1110,10 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
             bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()
         click.echo(f"Liquidity asset id: {pair_liquidity_tail_hash}")
 
-        wallet_client = await get_wallet_client(get_config_item("chia_root"))
+        sage, wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+        if sage:
+            click.echo("Cannot swap XCH for token with Sage yet")
+            return
 
         wallets = await wallet_client.get_wallets(wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT)
         token_wallet_id = next((_['id'] for _ in wallets if _[
@@ -1349,6 +1387,10 @@ async def _rebase_up(token_tail_hash, other_sb, offer, token_amount, push_tx, fe
 
     pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(token_tail_hash)
 
+    if hidden_puzzle_hash is None:
+        click.echo("Cannot rebase a CAT pair")
+        sys.exit(1)
+
     full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
 
     last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
@@ -1377,38 +1419,48 @@ async def _rebase_up(token_tail_hash, other_sb, offer, token_amount, push_tx, fe
             await full_node_client.await_closed()
             sys.exit(1)
 
-        wallet_client = await get_wallet_client(get_config_item("chia_root"))
-        wallets = await wallet_client.get_wallets(
-            wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT
-        )
-        token_wallet_id = next((_['id'] for _ in wallets if _[
-                               'data'].startswith(token_tail_hash)), None)
-        
-        
-        if token_wallet_id is None:
-            click.echo(
-                "You don't have a wallet for the token. Please set them up before using this command.")
+        wallet_client = await get_wallet_client(get_config_item("chia_root"), get_config_item("use_sage"))
+
+        offer = None
+        if not sage:
+            wallets = await wallet_client.get_wallets(
+                wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT
+            )
+            token_wallet_id = next((_['id'] for _ in wallets if _[
+                                'data'].startswith(token_tail_hash)), None)
+            
+            
+            if token_wallet_id is None:
+                click.echo(
+                    "You don't have a wallet for the token. Please set them up before using this command.")
+                wallet_client.close()
+                await wallet_client.await_closed()
+                full_node_client.close()
+                await full_node_client.await_closed()
+                sys.exit(1)
+
+            if use_fee_estimate:
+                fee = await get_fee_estimate(sb_to_aggregate, full_node_client)
+                print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
+            offer_dict = {}
+            offer_dict[token_wallet_id] = -token_amount
+            offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config, fee=fee)
+            offer = offer_resp.offer
+
             wallet_client.close()
             await wallet_client.await_closed()
-            full_node_client.close()
-            await full_node_client.await_closed()
-            sys.exit(1)
-
-        if use_fee_estimate:
-            fee = await get_fee_estimate(sb_to_aggregate, full_node_client)
-            print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
-        offer_dict = {}
-        offer_dict[token_wallet_id] = -token_amount
-        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config, fee=fee)
-        offer = offer_resp.offer
+        else:
+            offer = wallet_client.make_offer(
+                [],
+                [[bytes.fromhex(token_tail_hash), hidden_puzzle_hash, token_amount]],
+                fee,
+                auto_import=False
+            )
 
         offer_str = offer.to_bech32()
         open("offer.txt", "w").write(offer_str)
 
         click.echo("Offer successfully generated and saved to offer.txt.")
-
-        wallet_client.close()
-        await wallet_client.await_closed()
 
     xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
         full_node_client,

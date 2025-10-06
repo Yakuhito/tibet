@@ -71,6 +71,7 @@ from chia.wallet.util.puzzle_compression import decompress_object_with_puzzles
 from chia.wallet.util.puzzle_compression import lowest_best_version
 from chia_rs import run_chia_program
 from clvm.casts import int_to_bytes
+from sage_client import SageClient
 
 from clvm import SExp
 
@@ -354,8 +355,12 @@ async def get_sim_full_node_client(
 
 
 async def get_wallet_client(
-    chia_root: str
-) -> WalletRpcClient:
+    chia_root: str,
+    use_sage: bool
+):
+    if use_sage:
+        return True, SageClient()
+    
     root_path = Path(chia_root)
 
     config = load_config(root_path, "config.yaml")
@@ -366,7 +371,7 @@ async def get_wallet_client(
     )
     await wallet_client.healthz()
 
-    return wallet_client
+    return False, wallet_client
 
 
 async def launch_router_from_coin(parent_coin, parent_coin_puzzle, rcat, fee=0):
