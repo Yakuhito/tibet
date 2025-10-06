@@ -664,7 +664,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         full_node_client,
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
-        bytes.fromhex(token_tail_hash) if hidden_puzzle_hash is not None else None,
+        bytes.fromhex(token_tail_hash),
         hidden_puzzle_hash,
         creation_spend,
         sb_to_aggregate
@@ -681,7 +681,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         creation_spend,
-        bytes.fromhex(token_tail_hash) if hidden_puzzle_hash is not None else None,
+        bytes.fromhex(token_tail_hash),
         hidden_puzzle_hash,
         inverse_fee,
         pair_state["liquidity"],
@@ -818,7 +818,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         full_node_client,
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
-        bytes.fromhex(token_tail_hash) if hidden_puzzle_hash is not None else None,
+        bytes.fromhex(token_tail_hash),
         hidden_puzzle_hash,
         creation_spend,
         sb_to_aggregate
@@ -835,7 +835,7 @@ async def _remove_liquidity(token_tail_hash, offer, liquidity_token_amount, push
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         creation_spend,
-        bytes.fromhex(token_tail_hash) if hidden_puzzle_hash is not None else None,
+        bytes.fromhex(token_tail_hash),
         hidden_puzzle_hash,
         inverse_fee,
         pair_state["liquidity"],
@@ -971,7 +971,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
         full_node_client,
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
-        bytes.fromhex(token_tail_hash) if hidden_puzzle_hash is not None else None,
+        bytes.fromhex(token_tail_hash),
         hidden_puzzle_hash,
         creation_spend,
         sb_to_aggregate
@@ -988,7 +988,7 @@ async def _xch_to_token(token_tail_hash, offer, xch_amount, push_tx, fee, use_fe
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         creation_spend,
-        bytes.fromhex(token_tail_hash) if hidden_puzzle_hash is not None else None,
+        bytes.fromhex(token_tail_hash),
         hidden_puzzle_hash,
         inverse_fee,
         pair_state["liquidity"],
@@ -1124,7 +1124,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
         full_node_client,
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
-        bytes.fromhex(token_tail_hash) if hidden_puzzle_hash is not None else None,
+        bytes.fromhex(token_tail_hash),
         hidden_puzzle_hash,
         creation_spend,
         sb_to_aggregate
@@ -1141,7 +1141,7 @@ async def _token_to_xch(token_tail_hash, offer, token_amount, push_tx, fee, use_
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         creation_spend,
-        bytes.fromhex(token_tail_hash) if hidden_puzzle_hash is not None else None,
+        bytes.fromhex(token_tail_hash),
         hidden_puzzle_hash,
         inverse_fee,
         pair_state["liquidity"],
@@ -1324,6 +1324,147 @@ async def _create_pair_with_initial_liquidity(
     await full_node_client.await_closed()
 
 
+@click.command()
+@click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
+@click.option("--other-sb", required=True, help='JSON file containing the spend bundle that spends the hidden puzzle hash to send a message to this pair')
+@click.option("--offer", default=None, help='Offer to build liquidity tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
+@click.option("--token-amount", default=0, help="Amount of tokens to *add* to the pair's reserve via rebase. Unit is mojos (1 CAT = 1000 mojos).")
+@click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
+@click.option('--fee', default=0, help='Fee to use for transaction; only used if offer is generated')
+@click.option('--use-fee-estimate', is_flag=True, default=False, show_default=True, help='Estimate required fee when generating offer')
+def rebase_up(asset_id, other_sb, offer, token_amount, push_tx, fee, use_fee_estimate):
+    if len(asset_id) != 64:
+        click.echo("Oops! That asset id doesn't look right...")
+        sys.exit(1)
+    asyncio.run(_rebase_up(asset_id, other_sb, offer,
+                token_amount, push_tx, fee, use_fee_estimate))
+
+
+async def _rebase_up(token_tail_hash, other_sb, offer, token_amount, push_tx, fee, use_fee_estimate):
+    click.echo("Rebasing UP...")
+    offer_str = ""
+
+    click.echo(f"Reading other spend bundle from '{other_sb}'...")
+    other_sb = SpendBundle.from_json_dict(json.loads(open(other_sb, "r").read()))
+
+    pair_launcher_id, hidden_puzzle_hash, inverse_fee = get_pair_data(token_tail_hash)
+
+    full_node_client = await get_full_node_client(get_config_item("chia_root"), get_config_item("rpc_url"))
+
+    last_synced_pair_id = get_config_item("pair_sync", pair_launcher_id)
+    last_synced_pair_id_not_none = last_synced_pair_id
+    if last_synced_pair_id_not_none is None:
+        last_synced_pair_id_not_none = pair_launcher_id
+
+    current_pair_coin, creation_spend, pair_state, sb_to_aggregate, last_synced_pair_id_on_blockchain = await sync_pair(
+        full_node_client, bytes.fromhex(last_synced_pair_id_not_none)
+    )
+    current_pair_coin_id = current_pair_coin.name().hex()
+    click.echo(f"Current pair coin id: {current_pair_coin_id}")
+
+    if offer is not None:
+        click.echo("No need to generate new offer.")
+        if os.path.isfile(offer):
+            offer_str = open(offer, "r").read().strip()
+        else:
+            offer_str = offer
+    else:
+        click.echo("Generating new offer...")
+
+        if token_amount == 0:
+            click.echo("Please set ---token-amount to use this option.")
+            full_node_client.close()
+            await full_node_client.await_closed()
+            sys.exit(1)
+
+        wallet_client = await get_wallet_client(get_config_item("chia_root"))
+        wallets = await wallet_client.get_wallets(
+            wallet_type=WalletType.CAT if hidden_puzzle_hash is None else WalletType.RCAT
+        )
+        token_wallet_id = next((_['id'] for _ in wallets if _[
+                               'data'].startswith(token_tail_hash)), None)
+        
+        
+        if token_wallet_id is None:
+            click.echo(
+                "You don't have a wallet for the token. Please set them up before using this command.")
+            wallet_client.close()
+            await wallet_client.await_closed()
+            full_node_client.close()
+            await full_node_client.await_closed()
+            sys.exit(1)
+
+        if use_fee_estimate:
+            fee = await get_fee_estimate(sb_to_aggregate, full_node_client)
+            print(f"[!] Using estimated fee: {fee / 10 ** 12} XCH")
+        offer_dict = {}
+        offer_dict[token_wallet_id] = -token_amount
+        offer_resp = await wallet_client.create_offer_for_ids(offer_dict, tx_config=tx_config, fee=fee)
+        offer = offer_resp.offer
+
+        offer_str = offer.to_bech32()
+        open("offer.txt", "w").write(offer_str)
+
+        click.echo("Offer successfully generated and saved to offer.txt.")
+
+        wallet_client.close()
+        await wallet_client.await_closed()
+
+    xch_reserve_coin, token_reserve_coin, token_reserve_lineage_proof = await get_pair_reserve_info(
+        full_node_client,
+        bytes.fromhex(pair_launcher_id),
+        current_pair_coin,
+        bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
+        creation_spend,
+        sb_to_aggregate
+    )
+
+    if last_synced_pair_id_on_blockchain != last_synced_pair_id:
+        click.echo("Pair state updated since last sync; saving it...")
+        config = get_config()
+        config["pair_sync"] = config.get("pair_sync", {})
+        config["pair_sync"][pair_launcher_id] = last_synced_pair_id_on_blockchain.hex()
+        save_config(config)
+
+    sb = await respond_to_deposit_liquidity_offer(
+        bytes.fromhex(pair_launcher_id),
+        current_pair_coin,
+        creation_spend,
+        bytes.fromhex(token_tail_hash),
+        hidden_puzzle_hash,
+        inverse_fee,
+        pair_state["liquidity"],
+        pair_state["xch_reserve"],
+        pair_state["token_reserve"],
+        offer_str,
+        xch_reserve_coin,
+        token_reserve_coin,
+        token_reserve_lineage_proof
+    )
+
+    if sb_to_aggregate is not None:
+        sb = SpendBundle.aggregate([sb, sb_to_aggregate])
+
+    if push_tx:
+        resp = input("Are you sure you want to broadcast this spend? (Yes): ")
+        if resp == "Yes":
+            click.echo(f"Pushing tx...")
+            resp = await full_node_client.push_tx(sb)
+            click.echo(resp)
+            click.echo("Enjoy your lp fees!")
+        else:
+            click.echo("That's not a clear 'Yes'!")
+    else:
+        open("spend_bundle.json", "w").write(json.dumps(
+            sb.to_json_dict(), sort_keys=True, indent=4))
+        click.echo("Spend bundle written to spend_bundle.json.")
+        click.echo("Use --push-tx to broadcast this spend.")
+
+    full_node_client.close()
+    await full_node_client.await_closed()
+
+
 if __name__ == "__main__":
     cli.add_command(config_node)
     cli.add_command(test_node_config)
@@ -1337,5 +1478,6 @@ if __name__ == "__main__":
     cli.add_command(remove_liquidity)
     cli.add_command(xch_to_token)
     cli.add_command(token_to_xch)
+    cli.add_command(rabse_up)
     cli.add_command(create_pair_with_initial_liquidity)
     cli()
