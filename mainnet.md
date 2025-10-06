@@ -16,6 +16,8 @@ chia configure --testnet false
 chia start wallet
 ```
 
+Note that the `chia` commands are only needed if you intend to use the reference wallet - it's highly recommended to use use the `--use-sage` switch with `config-node` and Sage wallet.
+
 If you've used the `testnet` version of TibetSwap, do not forget to remove the configuration:
 
 
@@ -25,7 +27,7 @@ rm config.json # delete prev. config
 
 Use the following command to configure `tibet.py` (using [coinset.org](https://www.coinset.org/) for the full node RPC):
 ```bash
-python3 tibet.py config-node --network mainnet
+python3 tibet.py config-node --network mainnet [--use-sage]
 ```
 
 If you're running a full node, thank you for making the network more decentralized! Run this command instead of the last one to make requests go through your full node:
