@@ -732,7 +732,7 @@ async def _deposit_liquidity(token_tail_hash, offer, xch_amount, token_amount, p
             click.echo(f"Pushing tx...")
             resp = await full_node_client.push_tx(sb)
             click.echo(resp)
-            click.echo("Congrats on the rebase!")
+            click.echo("Enjoy your lp fees!")
         else:
             click.echo("That's not a clear 'Yes'!")
     else:
@@ -1547,7 +1547,7 @@ async def _rebase_up(token_tail_hash, other_sb, offer, token_amount, push_tx, fe
             click.echo(f"Pushing tx...")
             resp = await full_node_client.push_tx(sb)
             click.echo(resp)
-            click.echo("Enjoy your lp fees!")
+            click.echo("Congrats on the rebase!")
         else:
             click.echo("That's not a clear 'Yes'!")
     else:
