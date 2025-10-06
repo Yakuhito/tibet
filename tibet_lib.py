@@ -71,6 +71,7 @@ from chia.wallet.util.puzzle_compression import decompress_object_with_puzzles
 from chia.wallet.util.puzzle_compression import lowest_best_version
 from chia_rs import run_chia_program
 from clvm.casts import int_to_bytes
+from sage_client import SageClient
 
 from clvm import SExp
 
@@ -354,8 +355,12 @@ async def get_sim_full_node_client(
 
 
 async def get_wallet_client(
-    chia_root: str
-) -> WalletRpcClient:
+    chia_root: str,
+    use_sage: bool
+):
+    if use_sage:
+        return True, SageClient()
+    
     root_path = Path(chia_root)
 
     config = load_config(root_path, "config.yaml")
@@ -366,7 +371,7 @@ async def get_wallet_client(
     )
     await wallet_client.healthz()
 
-    return wallet_client
+    return False, wallet_client
 
 
 async def launch_router_from_coin(parent_coin, parent_coin_puzzle, rcat, fee=0):
@@ -2411,7 +2416,8 @@ async def create_pair_with_liquidity(
                 ephemeral = True
                 cs_to_aggregate.append(coin_spend)
                 if amount != initial_xch_liquidity + initial_cat_liquidity + ROUTER_MIN_FEE + DEV_DEPLOYMENT_FEE + 1:
-                    raise Exception(f"Invalid XCH offer amount; should be {initial_xch_liquidity + ROUTER_MIN_FEE + DEV_DEPLOYMENT_FEE + 1} mojos")
+                    print(initial_xch_liquidity, initial_cat_liquidity)
+                    raise Exception(f"Invalid XCH offer amount; should be {initial_xch_liquidity + initial_cat_liquidity + ROUTER_MIN_FEE + DEV_DEPLOYMENT_FEE + 1} mojos")
 
             if puzzle_hash == ephemeral_token_coin_puzzle_hash:
                 eph_token_coin = Coin(
@@ -2545,3 +2551,227 @@ async def create_pair_with_liquidity(
         coin_spends,
         AugSchemeMPL.aggregate([offer_spend_bundle.aggregated_signature, temp_custody_sb.aggregated_signature])
     )
+
+# Rebase up = adding rCAT to the pair with the rebase action
+async def respond_to_rebase_up_offer(
+    pair_launcher_id,
+    current_pair_coin,
+    creation_spend,
+    token_tail_hash,
+    token_hidden_puzzle_hash,
+    inverse_fee,
+    pair_liquidity,
+    pair_xch_reserve,
+    pair_token_reserve,
+    offer_str,
+    last_xch_reserve_coin,
+    last_token_reserve_coin,
+    # coin_parent_coin_info, inner_puzzle_hash, amount
+    last_token_reserve_lineage_proof,
+    # contains the bundle that spends the hidden puzzle hash sending a message to the current pair
+    hidden_puzzle_hash_spend_bundle,
+):
+    # 1. Detect ephemeral coin (those created by the offer that we're allowed to use)
+    offer = Offer.from_bech32(offer_str)
+    offer_spend_bundle = offer.to_spend_bundle()
+    offer_coin_spends = offer_spend_bundle.coin_spends
+
+    eph_xch_coin = None
+    eph_token_coin = None
+
+    # needed when spending eph_token_coin since it's a CAT
+    eph_token_coin_creation_spend = None
+    announcement_asserts = []  # assert everything when the liquidity cat is minted
+
+    ephemeral_token_coin_puzzle = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        OFFER_MOD
+    )
+    ephemeral_token_coin_puzzle_hash = ephemeral_token_coin_puzzle.get_tree_hash()
+
+    # all valid coin spends (i.e., not 'hints' for offered assets or coins)
+    cs_from_initial_offer = []
+
+    for coin_spend in offer_coin_spends:
+        # 'hint' for offer requested coin (liquidity CAT)
+        if coin_spend.coin.parent_coin_info == b"\x00" * 32:
+            continue
+
+        cs_from_initial_offer.append(coin_spend)
+        conditions_dict = conditions_dict_for_solution(
+            coin_spend.puzzle_reveal,
+            coin_spend.solution,
+            INFINITE_COST
+        )
+
+        # is this spend creating an ephemeral coin?
+        for cwa in conditions_dict.get(ConditionOpcode.CREATE_COIN, []):
+            puzzle_hash = cwa.vars[0]
+            amount = SExp.to(cwa.vars[1]).as_int()
+
+            if puzzle_hash == OFFER_MOD_HASH:
+                eph_xch_coin = Coin(coin_spend.coin.name(),
+                                    puzzle_hash, amount)
+
+            if puzzle_hash == ephemeral_token_coin_puzzle_hash:
+                eph_token_coin = Coin(
+                    coin_spend.coin.name(), puzzle_hash, amount)
+                eph_token_coin_creation_spend = coin_spend
+
+        # is there any announcement that we'll need to assert?
+        # cwa = condition with args
+        for cwa in conditions_dict.get(ConditionOpcode.CREATE_COIN_ANNOUNCEMENT, []):
+            announcement_asserts.append([
+                ConditionOpcode.ASSERT_COIN_ANNOUNCEMENT,
+                std_hash(coin_spend.coin.name() + cwa.vars[0])
+            ])
+
+    # 2. Math stuff
+    deposited_token_amount = eph_token_coin.amount
+    new_token_reserve = deposited_token_amount + pair_token_reserve
+
+    # 3. spend the token ephemeral coin to create the token reserve coin
+    p2_singleton_puzzle = pay_to_singleton_flashloan_puzzle(pair_launcher_id)
+    p2_singleton_puzzle_cat = get_cat_puzzle(
+        token_tail_hash,
+        token_hidden_puzzle_hash,
+        p2_singleton_puzzle
+    )
+
+    eph_token_coin_notarized_payments = []
+    eph_token_coin_notarized_payments.append(
+        Program.to([
+            current_pair_coin.name(),
+            [p2_singleton_puzzle.get_tree_hash(), new_token_reserve]
+        ])
+    )
+
+    eph_token_coin_inner_solution = get_cat_inner_solution(
+        token_hidden_puzzle_hash is not None,
+        OFFER_MOD,
+        Program.to(eph_token_coin_notarized_payments)
+    )
+
+    spendable_cats_for_token_reserve = []
+    spendable_cats_for_token_reserve.append(
+        SpendableCAT(
+            eph_token_coin,
+            token_tail_hash,
+            get_cat_inner_puzzle(token_hidden_puzzle_hash, OFFER_MOD),
+            eph_token_coin_inner_solution,
+            lineage_proof=LineageProof(
+                eph_token_coin_creation_spend.coin.parent_coin_info,
+                get_innerpuzzle_from_puzzle(eph_token_coin_creation_spend.puzzle_reveal).get_tree_hash(),
+                eph_token_coin_creation_spend.coin.amount
+            )
+        )
+    )
+
+    pair_singleton_inner_puzzle = get_pair_inner_puzzle(
+        pair_launcher_id,
+        token_tail_hash,
+        pair_liquidity,
+        pair_xch_reserve,
+        pair_token_reserve,
+        token_hidden_puzzle_hash,
+        inverse_fee
+    )
+    if last_token_reserve_coin is not None:
+        spendable_cats_for_token_reserve.append(
+            SpendableCAT(
+                last_token_reserve_coin,
+                token_tail_hash,
+                get_cat_inner_puzzle(token_hidden_puzzle_hash, p2_singleton_puzzle),
+                get_cat_inner_solution(
+                    token_hidden_puzzle_hash is not None,
+                    p2_singleton_puzzle,
+                    solution_for_p2_singleton_flashloan(
+                        last_token_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
+                    )
+                ),
+                lineage_proof=LineageProof(
+                    last_token_reserve_lineage_proof[0],
+                    last_token_reserve_lineage_proof[1],
+                    last_token_reserve_lineage_proof[2]
+                )
+            )
+        )
+
+    token_reserve_creation_spend_bundle = unsigned_spend_bundle_for_spendable_cats(
+        CAT_MOD, spendable_cats_for_token_reserve
+    )
+    token_reserve_creation_spends = token_reserve_creation_spend_bundle.coin_spends
+
+    # 4. Re-create the pair singleton (spend it)
+    pair_singleton_puzzle = get_pair_puzzle(
+        pair_launcher_id,
+        token_tail_hash,
+        pair_liquidity,
+        pair_xch_reserve,
+        pair_token_reserve,
+        token_hidden_puzzle_hash,
+        inverse_fee
+    )
+    inner_inner_sol = Program.to((
+        (
+            current_pair_coin.name(),
+            (
+                b"\x00" * 32 if last_xch_reserve_coin is None else last_xch_reserve_coin.name(),
+                b"\x00" * 32 if last_token_reserve_coin is None else last_token_reserve_coin.name()
+            )
+        ),
+        [
+            new_token_reserve,
+        ]
+    ))
+
+    rebase_puzzle = get_rcat_rebase_puzzle(token_hidden_puzzle_hash)
+    pair_singleton_inner_solution = Program.to([
+        rebase_puzzle,
+        Program.to(
+            get_rcat_merkle_root_and_proofs(inverse_fee, token_hidden_puzzle_hash)[1][rebase_puzzle.get_tree_hash()]
+        ),
+        inner_inner_sol
+    ])
+
+    lineage_proof = lineage_proof_for_coinsol(creation_spend)
+    pair_singleton_solution = solution_for_singleton(
+        lineage_proof, current_pair_coin.amount, pair_singleton_inner_solution
+    )
+    pair_singleton_spend = make_spend(
+        current_pair_coin, pair_singleton_puzzle, pair_singleton_solution)
+
+    # 5. Spend the last (previous) xch reserve coin and we're done!
+    last_xch_reserve_spend_maybe = []
+
+    if last_xch_reserve_coin != None:
+        last_xch_reserve_coin_puzzle = p2_singleton_puzzle
+        last_xch_reserve_coin_solution = solution_for_p2_singleton_flashloan(
+            last_xch_reserve_coin, pair_singleton_inner_puzzle.get_tree_hash()
+        )
+        last_xch_reserve_spend_maybe.append(
+            make_spend(last_xch_reserve_coin, last_xch_reserve_coin_puzzle,
+                      last_xch_reserve_coin_solution)
+        )
+
+    # 6. Spend the ephemeral XCH coin to re-create the XCH reserve
+    eph_xch_coin_solution = Program.to([[
+        current_pair_coin.name(),
+        [p2_singleton_puzzle.get_tree_hash(), last_xch_reserve_coin.amount]
+    ]])
+    eph_xch_coin_spend = make_spend(
+        eph_xch_coin, OFFER_MOD, eph_xch_coin_solution)
+
+    sb = SpendBundle(
+        [
+            pair_singleton_spend,
+            eph_xch_coin_spend,
+        ] + token_reserve_creation_spends + cs_from_initial_offer + last_xch_reserve_spend_maybe + hidden_puzzle_hash_spend_bundle.coin_spends,
+        AugSchemeMPL.aggregate([
+            offer_spend_bundle.aggregated_signature,
+            hidden_puzzle_hash_spend_bundle.aggregated_signature
+        ])
+    )
+
+    return sb
