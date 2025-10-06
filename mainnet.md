@@ -27,7 +27,7 @@ rm config.json # delete prev. config
 
 Use the following command to configure `tibet.py` (using [coinset.org](https://www.coinset.org/) for the full node RPC):
 ```bash
-python3 tibet.py config-node --network mainnet [--use-sage]
+python3 tibet.py config-node --network mainnet [--use-sage true]
 ```
 
 If you're running a full node, thank you for making the network more decentralized! Run this command instead of the last one to make requests go through your full node:

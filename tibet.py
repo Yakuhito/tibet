@@ -190,11 +190,11 @@ async def _launch_router(push_tx, fee, rcat):
 @click.command()
 @click.option('--launcher-id', required=False, help='Launcher coin id of the v2 router.')
 @click.option('--rcat-launcher-id', required=False, help='Launcher coin id of the v2r (XCH-rCAT pairs) router.')
-def set_router(launcher_id, rcat_launcher_id):
-    asyncio.run(_set_router(launcher_id, rcat_launcher_id))
+def set_routers(launcher_id, rcat_launcher_id):
+    asyncio.run(_set_routers(launcher_id, rcat_launcher_id))
 
 
-async def _set_router(router_launcher_id, rcat_launcher_id):
+async def _set_routers(router_launcher_id, rcat_launcher_id):
     click.echo("Saving config...")
     config = get_config()
 
@@ -1522,7 +1522,7 @@ if __name__ == "__main__":
     cli.add_command(config_node)
     cli.add_command(test_node_config)
     cli.add_command(launch_router)
-    cli.add_command(set_router)
+    cli.add_command(set_routers)
     cli.add_command(launch_test_token)
     cli.add_command(create_pair)
     cli.add_command(sync_pairs)
