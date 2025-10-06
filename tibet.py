@@ -1479,6 +1479,6 @@ if __name__ == "__main__":
     cli.add_command(remove_liquidity)
     cli.add_command(xch_to_token)
     cli.add_command(token_to_xch)
-    cli.add_command(rabse_up)
+    cli.add_command(rebase_up)
     cli.add_command(create_pair_with_initial_liquidity)
     cli()
