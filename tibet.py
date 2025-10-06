@@ -1427,7 +1427,7 @@ async def _rebase_up(token_tail_hash, other_sb, offer, token_amount, push_tx, fe
         config["pair_sync"][pair_launcher_id] = last_synced_pair_id_on_blockchain.hex()
         save_config(config)
 
-    sb = await respond_to_deposit_liquidity_offer(
+    sb = await respond_to_rebase_up_offer(
         bytes.fromhex(pair_launcher_id),
         current_pair_coin,
         creation_spend,
@@ -1440,7 +1440,8 @@ async def _rebase_up(token_tail_hash, other_sb, offer, token_amount, push_tx, fe
         offer_str,
         xch_reserve_coin,
         token_reserve_coin,
-        token_reserve_lineage_proof
+        token_reserve_lineage_proof,
+        other_sb
     )
 
     if sb_to_aggregate is not None:
