@@ -2416,7 +2416,8 @@ async def create_pair_with_liquidity(
                 ephemeral = True
                 cs_to_aggregate.append(coin_spend)
                 if amount != initial_xch_liquidity + initial_cat_liquidity + ROUTER_MIN_FEE + DEV_DEPLOYMENT_FEE + 1:
-                    raise Exception(f"Invalid XCH offer amount; should be {initial_xch_liquidity + ROUTER_MIN_FEE + DEV_DEPLOYMENT_FEE + 1} mojos")
+                    print(initial_xch_liquidity, initial_cat_liquidity)
+                    raise Exception(f"Invalid XCH offer amount; should be {initial_xch_liquidity + initial_cat_liquidity + ROUTER_MIN_FEE + DEV_DEPLOYMENT_FEE + 1} mojos")
 
             if puzzle_hash == ephemeral_token_coin_puzzle_hash:
                 eph_token_coin = Coin(
