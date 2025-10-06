@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from chia_rs.sized_bytes import bytes32
 from chia_rs import SpendBundle, CoinSpend, AugSchemeMPL
+from chia.wallet.trading.offer import Offer
 from enum import Enum
 
 
@@ -51,7 +52,7 @@ class SageClient:
         offered_assets: List[[Optional[bytes32], Optional[bytes32], int]],
         fee: int,
         auto_import: bool = False,
-    ) -> str:
+    ) -> Offer:
         url = f"{self.base_url}/make_offer"
 
         ra = []
@@ -79,4 +80,4 @@ class SageClient:
                 "auto_import": auto_import,
             },
         )
-        return response.json()['offer']
+        return Offer.from_bech32(response.json()['offer'])

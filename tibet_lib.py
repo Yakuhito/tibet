@@ -2752,10 +2752,7 @@ async def respond_to_rebase_up_offer(
 
     sb = SpendBundle(
         [
-            eph_xch_coin_spend,
             pair_singleton_spend,
-            liquidity_cat_mint_coin_spend,
-            ephemeral_liquidity_cat_spend
         ] + token_reserve_creation_spends + cs_from_initial_offer + last_xch_reserve_spend_maybe + hidden_puzzle_hash_spend_bundle.coin_spends,
         AugSchemeMPL.aggregate([
             offer_spend_bundle.aggregated_signature,

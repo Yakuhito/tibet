@@ -559,6 +559,7 @@ async def _get_pair_info(token_tail_hash):
     )
     current_pair_coin_id = current_pair_coin.name().hex()
     click.echo(f"Current pair coin id: {current_pair_coin_id}")
+    click.echo(f"Current pair coin puzzle hash: {current_pair_coin.puzzle_hash.hex()}")
     click.echo(f"Liquidity asset id: {pair_liquidity_tail_puzzle(bytes.fromhex(pair_launcher_id)).get_tree_hash().hex()}")
 
     if hidden_puzzle_hash is not None:
@@ -1401,7 +1402,7 @@ async def _create_pair_with_initial_liquidity(
 
 @click.command()
 @click.option("--asset-id", required=True, help='Asset id (TAIL hash) of token to be offered in pair (token-XCH)')
-@click.option("--other-sb", required=True, help='JSON file containing the spend bundle that spends the hidden puzzle hash to send a message to this pair')
+@click.option("--other-sb", required=True, help='JSON file containing the spend bundle that spends the hidden puzzle hash to send a message to this pair.')
 @click.option("--offer", default=None, help='Offer to build liquidity tx from. By default, a new offer will be generated. You can also provide the offer directly or the path to a file containing the offer.')
 @click.option("--token-amount", default=0, help="Amount of tokens to *add* to the pair's reserve via rebase. Unit is mojos (1 CAT = 1000 mojos).")
 @click.option("--push-tx", is_flag=True, show_default=True, default=False, help="Push the signed spend bundle to the network and add liquidity CAT to wallet.")
