@@ -1,5 +1,9 @@
 # tibet
 
+This repository is no longer maintained, following a whitehat rescue that led to the funds locked in TibetSwap v2 to be returned to liquidity providers. You can learn more about this event [here](https://blog.kuhi.to/tibetswap-v2-post-mortem) and [here](https://blog.kuhi.to/so-long-and-thanks-for-all-the-trades).
+
+The Chialisp code IS NOT SAFE for mainnet deployment. It has two known critical vulnerabilities, the one described in the post-mortem above (swapping allows negative input amounts) and one having to do with liquidity operations (to quote the initial report, "remove_liquidity never forces the LP melt") reported by [splitXCH](https://x.com/splitXCH).
+
 Also referred to as `yakSwap`, `tibet` is an attempt to recreate [`Uniswap V1`](https://github.com/Uniswap/v1-contracts) on the Chia blockchain.
 
 To see how to use on testnet, see [testnet.md](testnet.md).
